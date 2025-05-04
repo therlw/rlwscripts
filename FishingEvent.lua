@@ -4,7 +4,7 @@ local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 -- Create Window
 local Window = Rayfield:CreateWindow({
     Name = "RLWSCRİPTS",
-    Icon = 0, -- Lucide icon
+    Icon = 0,
     LoadingTitle = "Premium Fishing System",
     LoadingSubtitle = "Auto Sell, Auto Fish & Complete",
     Theme = "Default",
@@ -55,7 +55,6 @@ local function LoadModules()
     end
     return true
 end
-
 
 -- Create Tabs
 local AutoSellTab = Window:CreateTab("Auto Sell", "dollar-sign")
@@ -150,7 +149,6 @@ AutoFishTab:CreateSlider({
 -- Auto Complete Section
 local CompleteSection = AutoCompleteTab:CreateSection("Auto Complete Settings")
 
--- Önce FishGame modülünü yükleyelim ve hook'u bir kere tanımlayalım
 local FishGame
 local success, err = pcall(function()
     FishGame = require(game:GetService("ReplicatedStorage").Library.Client.EventFishingCmds.Game)
@@ -159,7 +157,7 @@ local success, err = pcall(function()
         FishGame.BeginOld = FishGame.Begin
         FishGame.Begin = function(arg1, arg2, arg3)
             if _G.AutoCompleteEnabled then
-                arg2.BarSize = 1  -- Balık yakalama çubuğunu tam boy yap
+                arg2.BarSize = 1
             end
             return FishGame.BeginOld(arg1, arg2, arg3)
         end
@@ -187,7 +185,52 @@ local AutoCompleteToggle = AutoCompleteTab:CreateToggle({
     end
 })
 
+-- Settings Tab (Anti-AFK)
+local SettingsTab = Window:CreateTab("Settings", "settings")
+local SettingsSection = SettingsTab:CreateSection("Anti-AFK Settings")
 
+_G.AntiAFKEnabled = false
+_G.AFKInterval = 150
+
+SettingsTab:CreateToggle({
+    Name = "Enable Anti-AFK",
+    CurrentValue = false,
+    Flag = "AntiAFKToggle",
+    Callback = function(Value)
+        _G.AntiAFKEnabled = Value
+
+        if Value then
+            Rayfield:Notify({
+                Title = "Anti-AFK",
+                Content = "Anti-AFK aktif!",
+                Duration = 3,
+            })
+
+            coroutine.wrap(function()
+                while _G.AntiAFKEnabled do
+                    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+                        pcall(function()
+                            LocalPlayer.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                        end)
+                    end
+                    task.wait(_G.AFKInterval)
+                end
+            end)()
+        end
+    end
+})
+
+SettingsTab:CreateSlider({
+    Name = "AFK Interval (seconds)",
+    Range = {60, 300},
+    Increment = 30,
+    Suffix = "s",
+    CurrentValue = _G.AFKInterval,
+    Flag = "AFKInterval",
+    Callback = function(Value)
+        _G.AFKInterval = Value
+    end
+})
 
 -- Initialize
 if LoadModules() then
@@ -200,7 +243,7 @@ else
     Rayfield:Destroy()
 end
 
--- Destroy button (optional)
+-- Destroy UI
 Window:CreateButton({
     Name = "Destroy UI",
     Callback = function()
