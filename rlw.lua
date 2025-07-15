@@ -287,109 +287,105 @@ local function sendWebhook(data)
     })
 end
 
--- GÜNCELLENMİŞ SATIN ALMA FONKSİYONU (ESKİ ÇALIŞAN SÜRÜM MANTIĞIYLA)
-local function purchaseItem(userId, itemId, sellerName, price, quantity)
-    -- 1. STOK VE BAKİYE KONTROLÜ
-    local realStock = quantity or 1
-    local serverStock = realStock
+-- SATIN ALMA FONKSİYONU (TAM FIX)
+local function purchaseItem(userId, itemId, price, quantity)
+    local playerDiamonds = Players.LocalPlayer.leaderstats["💎 Diamonds"].Value
+    local maxAffordable = math.floor(playerDiamonds / price)
     
-    -- Gerçek stok miktarını API'den al
-    pcall(function()
-        local stockData = ReplicatedStorage.Network.GetBoothStock:InvokeServer(userId)
-        if stockData and stockData[itemId] then
-            serverStock = stockData[itemId]
-            realStock = math.min(serverStock, quantity)
-            print(string.format("ℹ️ Stok Bilgisi | Görünen: %s | Gerçek: %s", 
-                formatNumber(quantity), formatNumber(realStock)))
-        end
-    end)
-    
-    local playerMoney = Players.LocalPlayer.leaderstats["💎 Diamonds"].Value
-    local maxAffordable = math.floor(playerMoney / price)
-    local purchaseAmount = math.min(realStock, maxAffordable)
-    
-    if purchaseAmount <= 0 then
-        print(string.format("⛔ ALIM YAPILAMADI | Sebep: %s", 
-            playerMoney < price and "Bakiye yetersiz" or "Stok tükendi"))
+    if maxAffordable <= 0 then
+        print(string.format("⛔ BAKİYE YETERSİZ | Gereken: %s | Var: %s", 
+            formatNumber(price), formatNumber(playerDiamonds)))
         return false
     end
 
-    -- 2. TOPLU ALIM DENEMESİ (ESKİ SÜRÜM MANTIĞI)
-    print(string.format("🔄 ALIM DENENİYOR | %s | Fiyat: %s | Stok: %s | Alınacak: %s", 
-        itemId, formatNumber(price), formatNumber(realStock), formatNumber(purchaseAmount)))
-
-    local args = {
-        [1] = userId,
-        [2] = {[itemId] = purchaseAmount},
-        [3] = {["Caller"] = getFakeCaller()}
-    }
-    
-    local success, result = pcall(function()
-        return Network.Booths_RequestPurchase:InvokeServer(unpack(args))
+    -- 1. GERÇEK STOK KONTROLÜ (GÜVENLİ)
+    local realStock = quantity
+    local stockCheckSuccess, stockData = pcall(function()
+        return ReplicatedStorage.Network.GetBoothStock:InvokeServer(userId)
     end)
     
-    -- 3. SONUÇ İŞLEME
-    if success and result == true then
-        local totalCost = price * purchaseAmount
-        print(string.format("✅ TOPLU ALIM BAŞARILI | %s: %s adet | Toplam: %s", 
-            itemId, formatNumber(purchaseAmount), formatNumber(totalCost)))
+    if stockCheckSuccess and stockData and stockData[itemId] then
+        realStock = stockData[itemId]
+        print(string.format("ℹ️ STOK BİLGİSİ | Görünen: %s | Gerçek: %s", 
+            formatNumber(quantity), formatNumber(realStock)))
+    else
+        warn("⚠️ Stok bilgisi alınamadı, görünen stok kullanılıyor")
+    end
+
+    -- 2. ALIM MİKTARI HESAPLAMA
+    local purchaseAmount = math.min(realStock, maxAffordable)
+    
+    if purchaseAmount <= 0 then
+        print("⛔ Stokta item kalmadı veya bakiye yetersiz")
+        return false
+    end
+
+    print(string.format("🔄 ALIM BAŞLATILIYOR | %s | Fiyat: %s | Stok: %s | Alınacak: %s", 
+        _G.G_Settings.targetItemName, formatNumber(price), formatNumber(realStock), formatNumber(purchaseAmount)))
+
+    -- 3. AKILLI ALIM STRATEJİSİ
+    local function attemptPurchase(amount)
+        local args = {
+            [1] = userId,
+            [2] = {[itemId] = amount},
+            [3] = {["Caller"] = getFakeCaller()}
+        }
         
-        -- Webhook bildirimi gönder
+        local success, result = pcall(function()
+            return Network.Booths_RequestPurchase:InvokeServer(unpack(args))
+        end)
+        
+        return success and result == true
+    end
+
+    -- 4. KADEMELİ ALIM DENEMELERİ
+    local purchased = 0
+    local remaining = purchaseAmount
+    
+    -- Önce tamamını almayı dene
+    if attemptPurchase(remaining) then
+        purchased = remaining
+        print(string.format("🎉 TAM TOPLU ALIM | %s: %s adet | Toplam: %s", 
+            _G.G_Settings.targetItemName, formatNumber(purchased), formatNumber(price * purchased)))
+    else
+        -- Büyük gruplarla deneme (100, 50, 25, 10, 5, 1)
+        local chunkSizes = {100, 50, 25, 10, 5, 1}
+        
+        for _, chunk in ipairs(chunkSizes) do
+            while remaining >= chunk do
+                if not _G.G_Settings.running then break end
+                
+                if attemptPurchase(chunk) then
+                    purchased = purchased + chunk
+                    remaining = remaining - chunk
+                    print(string.format("✅ GRUPLU ALIM | %s: %s adet | Kalan: %s", 
+                        _G.G_Settings.targetItemName, formatNumber(chunk), formatNumber(remaining)))
+                    task.wait(0.1) -- Sunucu yükünü azalt
+                else
+                    break
+                end
+            end
+            
+            if remaining == 0 then break end
+        end
+    end
+
+    -- 5. SONUÇ DEĞERLENDİRME
+    if purchased > 0 then
+        local totalCost = price * purchased
+        print(string.format("🌟 ALIM TAMAMLANDI | Toplam: %s adet | Ödenen: %s", 
+            formatNumber(purchased), formatNumber(totalCost)))
+        
         sendWebhook({
-            itemId = itemId,
-            seller = sellerName,
+            userId = userId,
             price = price,
-            quantity = purchaseAmount,
-            totalCost = totalCost,
-            imageUrl = "rbxassetid://"..settings.targetImageId:match("%d+")
+            quantity = purchased,
+            totalCost = totalCost
         })
-        
         return true
     else
-        -- 4. TOPLU ALIM BAŞARISIZSA TEK TEK DENE (ESKİ SÜRÜM YEDEK MEKANİZMASI)
-        warn(string.format("❌ TOPLU ALIM BAŞARISIZ | Hata: %s", tostring(result)))
-        print("🔄 Tek tek alım deneniyor...")
-        
-        local purchasedCount = 0
-        for i = 1, math.min(purchaseAmount, 100) do  -- En fazla 100 deneme
-            if not settings.running then break end
-            
-            local singleArgs = {
-                [1] = userId,
-                [2] = {[itemId] = 1},
-                [3] = {["Caller"] = getFakeCaller()}
-            }
-            
-            local singleSuccess, singleResult = pcall(function()
-                return Network.Booths_RequestPurchase:InvokeServer(unpack(singleArgs))
-            end)
-            
-            if singleSuccess and singleResult == true then
-                purchasedCount = purchasedCount + 1
-                task.wait(0.15) -- Sunucu yükünü azaltmak için
-            else
-                break
-            end
-        end
-        
-        if purchasedCount > 0 then
-            local totalCost = price * purchasedCount
-            print(string.format("✅ TEK TEK ALIM BAŞARILI | %s: %s adet | Toplam: %s", 
-                itemId, formatNumber(purchasedCount), formatNumber(totalCost)))
-            
-            sendWebhook({
-                itemId = itemId,
-                seller = sellerName,
-                price = price,
-                quantity = purchasedCount,
-                totalCost = totalCost,
-                imageUrl = "rbxassetid://"..settings.targetImageId:match("%d+")
-            })
-            return true
-        else
-            warn("❌ Hiçbir alım yapılamadı")
-            return false
-        end
+        warn("❌ HİÇBİR ALIM YAPILAMADI")
+        return false
     end
 end
 
