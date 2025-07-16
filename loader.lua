@@ -13,7 +13,7 @@ end
 
 -- ANA YÜKLEYİCİ
 if loadScript() then
-    print("✅ Script başarıyla yüklendi!")
+    print("✅ Loader başarıyla yüklendi!")
     
     -- KONTROL MESAJI
     print("\n⚙️ Aktif Ayarlar:")
