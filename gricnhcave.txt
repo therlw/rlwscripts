@@ -1,0 +1,465 @@
+--[[
+    RLWSCRIPTS - PS99 CHRISTMAS GRINCH SCRIPT
+    --------------------------------------------------------------
+    • Fixed UI: Proper rounded corners and spacing
+    • Enhanced Controls: Professional pick selector system
+    • Persistent Configuration: Settings save between executions
+    • Smart Engine: Automatic door tracking with visual feedback
+]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
+local HttpService = game:GetService("HttpService")
+
+local LocalPlayer = Players.LocalPlayer
+local StartTime = os.time()
+
+-- [SERVICES & LIBS]
+local Network = require(ReplicatedStorage.Library.Client.Network)
+local Save = require(ReplicatedStorage.Library.Client.Save)
+local Items = require(ReplicatedStorage.Library.Items)
+
+-- [ENHANCED THEME]
+local Theme = {
+    Primary = Color3.fromRGB(0, 210, 255),
+    Secondary = Color3.fromRGB(100, 255, 200),
+    Background = Color3.fromRGB(8, 8, 10),
+    Panel = Color3.fromRGB(16, 16, 20),
+    Card = Color3.fromRGB(24, 24, 30),
+    Text = Color3.fromRGB(245, 245, 245),
+    SubText = Color3.fromRGB(150, 150, 160),
+    Border = Color3.fromRGB(45, 45, 50),
+    Success = Color3.fromRGB(0, 255, 140),
+    Warning = Color3.fromRGB(255, 180, 0),
+    Error = Color3.fromRGB(255, 80, 80)
+}
+
+-- [PERSISTENT STORAGE KEY]
+local SETTINGS_KEY = "RLW_CHRISTMAS_GRINCH_SETTINGS_V1"
+
+-- [DEFAULT CONFIGURATION]
+local DefaultConfig = {
+    Enabled = false,
+    AutoClaim = true,
+    SkipOpened = true,
+    Notifications = true,
+    DoorPicks = {
+        ["1"] = "Lockpick A",
+        ["2"] = "Lockpick B", 
+        ["3"] = "Lockpick C",
+        ["Default"] = "Lockpick A"
+    },
+    WindowPosition = UDim2.new(0.8, 0, 0.3, 0)
+}
+
+-- [LOAD/SAVE PERSISTENT SETTINGS]
+local function LoadSettings()
+    local success, data = pcall(function()
+        return HttpService:JSONDecode(readfile(SETTINGS_KEY .. ".json") or "{}")
+    end)
+    if success and data then
+        for k, v in pairs(DefaultConfig) do
+            if data[k] == nil then
+                data[k] = v
+            end
+        end
+        return data
+    end
+    return DefaultConfig
+end
+
+local function SaveSettings(config)
+    pcall(function()
+        writefile(SETTINGS_KEY .. ".json", HttpService:JSONEncode(config))
+    end)
+end
+
+-- [INITIALIZE CONFIG]
+local Config = LoadSettings()
+
+-- [PROFESSIONAL GUI]
+local ScreenGui = Instance.new("ScreenGui", CoreGui)
+ScreenGui.Name = "RLWSCRIPTS_XMAS"
+ScreenGui.DisplayOrder = 999
+ScreenGui.ResetOnSpawn = false
+
+-- Main Container with PROPER ROUNDED CORNERS
+local Main = Instance.new("Frame", ScreenGui)
+Main.Size = UDim2.new(0, 320, 0, 480)
+Main.Position = Config.WindowPosition
+Main.BackgroundColor3 = Theme.Background
+Main.BorderSizePixel = 0
+Main.ClipsDescendants = true
+
+-- FIXED: Proper rounded corners
+local MainCorner = Instance.new("UICorner", Main)
+MainCorner.CornerRadius = UDim.new(0, 14)
+
+local MainStroke = Instance.new("UIStroke", Main)
+MainStroke.Color = Theme.Border
+MainStroke.Thickness = 2
+
+-- [HEADER WITH GRADIENT]
+local Header = Instance.new("Frame", Main)
+Header.Size = UDim2.new(1, 0, 0, 48)
+Header.BackgroundTransparency = 1
+Header.ClipsDescendants = true
+
+-- FIXED: Rounded top corners for header
+local HeaderCorner = Instance.new("UICorner", Header)
+HeaderCorner.CornerRadius = UDim.new(0, 14)
+HeaderCorner.Name = "HeaderCorner"
+
+local HeaderGradient = Instance.new("UIGradient", Header)
+HeaderGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 150, 255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 255, 200))
+})
+HeaderGradient.Rotation = 90
+
+-- Title with Christmas theme
+local Title = Instance.new("TextLabel", Header)
+Title.Size = UDim2.new(1, -20, 1, 0)
+Title.Position = UDim2.new(0, 15, 0, 0)
+Title.RichText = true
+Title.Text = '🎄 <font color="#FFFFFF">PS99 CHRISTMAS</font> <font color="#00FFAA">GRINCH</font> 🎄'
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 14
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.BackgroundTransparency = 1
+
+-- Version tag
+local Version = Instance.new("TextLabel", Header)
+Version.Size = UDim2.new(0, 80, 0, 14)
+Version.Position = UDim2.new(1, -85, 0, 4)
+Version.Text = "RLW v1.0"
+Version.Font = Enum.Font.GothamMedium
+Version.TextSize = 9
+Version.TextColor3 = Color3.new(1, 1, 1)
+Version.TextXAlignment = Enum.TextXAlignment.Right
+Version.BackgroundTransparency = 1
+
+-- [CONTENT AREA]
+local Content = Instance.new("Frame", Main)
+Content.Position = UDim2.new(0, 0, 0, 48)
+Content.Size = UDim2.new(1, 0, 1, -96)
+Content.BackgroundTransparency = 1
+
+-- Scrollable container
+local Container = Instance.new("ScrollingFrame", Content)
+Container.Size = UDim2.new(1, 0, 1, 0)
+Container.BackgroundTransparency = 1
+Container.ScrollBarThickness = 4
+Container.ScrollBarImageColor3 = Theme.Border
+Container.CanvasSize = UDim2.new(0, 0, 0, 0)
+Container.AutomaticCanvasSize = Enum.AutomaticSize.Y
+
+local ContainerLayout = Instance.new("UIListLayout", Container)
+ContainerLayout.Padding = UDim.new(0, 10)
+ContainerLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+-- [TOGGLE FUNCTION]
+local function CreateToggle(label, configKey, callback)
+    local ToggleFrame = Instance.new("Frame", Container)
+    ToggleFrame.Size = UDim2.new(0.9, 0, 0, 40)
+    ToggleFrame.BackgroundColor3 = Theme.Card
+    ToggleFrame.BorderSizePixel = 0
+    
+    local Corner = Instance.new("UICorner", ToggleFrame)
+    Corner.CornerRadius = UDim.new(0, 8)
+    
+    local Stroke = Instance.new("UIStroke", ToggleFrame)
+    Stroke.Color = Theme.Border
+    Stroke.Thickness = 1
+    
+    local Label = Instance.new("TextLabel", ToggleFrame)
+    Label.Size = UDim2.new(0.7, 0, 1, 0)
+    Label.Position = UDim2.new(0, 12, 0, 0)
+    Label.Text = label
+    Label.Font = Enum.Font.GothamMedium
+    Label.TextSize = 12
+    Label.TextColor3 = Theme.Text
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.BackgroundTransparency = 1
+    
+    local ToggleButton = Instance.new("TextButton", ToggleFrame)
+    ToggleButton.Size = UDim2.new(0, 36, 0, 20)
+    ToggleButton.Position = UDim2.new(1, -42, 0.5, -10)
+    ToggleButton.BackgroundColor3 = Config[configKey] and Theme.Primary or Color3.fromRGB(40, 40, 45)
+    ToggleButton.Text = ""
+    ToggleButton.AutoButtonColor = false
+    
+    local ToggleCorner = Instance.new("UICorner", ToggleButton)
+    ToggleCorner.CornerRadius = UDim.new(1, 0)
+    
+    local ToggleDot = Instance.new("Frame", ToggleButton)
+    ToggleDot.Size = UDim2.new(0, 14, 0, 14)
+    ToggleDot.Position = Config[configKey] and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
+    ToggleDot.BackgroundColor3 = Color3.new(1, 1, 1)
+    ToggleDot.BorderSizePixel = 0
+    
+    local DotCorner = Instance.new("UICorner", ToggleDot)
+    DotCorner.CornerRadius = UDim.new(1, 0)
+    
+    ToggleButton.MouseButton1Click:Connect(function()
+        Config[configKey] = not Config[configKey]
+        SaveSettings(Config)
+        
+        TweenService:Create(ToggleButton, TweenInfo.new(0.2), {
+            BackgroundColor3 = Config[configKey] and Theme.Primary or Color3.fromRGB(40, 40, 45)
+        }):Play()
+        
+        TweenService:Create(ToggleDot, TweenInfo.new(0.2), {
+            Position = Config[configKey] and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
+        }):Play()
+        
+        if callback then
+            callback(Config[configKey])
+        end
+    end)
+    
+    return ToggleFrame
+end
+
+-- [DOOR PICK SELECTOR]
+local function CreateDoorSection(doorNum)
+    local Section = Instance.new("Frame", Container)
+    Section.Size = UDim2.new(0.9, 0, 0, 60)
+    Section.BackgroundColor3 = Theme.Card
+    Section.BorderSizePixel = 0
+    
+    local Corner = Instance.new("UICorner", Section)
+    Corner.CornerRadius = UDim.new(0, 8)
+    
+    local Stroke = Instance.new("UIStroke", Section)
+    Stroke.Color = Theme.Border
+    Stroke.Thickness = 1
+    
+    -- Door label
+    local DoorLabel = Instance.new("TextLabel", Section)
+    DoorLabel.Size = UDim2.new(0.4, 0, 0, 20)
+    DoorLabel.Position = UDim2.new(0, 12, 0, 8)
+    DoorLabel.Text = "🚪 DOOR " .. doorNum
+    DoorLabel.Font = Enum.Font.GothamBold
+    DoorLabel.TextSize = 12
+    DoorLabel.TextColor3 = Theme.SubText
+    DoorLabel.TextXAlignment = Enum.TextXAlignment.Left
+    DoorLabel.BackgroundTransparency = 1
+    
+    -- Current pick display
+    local CurrentPick = Instance.new("TextLabel", Section)
+    CurrentPick.Size = UDim2.new(0.4, 0, 0, 16)
+    CurrentPick.Position = UDim2.new(0, 12, 0, 30)
+    CurrentPick.Text = Config.DoorPicks[tostring(doorNum)] or Config.DoorPicks["Default"]
+    CurrentPick.Font = Enum.Font.GothamMedium
+    CurrentPick.TextSize = 11
+    CurrentPick.TextColor3 = Theme.Primary
+    CurrentPick.TextXAlignment = Enum.TextXAlignment.Left
+    CurrentPick.BackgroundTransparency = 1
+    
+    -- Pick selector buttons
+    local ButtonFrame = Instance.new("Frame", Section)
+    ButtonFrame.Size = UDim2.new(0.5, 0, 0.6, 0)
+    ButtonFrame.Position = UDim2.new(0.5, 0, 0.2, 0)
+    ButtonFrame.BackgroundTransparency = 1
+    
+    local picks = {"A", "B", "C"}
+    
+    for i, pickLetter in ipairs(picks) do
+        local PickButton = Instance.new("TextButton", ButtonFrame)
+        PickButton.Size = UDim2.new(0.3, -4, 1, 0)
+        PickButton.Position = UDim2.new((i-1) * 0.33, 0, 0, 0)
+        PickButton.Text = pickLetter
+        PickButton.Font = Enum.Font.GothamBold
+        PickButton.TextSize = 12
+        
+        local isCurrent = (Config.DoorPicks[tostring(doorNum)] or Config.DoorPicks["Default"]):sub(-1) == pickLetter
+        PickButton.BackgroundColor3 = isCurrent and Theme.Primary or Color3.fromRGB(40, 40, 45)
+        PickButton.TextColor3 = isCurrent and Color3.new(1,1,1) or Theme.SubText
+        PickButton.AutoButtonColor = false
+        
+        local ButtonCorner = Instance.new("UICorner", PickButton)
+        ButtonCorner.CornerRadius = UDim.new(0, 6)
+        
+        PickButton.MouseButton1Click:Connect(function()
+            Config.DoorPicks[tostring(doorNum)] = "Lockpick " .. pickLetter
+            SaveSettings(Config)
+            CurrentPick.Text = "Lockpick " .. pickLetter
+            
+            -- Update all buttons
+            for _, child in ipairs(ButtonFrame:GetChildren()) do
+                if child:IsA("TextButton") then
+                    local isNowCurrent = child.Text == pickLetter
+                    child.BackgroundColor3 = isNowCurrent and Theme.Primary or Color3.fromRGB(40, 40, 45)
+                    child.TextColor3 = isNowCurrent and Color3.new(1,1,1) or Theme.SubText
+                end
+            end
+        end)
+    end
+    
+    return Section
+end
+
+-- [BUILD UI]
+CreateToggle("Enable Auto Farm", "Enabled", function(value)
+    if EngineStatus then
+        EngineStatus.Text = value and "▶️ ENGINE RUNNING" or "⏹️ ENGINE IDLE"
+        EngineStatus.TextColor3 = value and Theme.Success or Theme.SubText
+    end
+end)
+
+CreateToggle("Auto Claim Rewards", "AutoClaim")
+CreateToggle("Skip Opened Doors", "SkipOpened")
+CreateToggle("Show Notifications", "Notifications")
+
+-- Door sections
+for i = 1, 3 do
+    CreateDoorSection(i)
+end
+
+-- [STATUS BAR]
+local StatusBar = Instance.new("Frame", Main)
+StatusBar.Size = UDim2.new(1, 0, 0, 48)
+StatusBar.Position = UDim2.new(0, 0, 1, -48)
+StatusBar.BackgroundColor3 = Theme.Card
+StatusBar.BorderSizePixel = 0
+
+-- FIXED: Rounded bottom corners for status bar
+local StatusCorner = Instance.new("UICorner", StatusBar)
+StatusCorner.CornerRadius = UDim.new(0, 14)
+
+local TopBorder = Instance.new("Frame", StatusBar)
+TopBorder.Size = UDim2.new(1, 0, 0, 1)
+TopBorder.BackgroundColor3 = Theme.Border
+TopBorder.BorderSizePixel = 0
+
+local RuntimeInfo = Instance.new("TextLabel", StatusBar)
+RuntimeInfo.Size = UDim2.new(1, -20, 0, 18)
+RuntimeInfo.Position = UDim2.new(0, 12, 0, 6)
+RuntimeInfo.Text = "⏱️ 00:00:00"
+RuntimeInfo.Font = Enum.Font.Code
+RuntimeInfo.TextSize = 11
+RuntimeInfo.TextColor3 = Theme.SubText
+RuntimeInfo.TextXAlignment = Enum.TextXAlignment.Left
+RuntimeInfo.BackgroundTransparency = 1
+
+EngineStatus = Instance.new("TextLabel", StatusBar)
+EngineStatus.Size = UDim2.new(1, -20, 0, 18)
+EngineStatus.Position = UDim2.new(0, 12, 0, 24)
+EngineStatus.Text = "⏹️ ENGINE IDLE"
+EngineStatus.Font = Enum.Font.GothamMedium
+EngineStatus.TextSize = 10
+EngineStatus.TextColor3 = Theme.SubText
+EngineStatus.TextXAlignment = Enum.TextXAlignment.Left
+EngineStatus.BackgroundTransparency = 1
+
+-- [ENGINE LOGIC]
+local function GetTargetDoor()
+    local data = Save.Get()
+    if data and data.GrinchCaveState then
+        return data.GrinchCaveState.Door + 1
+    end
+    return 1
+end
+
+local function GetPickType(doorNum)
+    return Config.DoorPicks[tostring(doorNum)] or Config.DoorPicks["Default"]
+end
+
+task.spawn(function()
+    while task.wait(1.5) do
+        if Config.Enabled then
+            local door = GetTargetDoor()
+            local pick = GetPickType(door)
+            
+            EngineStatus.Text = string.format("🎯 DOOR %d [%s]", door, pick:sub(-1))
+            EngineStatus.TextColor3 = Theme.Primary
+            
+            local success, isWin = pcall(function()
+                return Network.Invoke("Lockpick Game: Request Unlock", door, pick)
+            end)
+            
+            if success and isWin == true then
+                EngineStatus.Text = string.format("✅ UNLOCKED DOOR %d", door)
+                EngineStatus.TextColor3 = Theme.Success
+                
+                if Config.AutoClaim then
+                    task.wait(0.5)
+                    pcall(Network.Invoke, "Lockpick Game: Claim")
+                end
+            elseif not success then
+                EngineStatus.Text = "❌ NETWORK ERROR"
+                EngineStatus.TextColor3 = Theme.Error
+            end
+        end
+    end
+end)
+
+-- [WINDOW MANAGEMENT]
+local dragging = false
+local dragStart, startPos
+
+Header.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = Main.Position
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        Main.Position = UDim2.new(
+            startPos.X.Scale, 
+            startPos.X.Offset + delta.X, 
+            startPos.Y.Scale, 
+            startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+        Config.WindowPosition = Main.Position
+        SaveSettings(Config)
+    end
+end)
+
+-- [RUNTIME UPDATER]
+RunService.Heartbeat:Connect(function()
+    local elapsed = os.time() - StartTime
+    RuntimeInfo.Text = string.format("⏱️ %02d:%02d:%02d", 
+        math.floor(elapsed/3600), 
+        math.floor(elapsed/60)%60, 
+        elapsed%60
+    )
+end)
+
+-- [KEYBINDS]
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed then
+        if input.KeyCode == Enum.KeyCode.H then
+            ScreenGui.Enabled = not ScreenGui.Enabled
+        elseif input.KeyCode == Enum.KeyCode.RightShift then
+            Config.Enabled = not Config.Enabled
+            SaveSettings(Config)
+            EngineStatus.Text = Config.Enabled and "▶️ ENGINE RUNNING" or "⏹️ ENGINE IDLE"
+            EngineStatus.TextColor3 = Config.Enabled and Theme.Success or Theme.SubText
+        end
+    end
+end)
+
+print([[
+╔══════════════════════════════════════════╗
+║ RLWSCRIPTS - PS99 CHRISTMAS GRINCH      ║
+║ • Press H to hide/show GUI              ║
+║ • RightShift to toggle engine           ║
+║ • Settings saved automatically          ║
+╚══════════════════════════════════════════╝]])
