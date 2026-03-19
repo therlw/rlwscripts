@@ -31,6 +31,7 @@ local function handleLever()
     if pulled then return end
     pulled = true
     
+    print("Heroic mode detected, pulling lever in 0.7s...")
     task.wait(0.7)
     
     for i = 1, 5 do
@@ -39,11 +40,16 @@ local function handleLever()
         end)
         
         if ok then
+            print("Lever pulled successfully! (Attempt: " .. i .. ")")
             break
+        else
+            warn("Lever pull failed, retrying... (" .. i .. "/5)")
         end
         task.wait(0.5)
     end
 end
+
+print("Raid monitor started, waiting for door...")
 
 RunService.Heartbeat:Connect(function()
     local targetDoor = getDoor()
@@ -52,15 +58,19 @@ RunService.Heartbeat:Connect(function()
         if not door then
             door = targetDoor
             startPos = door:GetPivot()
+            print("Door found, monitoring movement.")
         end
         
         if startPos and not opened then
             local currentPos = door:GetPivot()
             if (currentPos.Position - startPos.Position).Magnitude > 1 then
                 opened = true
+                print("Door opened! Checking conditions...")
                 
                 if checkHeroic() then
                     task.spawn(handleLever)
+                else
+                    print("Not heroic mode, skipping lever.")
                 end
             end
         end
@@ -70,6 +80,7 @@ RunService.Heartbeat:Connect(function()
             startPos = nil
             opened = false
             pulled = false
+            print("Raid ended or door removed, resetting state.")
         end
     end
 end)
