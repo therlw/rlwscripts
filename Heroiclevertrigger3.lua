@@ -2,10 +2,18 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Network = require(ReplicatedStorage.Library.Client.Network)
 
-local pulled = false
-local opened = false
+local pulledLevers = {
+    Boss3 = false,
+    Boss2 = false,
+    Boss1 = false
+}
+
+local leverOrder = { 3, 2, 1 }  -- Önce 3, sonra 2, en son 1
+
+local room10Opened = false
 local door = nil
 local startPos = nil
+local isPulling = false  -- Aynı anda birden fazla çekme işlemini engellemek için
 
 local function getRaid()
     local things = workspace:FindFirstChild("__THINGS")
@@ -27,29 +35,55 @@ local function checkHeroic()
     return raid and raid.Rooms:FindFirstChild("Boss3") ~= nil
 end
 
-local function handleLever()
-    if pulled then return end
-    pulled = true
+local function pullLever(bossNumber)
+    local leverName = "Boss" .. bossNumber
+    if pulledLevers[leverName] then return true end
     
-    print("Heroic mode detected, pulling lever in 0.7s...")
-    task.wait(0.7)
+    print("🔧 Pulling " .. leverName .. " lever...")
     
     for i = 1, 5 do
         local ok = pcall(function()
-            return Network.Invoke("LuckyRaid_PullLever", 3)
+            return Network.Invoke("LuckyRaid_PullLever", bossNumber)
         end)
         
         if ok then
-            print("Lever pulled successfully! (Attempt: " .. i .. ")")
-            break
+            pulledLevers[leverName] = true
+            print("✅ " .. leverName .. " lever pulled successfully!")
+            return true
         else
-            warn("Lever pull failed, retrying... (" .. i .. "/5)")
+            warn("❌ " .. leverName .. " lever failed, retrying... (" .. i .. "/5)")
         end
         task.wait(0.5)
     end
+    return false
 end
 
-print("Raid monitor started, waiting for door...")
+local function pullAllLeversInOrder()
+    if isPulling then return end
+    isPulling = true
+    
+    if not checkHeroic() then
+        print("Not heroic mode, skipping levers.")
+        isPulling = false
+        return
+    end
+    
+    print("⚡ Heroic mode detected! Pulling levers in order: Boss3 → Boss2 → Boss1")
+    task.wait(0.7)
+    
+    -- Tüm lever'ları sırayla ama beklemeden çağır
+    for _, bossNumber in ipairs(leverOrder) do
+        task.spawn(function()
+            pullLever(bossNumber)
+        end)
+        -- BEKLEME YOK - hemen sıradaki lever'ı başlat
+    end
+    
+    print("🎉 All heroic levers triggered!")
+    isPulling = false
+end
+
+print("Raid monitor started, waiting for Room10 door to open...")
 
 RunService.Heartbeat:Connect(function()
     local targetDoor = getDoor()
@@ -58,29 +92,27 @@ RunService.Heartbeat:Connect(function()
         if not door then
             door = targetDoor
             startPos = door:GetPivot()
-            print("Door found, monitoring movement.")
+            print("🚪 Room10 door found, tracking movement.")
         end
         
-        if startPos and not opened then
+        if startPos and not room10Opened then
             local currentPos = door:GetPivot()
             if (currentPos.Position - startPos.Position).Magnitude > 1 then
-                opened = true
-                print("Door opened! Checking conditions...")
-                
-                if checkHeroic() then
-                    task.spawn(handleLever)
-                else
-                    print("Not heroic mode, skipping lever.")
-                end
+                room10Opened = true
+                print("🚪 Room10 door opened!")
+                task.spawn(pullAllLeversInOrder)
             end
         end
     else
         if door then
             door = nil
             startPos = nil
-            opened = false
-            pulled = false
-            print("Raid ended or door removed, resetting state.")
+            room10Opened = false
+            isPulling = false
+            for k in pairs(pulledLevers) do
+                pulledLevers[k] = false
+            end
+            print("🔄 Raid ended, resetting.")
         end
     end
 end)
