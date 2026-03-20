@@ -8,12 +8,12 @@ local pulledLevers = {
     Boss1 = false
 }
 
-local leverOrder = { 3, 2, 1 }  -- Önce 3, sonra 2, en son 1
+local leverOrder = { 3, 2, 1 }
 
 local room10Opened = false
 local door = nil
 local startPos = nil
-local isPulling = false  -- Aynı anda birden fazla çekme işlemini engellemek için
+local isPulling = false
 
 local function getRaid()
     local things = workspace:FindFirstChild("__THINGS")
@@ -71,12 +71,12 @@ local function pullAllLeversInOrder()
     print("⚡ Heroic mode detected! Pulling levers in order: Boss3 → Boss2 → Boss1")
     task.wait(0.7)
     
-    -- Tüm lever'ları sırayla ama beklemeden çağır
+    
     for _, bossNumber in ipairs(leverOrder) do
         task.spawn(function()
             pullLever(bossNumber)
         end)
-        -- BEKLEME YOK - hemen sıradaki lever'ı başlat
+        
     end
     
     print("🎉 All heroic levers triggered!")
