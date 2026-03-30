@@ -242,29 +242,29 @@ function Library:CreateKeySystem(config)
         BackgroundColor3 = Color3.fromRGB(12, 12, 14),
         CornerRadius = UDim.new(0, 12),
         Stroke = {Color = Color3.fromRGB(35, 35, 40), Thickness = 1},
-        ClipsDescendants = false
+        ClipsDescendants = true -- Changed to true to perfectly clip the accent line
     })
     
-    -- Drop Shadow (Fake)
-    el("ImageLabel", {
+    -- Drop Shadow (Fake) - Using a softer, more rounded shadow asset
+    local shadow = el("ImageLabel", {
         Name = "Shadow",
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.new(0.5, 0, 0.5, 4),
-        Size = UDim2.new(1, 60, 1, 60),
+        Size = UDim2.new(0, 440, 0, 310), -- Tighter fit for a more natural look
         BackgroundTransparency = 1,
-        Image = "rbxassetid://6015897843",
+        Image = "rbxassetid://1316045217",
         ImageColor3 = Color3.new(0, 0, 0),
         ImageTransparency = 0.4,
         ScaleType = Enum.ScaleType.Slice,
-        SliceCenter = Rect.new(49, 49, 450, 450),
+        SliceCenter = Rect.new(10, 10, 118, 118),
         ZIndex = -1,
-        Parent = mainFrame
+        Parent = screenGui
     })
 
-    -- Top Accent Line (Animated)
+    -- Top Accent Line (Animated) - Now directly inside MainFrame to be clipped by its UICorner
     local accentLine = el("Frame", {
         Name = "AccentLine",
-        Size = UDim2.new(1, 0, 0, 2),
+        Size = UDim2.new(1, 0, 0, 3), -- Slightly thicker for a better premium feel
         Position = UDim2.new(0, 0, 0, 0),
         BackgroundColor3 = Color3.new(1, 1, 1),
         BorderSizePixel = 0,
@@ -334,6 +334,8 @@ function Library:CreateKeySystem(config)
             task.delay(0.3, function() blurEffect:Destroy() end)
         end
         local tween = CreateTween(mainFrame, {Size = UDim2.new(0, 380, 0, 250), Position = UDim2.new(0.5, 0, 0.5, 20)}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+        CreateTween(shadow, {Size = UDim2.new(0, 420, 0, 290), Position = UDim2.new(0.5, 0, 0.5, 24), ImageTransparency = 1}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+        
         -- Fade out elements manually since GroupTransparency is buggy on Frames
         for _, v in pairs(mainFrame:GetDescendants()) do
             if v:IsA("TextLabel") or v:IsA("TextBox") or v:IsA("TextButton") then
@@ -492,12 +494,13 @@ function Library:CreateKeySystem(config)
     getKeyBtn.Parent = content
 
     -- Smooth Dragging Logic
-    local dragging, dragInput, mousePos, framePos
+    local dragging, dragInput, mousePos, framePos, shadowPos
     mainFrame.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             dragging = true
             mousePos = input.Position
             framePos = mainFrame.Position
+            shadowPos = shadow.Position
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then dragging = false end
             end)
@@ -512,6 +515,9 @@ function Library:CreateKeySystem(config)
             CreateTween(mainFrame, {
                 Position = UDim2.new(framePos.X.Scale, framePos.X.Offset + delta.X, framePos.Y.Scale, framePos.Y.Offset + delta.Y)
             }, 0.1, Enum.EasingStyle.Linear)
+            CreateTween(shadow, {
+                Position = UDim2.new(shadowPos.X.Scale, shadowPos.X.Offset + delta.X, shadowPos.Y.Scale, shadowPos.Y.Offset + delta.Y)
+            }, 0.1, Enum.EasingStyle.Linear)
         end
     end)
     
@@ -519,6 +525,10 @@ function Library:CreateKeySystem(config)
     mainFrame.Size = UDim2.new(0, 380, 0, 250)
     mainFrame.Position = UDim2.new(0.5, 0, 0.5, 20)
     mainFrame.BackgroundTransparency = 1
+    
+    shadow.Size = UDim2.new(0, 420, 0, 290)
+    shadow.Position = UDim2.new(0.5, 0, 0.5, 24)
+    shadow.ImageTransparency = 1
     
     -- Fade in elements
     for _, v in pairs(mainFrame:GetDescendants()) do
@@ -537,6 +547,7 @@ function Library:CreateKeySystem(config)
     end
     
     CreateTween(mainFrame, {Size = UDim2.new(0, 400, 0, 270), Position = UDim2.new(0.5, 0, 0.5, 0), BackgroundTransparency = 0}, 0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+    CreateTween(shadow, {Size = UDim2.new(0, 440, 0, 310), Position = UDim2.new(0.5, 0, 0.5, 4), ImageTransparency = 0.4}, 0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
     
     mainFrame.Parent = screenGui
     return screenGui
