@@ -117,15 +117,58 @@ function Library.PrimaryButton(props)
         ClipsDescendants = true,
         OnClick = props.OnClick
     })
+
+    -- Shine Effect
+    local shine = el("Frame", {
+        Name = "Shine",
+        Size = UDim2.new(0, 50, 1, 0),
+        Position = UDim2.new(-0.5, 0, 0, 0),
+        BackgroundColor3 = Color3.new(1, 1, 1),
+        BackgroundTransparency = 0.8,
+        Rotation = 25,
+        BorderSizePixel = 0,
+        ZIndex = 2,
+        Parent = btn,
+        Gradient = {
+            Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+                ColorSequenceKeypoint.new(0.5, Color3.new(1, 1, 1)),
+                ColorSequenceKeypoint.new(1, Color3.new(1, 1, 1))
+            })
+        }
+    })
+    local shineGrad = shine:FindFirstChildOfClass("UIGradient")
+    shineGrad.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 1),
+        NumberSequenceKeypoint.new(0.5, 0),
+        NumberSequenceKeypoint.new(1, 1)
+    })
+
+    local function PlayShine()
+        shine.Position = UDim2.new(-0.5, 0, 0, 0)
+        CreateTween(shine, {Position = UDim2.new(1.5, 0, 0, 0)}, 0.8, Enum.EasingStyle.Sine)
+    end
     
     btn.MouseEnter:Connect(function()
         if not btn:GetAttribute("Disabled") then
             CreateTween(btn, {BackgroundColor3 = hoverColor}, 0.2)
+            PlayShine()
         end
     end)
     btn.MouseLeave:Connect(function()
         if not btn:GetAttribute("Disabled") then
             CreateTween(btn, {BackgroundColor3 = mainColor}, 0.2)
+        end
+    end)
+    
+    btn.MouseButton1Down:Connect(function()
+        if not btn:GetAttribute("Disabled") then
+            CreateTween(btn, {Size = UDim2.new(0.98, 0, 0, 42)}, 0.1)
+        end
+    end)
+    btn.MouseButton1Up:Connect(function()
+        if not btn:GetAttribute("Disabled") then
+            CreateTween(btn, {Size = props.Size or UDim2.new(1, 0, 0, 44)}, 0.1)
         end
     end)
     
@@ -173,6 +216,18 @@ function Library.Input(props)
         CornerRadius = UDim.new(0, 8),
         Stroke = {Color = strokeColor, Thickness = 1}
     })
+
+    -- Focus Glow
+    local glow = el("Frame", {
+        Name = "Glow",
+        Size = UDim2.new(1, 4, 1, 4),
+        Position = UDim2.new(0, -2, 0, -2),
+        BackgroundTransparency = 1,
+        ZIndex = -1,
+        Parent = container,
+        CornerRadius = UDim.new(0, 10),
+        Stroke = {Color = focusColor, Thickness = 2, Transparency = 1}
+    })
     
     local input = el("TextBox", {
         Name = "TextBox",
@@ -191,13 +246,16 @@ function Library.Input(props)
     })
     
     local stroke = container:FindFirstChild("UIStroke")
+    local glowStroke = glow:FindFirstChild("UIStroke")
     
     input.Focused:Connect(function()
         if stroke then CreateTween(stroke, {Color = focusColor}, 0.2) end
+        if glowStroke then CreateTween(glowStroke, {Transparency = 0.7}, 0.2) end
     end)
     
     input.FocusLost:Connect(function()
         if stroke then CreateTween(stroke, {Color = strokeColor}, 0.2) end
+        if glowStroke then CreateTween(glowStroke, {Transparency = 1}, 0.2) end
         if props.OnFocusLost then props.OnFocusLost(input.Text) end
     end)
     
@@ -233,8 +291,8 @@ function Library:CreateKeySystem(config)
         CreateTween(blurEffect, {Size = 15}, 0.5)
     end
 
-    -- Main Card
-    local mainFrame = el("Frame", {
+    -- Main Card (CanvasGroup for perfect corner clipping)
+    local mainFrame = el("CanvasGroup", {
         Name = "Main",
         Size = UDim2.new(0, 400, 0, 270),
         Position = UDim2.new(0.5, 0, 0.5, 0),
@@ -242,33 +300,46 @@ function Library:CreateKeySystem(config)
         BackgroundColor3 = Color3.fromRGB(12, 12, 14),
         CornerRadius = UDim.new(0, 12),
         Stroke = {Color = Color3.fromRGB(35, 35, 40), Thickness = 1},
-        ClipsDescendants = true -- Changed to true to perfectly clip the accent line
+        GroupTransparency = 0,
+        ClipsDescendants = true
+    })
+
+    -- Subtle Grid Background
+    el("ImageLabel", {
+        Name = "Grid",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Image = "rbxassetid://12501061320", -- Subtle grid pattern
+        ImageTransparency = 0.96,
+        ScaleType = Enum.ScaleType.Tile,
+        TileSize = UDim2.new(0, 64, 0, 64),
+        Parent = mainFrame
     })
     
-    -- Drop Shadow (Fake) - Using a softer, more rounded shadow asset
+    -- Drop Shadow (Ultra-Subtle & Professional)
     local shadow = el("ImageLabel", {
         Name = "Shadow",
         AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(0.5, 0, 0.5, 4),
-        Size = UDim2.new(0, 440, 0, 310), -- Tighter fit for a more natural look
+        Position = UDim2.new(0.5, 0, 0.5, 8),
+        Size = UDim2.new(0, 420, 0, 290),
         BackgroundTransparency = 1,
         Image = "rbxassetid://1316045217",
         ImageColor3 = Color3.new(0, 0, 0),
-        ImageTransparency = 0.4,
+        ImageTransparency = 0.92,
         ScaleType = Enum.ScaleType.Slice,
         SliceCenter = Rect.new(10, 10, 118, 118),
         ZIndex = -1,
         Parent = screenGui
     })
 
-    -- Top Accent Line (Animated) - Now directly inside MainFrame to be clipped by its UICorner
+    -- Top Accent Line (Perfectly Clipped & Inset)
     local accentLine = el("Frame", {
         Name = "AccentLine",
-        Size = UDim2.new(1, 0, 0, 3), -- Slightly thicker for a better premium feel
-        Position = UDim2.new(0, 0, 0, 0),
+        Size = UDim2.new(1, -2, 0, 2),
+        Position = UDim2.new(0, 1, 0, 1),
         BackgroundColor3 = Color3.new(1, 1, 1),
         BorderSizePixel = 0,
-        ZIndex = 2,
+        ZIndex = 10,
         Parent = mainFrame,
         Gradient = {
             Color = ColorSequence.new({
@@ -277,6 +348,28 @@ function Library:CreateKeySystem(config)
                 ColorSequenceKeypoint.new(1, Color3.fromRGB(12, 12, 14))
             })
         }
+    })
+
+    -- Subtle Glow behind accent line
+    local accentGlow = el("Frame", {
+        Name = "Glow",
+        Size = UDim2.new(1, 0, 0, 15),
+        Position = UDim2.new(0, 0, 0, 0),
+        BackgroundTransparency = 1,
+        ZIndex = 9,
+        Parent = mainFrame,
+        Gradient = {
+            Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, mainColor),
+                ColorSequenceKeypoint.new(1, mainColor)
+            }),
+            Rotation = 90
+        }
+    })
+    local glowGrad = accentGlow:FindFirstChildOfClass("UIGradient")
+    glowGrad.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0.8),
+        NumberSequenceKeypoint.new(1, 1)
     })
     
     -- Animate Gradient
@@ -333,20 +426,8 @@ function Library:CreateKeySystem(config)
             CreateTween(blurEffect, {Size = 0}, 0.3)
             task.delay(0.3, function() blurEffect:Destroy() end)
         end
-        local tween = CreateTween(mainFrame, {Size = UDim2.new(0, 380, 0, 250), Position = UDim2.new(0.5, 0, 0.5, 20)}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-        CreateTween(shadow, {Size = UDim2.new(0, 420, 0, 290), Position = UDim2.new(0.5, 0, 0.5, 24), ImageTransparency = 1}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-        
-        -- Fade out elements manually since GroupTransparency is buggy on Frames
-        for _, v in pairs(mainFrame:GetDescendants()) do
-            if v:IsA("TextLabel") or v:IsA("TextBox") or v:IsA("TextButton") then
-                CreateTween(v, {TextTransparency = 1}, 0.2)
-            elseif v:IsA("Frame") and v.Name ~= "Main" then
-                CreateTween(v, {BackgroundTransparency = 1}, 0.2)
-            elseif v:IsA("UIStroke") then
-                CreateTween(v, {Transparency = 1}, 0.2)
-            end
-        end
-        CreateTween(mainFrame, {BackgroundTransparency = 1}, 0.3)
+        local tween = CreateTween(mainFrame, {Size = UDim2.new(0, 380, 0, 250), Position = UDim2.new(0.5, 0, 0.5, 20), GroupTransparency = 1}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+        CreateTween(shadow, {Size = UDim2.new(0, 400, 0, 270), Position = UDim2.new(0.5, 0, 0.5, 24), ImageTransparency = 1}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In)
         
         tween.Completed:Wait()
         screenGui:Destroy()
@@ -524,30 +605,14 @@ function Library:CreateKeySystem(config)
     -- Entrance Animation
     mainFrame.Size = UDim2.new(0, 380, 0, 250)
     mainFrame.Position = UDim2.new(0.5, 0, 0.5, 20)
-    mainFrame.BackgroundTransparency = 1
+    mainFrame.GroupTransparency = 1
     
-    shadow.Size = UDim2.new(0, 420, 0, 290)
+    shadow.Size = UDim2.new(0, 410, 0, 280)
     shadow.Position = UDim2.new(0.5, 0, 0.5, 24)
     shadow.ImageTransparency = 1
     
-    -- Fade in elements
-    for _, v in pairs(mainFrame:GetDescendants()) do
-        if v:IsA("TextLabel") or v:IsA("TextBox") or v:IsA("TextButton") then
-            v.TextTransparency = 1
-            CreateTween(v, {TextTransparency = 0}, 0.4)
-        elseif v:IsA("Frame") and v.Name ~= "Main" then
-            local origTrans = v.BackgroundTransparency
-            v.BackgroundTransparency = 1
-            CreateTween(v, {BackgroundTransparency = origTrans}, 0.4)
-        elseif v:IsA("UIStroke") then
-            local origTrans = v.Transparency
-            v.Transparency = 1
-            CreateTween(v, {Transparency = origTrans}, 0.4)
-        end
-    end
-    
-    CreateTween(mainFrame, {Size = UDim2.new(0, 400, 0, 270), Position = UDim2.new(0.5, 0, 0.5, 0), BackgroundTransparency = 0}, 0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-    CreateTween(shadow, {Size = UDim2.new(0, 440, 0, 310), Position = UDim2.new(0.5, 0, 0.5, 4), ImageTransparency = 0.4}, 0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+    CreateTween(mainFrame, {Size = UDim2.new(0, 400, 0, 270), Position = UDim2.new(0.5, 0, 0.5, 0), GroupTransparency = 0}, 0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+    CreateTween(shadow, {Size = UDim2.new(0, 420, 0, 290), Position = UDim2.new(0.5, 0, 0.5, 8), ImageTransparency = 0.92}, 0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
     
     mainFrame.Parent = screenGui
     return screenGui
