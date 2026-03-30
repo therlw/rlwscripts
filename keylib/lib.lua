@@ -1,10 +1,11 @@
--- Advanced React-Like Key System Library
--- Professional, Modern, and Sleek UI Design
+-- Advanced React-Like Key System Library v2.0
+-- Professional, Modern, Sleek UI Design with Animations & Premium Features
 
 local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
 
 local Library = {}
 
@@ -14,6 +15,25 @@ local function CreateTween(instance, properties, duration, style, direction)
     local tween = TweenService:Create(instance, tweenInfo, properties)
     tween:Play()
     return tween
+end
+
+-- Exploit File System Wrappers (Safe)
+local function SaveKeyToFile(key)
+    if writefile then
+        pcall(function() writefile("RLW_SavedKey.txt", key) end)
+    end
+end
+
+local function LoadKeyFromFile()
+    if readfile and isfile then
+        local success, result = pcall(function()
+            if isfile("RLW_SavedKey.txt") then
+                return readfile("RLW_SavedKey.txt")
+            end
+        end)
+        if success and result then return result end
+    end
+    return ""
 end
 
 -- [[ REACT-LIKE ELEMENT CREATOR ]]
@@ -99,10 +119,14 @@ function Library.PrimaryButton(props)
     })
     
     btn.MouseEnter:Connect(function()
-        CreateTween(btn, {BackgroundColor3 = hoverColor}, 0.2)
+        if not btn:GetAttribute("Disabled") then
+            CreateTween(btn, {BackgroundColor3 = hoverColor}, 0.2)
+        end
     end)
     btn.MouseLeave:Connect(function()
-        CreateTween(btn, {BackgroundColor3 = mainColor}, 0.2)
+        if not btn:GetAttribute("Disabled") then
+            CreateTween(btn, {BackgroundColor3 = mainColor}, 0.2)
+        end
     end)
     
     return btn
@@ -154,7 +178,7 @@ function Library.Input(props)
         Name = "TextBox",
         Size = UDim2.new(1, 0, 1, 0),
         BackgroundTransparency = 1,
-        Text = "",
+        Text = props.DefaultText or "",
         PlaceholderText = props.PlaceholderText or "Enter text...",
         TextColor3 = Color3.fromRGB(240, 240, 245),
         PlaceholderColor3 = Color3.fromRGB(110, 110, 115),
@@ -187,6 +211,8 @@ function Library:CreateKeySystem(config)
     local titleText = config.Title or "RLWSCRIPTS"
     local descText = config.Description or "Please enter your key to continue."
     local mainColor = config.MainColor or Color3.fromRGB(99, 102, 241)
+    local useBlur = config.UseBlur == nil and true or config.UseBlur
+    local saveKey = config.SaveKey == nil and true or config.SaveKey
     
     local screenGui = el("ScreenGui", {
         Name = "ProfessionalKeySystem",
@@ -197,6 +223,15 @@ function Library:CreateKeySystem(config)
     if gethui then screenGui.Parent = gethui()
     elseif syn and syn.protect_gui then syn.protect_gui(screenGui); screenGui.Parent = CoreGui
     else screenGui.Parent = CoreGui end
+
+    -- Blur Effect
+    local blurEffect
+    if useBlur then
+        blurEffect = Instance.new("BlurEffect")
+        blurEffect.Size = 0
+        blurEffect.Parent = Lighting
+        CreateTween(blurEffect, {Size = 15}, 0.5)
+    end
 
     -- Main Card
     local mainFrame = el("Frame", {
@@ -226,8 +261,8 @@ function Library:CreateKeySystem(config)
         Parent = mainFrame
     })
 
-    -- Top Accent Line
-    el("Frame", {
+    -- Top Accent Line (Animated)
+    local accentLine = el("Frame", {
         Name = "AccentLine",
         Size = UDim2.new(1, 0, 0, 2),
         Position = UDim2.new(0, 0, 0, 0),
@@ -243,6 +278,17 @@ function Library:CreateKeySystem(config)
             })
         }
     })
+    
+    -- Animate Gradient
+    local grad = accentLine:FindFirstChildOfClass("UIGradient")
+    task.spawn(function()
+        local offset = 0
+        while grad and grad.Parent do
+            offset = offset + 0.01
+            grad.Offset = Vector2.new(math.sin(offset), 0)
+            task.wait(0.03)
+        end
+    end)
     
     -- Header Container
     local header = el("Frame", {
@@ -281,6 +327,29 @@ function Library:CreateKeySystem(config)
         Parent = header
     })
     
+    -- Close Function
+    local function CloseUI()
+        if blurEffect then
+            CreateTween(blurEffect, {Size = 0}, 0.3)
+            task.delay(0.3, function() blurEffect:Destroy() end)
+        end
+        local tween = CreateTween(mainFrame, {Size = UDim2.new(0, 380, 0, 250), Position = UDim2.new(0.5, 0, 0.5, 20)}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+        -- Fade out elements manually since GroupTransparency is buggy on Frames
+        for _, v in pairs(mainFrame:GetDescendants()) do
+            if v:IsA("TextLabel") or v:IsA("TextBox") or v:IsA("TextButton") then
+                CreateTween(v, {TextTransparency = 1}, 0.2)
+            elseif v:IsA("Frame") and v.Name ~= "Main" then
+                CreateTween(v, {BackgroundTransparency = 1}, 0.2)
+            elseif v:IsA("UIStroke") then
+                CreateTween(v, {Transparency = 1}, 0.2)
+            end
+        end
+        CreateTween(mainFrame, {BackgroundTransparency = 1}, 0.3)
+        
+        tween.Completed:Wait()
+        screenGui:Destroy()
+    end
+
     -- Close Button
     el("TextButton", {
         Name = "CloseBtn",
@@ -295,11 +364,7 @@ function Library:CreateKeySystem(config)
         Parent = header,
         OnMouseEnter = function(self) CreateTween(self, {TextColor3 = Color3.fromRGB(255, 255, 255)}, 0.2) end,
         OnMouseLeave = function(self) CreateTween(self, {TextColor3 = Color3.fromRGB(120, 120, 130)}, 0.2) end,
-        OnClick = function()
-            local tween = CreateTween(mainFrame, {Size = UDim2.new(0, 380, 0, 250), GroupTransparency = 1}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-            tween.Completed:Wait()
-            screenGui:Destroy()
-        end
+        OnClick = CloseUI
     })
     
     -- Content Container
@@ -313,16 +378,18 @@ function Library:CreateKeySystem(config)
     })
     
     -- Input Field
+    local initialKey = saveKey and LoadKeyFromFile() or ""
     local inputContainer, inputBox = Library.Input({
         Name = "KeyInput",
         Size = UDim2.new(1, 0, 0, 44),
         Position = UDim2.new(0, 0, 0, 10),
         PlaceholderText = "Enter your license key...",
+        DefaultText = initialKey,
         FocusColor = mainColor
     })
     inputContainer.Parent = content
     
-    -- Status Label (Hidden initially)
+    -- Status Label
     local statusLabel = el("TextLabel", {
         Name = "Status",
         Size = UDim2.new(1, 0, 0, 20),
@@ -346,31 +413,64 @@ function Library:CreateKeySystem(config)
         end)
     end
 
+    local function ShakeUI()
+        local origPos = mainFrame.Position
+        for i = 1, 6 do
+            mainFrame.Position = origPos + UDim2.new(0, math.random(-4, 4), 0, math.random(-4, 4))
+            task.wait(0.04)
+        end
+        mainFrame.Position = origPos
+    end
+
     -- Buttons
+    local validating = false
     local validateBtn = Library.PrimaryButton({
         Name = "ValidateBtn",
         Size = UDim2.new(1, 0, 0, 44),
         Position = UDim2.new(0, 0, 1, -96),
         Text = "Validate Key",
         Color = mainColor,
-        OnClick = function()
+        OnClick = function(self)
+            if validating then return end
             local key = inputBox.Text
             if key == "" then
                 ShowStatus("Please enter a key first.")
+                ShakeUI()
                 return
             end
             
             if config.OnValidate then
+                validating = true
+                self:SetAttribute("Disabled", true)
+                
+                -- Loading Animation
+                local originalText = self.Text
+                local originalColor = self.BackgroundColor3
+                self.Text = "Validating..."
+                CreateTween(self, {BackgroundColor3 = Color3.fromRGB(60, 60, 70)}, 0.2)
+                
+                -- Simulate Network Delay for premium feel
+                task.wait(0.6)
+                
                 local success = config.OnValidate(key)
                 if success then
-                    ShowStatus("Successfully authenticated!", Color3.fromRGB(80, 255, 120))
-                    task.wait(0.5)
-                    local tween = CreateTween(mainFrame, {Size = UDim2.new(0, 380, 0, 250), GroupTransparency = 1}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-                    tween.Completed:Wait()
-                    screenGui:Destroy()
+                    if saveKey then SaveKeyToFile(key) end
+                    self.Text = "Success!"
+                    CreateTween(self, {BackgroundColor3 = Color3.fromRGB(46, 204, 113)}, 0.2)
+                    ShowStatus("Successfully authenticated!", Color3.fromRGB(46, 204, 113))
+                    task.wait(0.6)
+                    CloseUI()
                 else
+                    self.Text = "Invalid Key"
+                    CreateTween(self, {BackgroundColor3 = Color3.fromRGB(231, 76, 60)}, 0.2)
                     ShowStatus("Invalid key provided. Please try again.")
+                    ShakeUI()
                     inputBox.Text = ""
+                    task.wait(1)
+                    self.Text = originalText
+                    CreateTween(self, {BackgroundColor3 = originalColor}, 0.2)
+                    self:SetAttribute("Disabled", false)
+                    validating = false
                 end
             end
         end
@@ -390,16 +490,6 @@ function Library:CreateKeySystem(config)
         end
     })
     getKeyBtn.Parent = content
-    
-    -- CanvasGroup for overall transparency tweening
-    local canvasGroup = el("CanvasGroup", {
-        Size = UDim2.new(1, 0, 1, 0),
-        BackgroundTransparency = 1,
-        Parent = mainFrame
-    })
-    -- Move children to canvas group for proper fading (except shadow and accent line which we handle separately if needed, but for simplicity we'll just tween the main frame size/transparency)
-    -- Actually, CanvasGroup can be buggy in some exploits. We'll stick to standard tweening.
-    canvasGroup:Destroy()
 
     -- Smooth Dragging Logic
     local dragging, dragInput, mousePos, framePos
@@ -419,7 +509,6 @@ function Library:CreateKeySystem(config)
     UserInputService.InputChanged:Connect(function(input)
         if input == dragInput and dragging then
             local delta = input.Position - mousePos
-            -- Smooth lerp dragging
             CreateTween(mainFrame, {
                 Position = UDim2.new(framePos.X.Scale, framePos.X.Offset + delta.X, framePos.Y.Scale, framePos.Y.Offset + delta.Y)
             }, 0.1, Enum.EasingStyle.Linear)
@@ -428,10 +517,26 @@ function Library:CreateKeySystem(config)
     
     -- Entrance Animation
     mainFrame.Size = UDim2.new(0, 380, 0, 250)
-    mainFrame.GroupTransparency = 1 -- If using CanvasGroup, otherwise we just scale
-    CreateTween(mainFrame, {Size = UDim2.new(0, 400, 0, 270)}, 0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+    mainFrame.Position = UDim2.new(0.5, 0, 0.5, 20)
+    mainFrame.BackgroundTransparency = 1
     
-    -- We can simulate GroupTransparency by adding a CanvasGroup wrapper, but to ensure exploit compatibility, scaling is safest.
+    -- Fade in elements
+    for _, v in pairs(mainFrame:GetDescendants()) do
+        if v:IsA("TextLabel") or v:IsA("TextBox") or v:IsA("TextButton") then
+            v.TextTransparency = 1
+            CreateTween(v, {TextTransparency = 0}, 0.4)
+        elseif v:IsA("Frame") and v.Name ~= "Main" then
+            local origTrans = v.BackgroundTransparency
+            v.BackgroundTransparency = 1
+            CreateTween(v, {BackgroundTransparency = origTrans}, 0.4)
+        elseif v:IsA("UIStroke") then
+            local origTrans = v.Transparency
+            v.Transparency = 1
+            CreateTween(v, {Transparency = origTrans}, 0.4)
+        end
+    end
+    
+    CreateTween(mainFrame, {Size = UDim2.new(0, 400, 0, 270), Position = UDim2.new(0.5, 0, 0.5, 0), BackgroundTransparency = 0}, 0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
     
     mainFrame.Parent = screenGui
     return screenGui
