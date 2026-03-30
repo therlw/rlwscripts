@@ -1,30 +1,39 @@
--- KeySystemLibrary.lua
--- A detailed, React-like GUI Library for Roblox Key Systems
+-- Advanced React-Like Key System Library
+-- Professional, Modern, and Sleek UI Design
 
 local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
 
 local Library = {}
 
+-- [[ UTILITIES ]]
+local function CreateTween(instance, properties, duration, style, direction)
+    local tweenInfo = TweenInfo.new(duration or 0.2, style or Enum.EasingStyle.Quad, direction or Enum.EasingDirection.Out)
+    local tween = TweenService:Create(instance, tweenInfo, properties)
+    tween:Play()
+    return tween
+end
+
 -- [[ REACT-LIKE ELEMENT CREATOR ]]
--- This function acts like React.createElement, allowing nested, declarative UI building.
 function Library.createElement(className, props, children)
     local inst = Instance.new(className)
     
     if props then
         for k, v in pairs(props) do
-            -- Event binding (e.g., OnClick -> MouseButton1Click)
             if type(v) == "function" and string.match(k, "^On") then
                 local eventName = string.sub(k, 3)
                 if eventName == "Click" then eventName = "MouseButton1Click" end
                 if eventName == "Change" then eventName = "Changed" end
                 if eventName == "FocusLost" then eventName = "FocusLost" end
+                if eventName == "FocusGained" then eventName = "Focused" end
+                if eventName == "MouseEnter" then eventName = "MouseEnter" end
+                if eventName == "MouseLeave" then eventName = "MouseLeave" end
                 
                 if inst[eventName] then
                     inst[eventName]:Connect(v)
                 end
-            -- Custom declarative properties
             elseif k == "CornerRadius" then
                 local corner = Instance.new("UICorner")
                 corner.CornerRadius = v
@@ -33,6 +42,7 @@ function Library.createElement(className, props, children)
                 local stroke = Instance.new("UIStroke")
                 stroke.Color = v.Color or Color3.new(0,0,0)
                 stroke.Thickness = v.Thickness or 1
+                stroke.Transparency = v.Transparency or 0
                 stroke.ApplyStrokeMode = v.ApplyStrokeMode or Enum.ApplyStrokeMode.Border
                 stroke.Parent = inst
             elseif k == "Gradient" then
@@ -40,14 +50,19 @@ function Library.createElement(className, props, children)
                 grad.Color = v.Color
                 grad.Rotation = v.Rotation or 0
                 grad.Parent = inst
+            elseif k == "Padding" then
+                local pad = Instance.new("UIPadding")
+                pad.PaddingTop = v.Top or UDim.new(0,0)
+                pad.PaddingBottom = v.Bottom or UDim.new(0,0)
+                pad.PaddingLeft = v.Left or UDim.new(0,0)
+                pad.PaddingRight = v.Right or UDim.new(0,0)
+                pad.Parent = inst
             else
-                -- Standard properties
                 inst[k] = v
             end
         end
     end
     
-    -- Append children
     if children then
         for _, child in ipairs(children) do
             if typeof(child) == "Instance" then
@@ -63,53 +78,106 @@ local el = Library.createElement
 
 -- [[ REUSABLE COMPONENTS ]]
 
-function Library.Button(props)
-    local defaultColor = props.BackgroundColor3 or Color3.fromRGB(45, 45, 45)
-    local hoverColor = props.HoverColor or Color3.fromRGB(65, 65, 65)
+function Library.PrimaryButton(props)
+    local mainColor = props.Color or Color3.fromRGB(99, 102, 241)
+    local h, s, v = mainColor:ToHSV()
+    local hoverColor = Color3.fromHSV(h, s, math.clamp(v - 0.1, 0, 1))
     
     local btn = el("TextButton", {
-        Name = props.Name or "Button",
-        Size = props.Size or UDim2.new(1, 0, 0, 40),
+        Name = props.Name or "PrimaryButton",
+        Size = props.Size or UDim2.new(1, 0, 0, 44),
         Position = props.Position,
-        BackgroundColor3 = defaultColor,
+        BackgroundColor3 = mainColor,
         Text = props.Text or "Button",
-        TextColor3 = props.TextColor3 or Color3.fromRGB(255, 255, 255),
-        Font = props.Font or Enum.Font.GothamBold,
-        TextSize = props.TextSize or 14,
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        Font = Enum.Font.GothamMedium,
+        TextSize = 14,
         AutoButtonColor = false,
-        CornerRadius = props.CornerRadius or UDim.new(0, 8),
+        CornerRadius = UDim.new(0, 8),
+        ClipsDescendants = true,
         OnClick = props.OnClick
     })
     
-    -- Hover animations
     btn.MouseEnter:Connect(function()
-        TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = hoverColor}):Play()
+        CreateTween(btn, {BackgroundColor3 = hoverColor}, 0.2)
     end)
     btn.MouseLeave:Connect(function()
-        TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = defaultColor}):Play()
+        CreateTween(btn, {BackgroundColor3 = mainColor}, 0.2)
+    end)
+    
+    return btn
+end
+
+function Library.SecondaryButton(props)
+    local defaultBg = Color3.fromRGB(20, 20, 22)
+    local hoverBg = Color3.fromRGB(30, 30, 35)
+    
+    local btn = el("TextButton", {
+        Name = props.Name or "SecondaryButton",
+        Size = props.Size or UDim2.new(1, 0, 0, 44),
+        Position = props.Position,
+        BackgroundColor3 = defaultBg,
+        Text = props.Text or "Button",
+        TextColor3 = Color3.fromRGB(220, 220, 225),
+        Font = Enum.Font.GothamMedium,
+        TextSize = 14,
+        AutoButtonColor = false,
+        CornerRadius = UDim.new(0, 8),
+        Stroke = {Color = Color3.fromRGB(45, 45, 50), Thickness = 1},
+        OnClick = props.OnClick
+    })
+    
+    btn.MouseEnter:Connect(function()
+        CreateTween(btn, {BackgroundColor3 = hoverBg}, 0.2)
+    end)
+    btn.MouseLeave:Connect(function()
+        CreateTween(btn, {BackgroundColor3 = defaultBg}, 0.2)
     end)
     
     return btn
 end
 
 function Library.Input(props)
-    local input = el("TextBox", {
-        Name = props.Name or "Input",
-        Size = props.Size or UDim2.new(1, 0, 0, 40),
+    local strokeColor = Color3.fromRGB(45, 45, 50)
+    local focusColor = props.FocusColor or Color3.fromRGB(99, 102, 241)
+    
+    local container = el("Frame", {
+        Name = props.Name or "InputContainer",
+        Size = props.Size or UDim2.new(1, 0, 0, 44),
         Position = props.Position,
-        BackgroundColor3 = props.BackgroundColor3 or Color3.fromRGB(25, 25, 25),
+        BackgroundColor3 = Color3.fromRGB(15, 15, 17),
+        CornerRadius = UDim.new(0, 8),
+        Stroke = {Color = strokeColor, Thickness = 1}
+    })
+    
+    local input = el("TextBox", {
+        Name = "TextBox",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
         Text = "",
         PlaceholderText = props.PlaceholderText or "Enter text...",
-        TextColor3 = props.TextColor3 or Color3.fromRGB(255, 255, 255),
-        PlaceholderColor3 = props.PlaceholderColor3 or Color3.fromRGB(120, 120, 120),
-        Font = props.Font or Enum.Font.Gotham,
-        TextSize = props.TextSize or 14,
+        TextColor3 = Color3.fromRGB(240, 240, 245),
+        PlaceholderColor3 = Color3.fromRGB(110, 110, 115),
+        Font = Enum.Font.Gotham,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left,
         ClearTextOnFocus = false,
-        CornerRadius = props.CornerRadius or UDim.new(0, 8),
-        Stroke = props.Stroke,
-        OnFocusLost = props.OnFocusLost
+        Padding = {Left = UDim.new(0, 16), Right = UDim.new(0, 16)},
+        Parent = container
     })
-    return input
+    
+    local stroke = container:FindFirstChild("UIStroke")
+    
+    input.Focused:Connect(function()
+        if stroke then CreateTween(stroke, {Color = focusColor}, 0.2) end
+    end)
+    
+    input.FocusLost:Connect(function()
+        if stroke then CreateTween(stroke, {Color = strokeColor}, 0.2) end
+        if props.OnFocusLost then props.OnFocusLost(input.Text) end
+    end)
+    
+    return container, input
 end
 
 -- [[ MAIN SYSTEM BUILDER ]]
@@ -118,144 +186,221 @@ function Library:CreateKeySystem(config)
     config = config or {}
     local titleText = config.Title or "RLWSCRIPTS"
     local descText = config.Description or "Please enter your key to continue."
-    local mainColor = config.MainColor or Color3.fromRGB(80, 0, 255)
-    local bgDark = Color3.fromRGB(15, 15, 15)
-    local bgLighter = Color3.fromRGB(25, 25, 25)
+    local mainColor = config.MainColor or Color3.fromRGB(99, 102, 241)
     
     local screenGui = el("ScreenGui", {
-        Name = "ReactLikeKeySystem",
+        Name = "ProfessionalKeySystem",
         ResetOnSpawn = false,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     })
     
-    -- Exploit GUI Protection
-    if gethui then
-        screenGui.Parent = gethui()
-    elseif syn and syn.protect_gui then
-        syn.protect_gui(screenGui)
-        screenGui.Parent = CoreGui
-    else
-        screenGui.Parent = CoreGui
-    end
+    if gethui then screenGui.Parent = gethui()
+    elseif syn and syn.protect_gui then syn.protect_gui(screenGui); screenGui.Parent = CoreGui
+    else screenGui.Parent = CoreGui end
 
-    -- Declarative UI Tree (React Style)
+    -- Main Card
     local mainFrame = el("Frame", {
         Name = "Main",
-        Size = UDim2.new(0, 420, 0, 280),
+        Size = UDim2.new(0, 400, 0, 270),
         Position = UDim2.new(0.5, 0, 0.5, 0),
         AnchorPoint = Vector2.new(0.5, 0.5),
-        BackgroundColor3 = bgDark,
+        BackgroundColor3 = Color3.fromRGB(12, 12, 14),
         CornerRadius = UDim.new(0, 12),
-        Stroke = {Color = mainColor, Thickness = 2},
-        ClipsDescendants = true
-    }, {
-        -- Close Button
-        el("TextButton", {
-            Size = UDim2.new(0, 30, 0, 30),
-            Position = UDim2.new(1, -10, 0, 10),
-            AnchorPoint = Vector2.new(1, 0),
-            BackgroundTransparency = 1,
-            Text = "✖",
-            TextColor3 = Color3.fromRGB(150, 150, 150),
-            TextSize = 16,
-            Font = Enum.Font.GothamBold,
-            OnClick = function()
-                -- Exit Animation
-                local tween = TweenService:Create(screenGui.Main, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In), {Size = UDim2.new(0, 0, 0, 0)})
-                tween:Play()
-                tween.Completed:Wait()
-                screenGui:Destroy()
-            end
-        }),
-        
-        -- Title
-        el("TextLabel", {
-            Size = UDim2.new(1, 0, 0, 30),
-            Position = UDim2.new(0, 0, 0, 25),
-            BackgroundTransparency = 1,
-            Text = titleText,
-            TextColor3 = mainColor,
-            TextSize = 24,
-            Font = Enum.Font.GothamBlack
-        }),
-        
-        -- Description
-        el("TextLabel", {
-            Size = UDim2.new(1, 0, 0, 20),
-            Position = UDim2.new(0, 0, 0, 60),
-            BackgroundTransparency = 1,
-            Text = descText,
-            TextColor3 = Color3.fromRGB(150, 150, 150),
-            TextSize = 14,
-            Font = Enum.Font.Gotham
-        }),
-        
-        -- Input & Buttons Container
-        el("Frame", {
-            Name = "Container",
-            Size = UDim2.new(1, -60, 0, 160),
-            Position = UDim2.new(0, 30, 0, 100),
-            BackgroundTransparency = 1
-        }, {
-            Library.Input({
-                Name = "KeyInput",
-                Size = UDim2.new(1, 0, 0, 45),
-                Position = UDim2.new(0, 0, 0, 0),
-                BackgroundColor3 = bgLighter,
-                PlaceholderText = "Paste your key here...",
-                CornerRadius = UDim.new(0, 8)
-            }),
-            
-            Library.Button({
-                Name = "ValidateBtn",
-                Size = UDim2.new(1, 0, 0, 45),
-                Position = UDim2.new(0, 0, 0, 55),
-                BackgroundColor3 = mainColor,
-                HoverColor = Color3.fromRGB(100, 40, 255),
-                Text = "Validate & Start",
-                CornerRadius = UDim.new(0, 8),
-                OnClick = function()
-                    local input = screenGui.Main.Container.KeyInput
-                    local key = input.Text
-                    if config.OnValidate then
-                        local success = config.OnValidate(key)
-                        if success then
-                            local tween = TweenService:Create(screenGui.Main, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In), {Size = UDim2.new(0, 0, 0, 0)})
-                            tween:Play()
-                            tween.Completed:Wait()
-                            screenGui:Destroy()
-                        else
-                            input.Text = ""
-                            input.PlaceholderText = "Invalid Key!"
-                            input.PlaceholderColor3 = Color3.fromRGB(255, 50, 50)
-                            task.wait(1.5)
-                            input.PlaceholderText = "Paste your key here..."
-                            input.PlaceholderColor3 = Color3.fromRGB(120, 120, 120)
-                        end
-                    end
-                end
-            }),
-            
-            Library.Button({
-                Name = "GetKeyBtn",
-                Size = UDim2.new(1, 0, 0, 45),
-                Position = UDim2.new(0, 0, 0, 110),
-                BackgroundColor3 = bgLighter,
-                HoverColor = Color3.fromRGB(35, 35, 35),
-                Text = "Get Free Key (Copy URL)",
-                TextColor3 = Color3.fromRGB(200, 200, 200),
-                CornerRadius = UDim.new(0, 8),
-                OnClick = function()
-                    if config.OnGetKey then
-                        config.OnGetKey()
-                    end
-                end
-            })
-        })
+        Stroke = {Color = Color3.fromRGB(35, 35, 40), Thickness = 1},
+        ClipsDescendants = false
     })
     
-    mainFrame.Parent = screenGui
+    -- Drop Shadow (Fake)
+    el("ImageLabel", {
+        Name = "Shadow",
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0.5, 0, 0.5, 4),
+        Size = UDim2.new(1, 60, 1, 60),
+        BackgroundTransparency = 1,
+        Image = "rbxassetid://6015897843",
+        ImageColor3 = Color3.new(0, 0, 0),
+        ImageTransparency = 0.4,
+        ScaleType = Enum.ScaleType.Slice,
+        SliceCenter = Rect.new(49, 49, 450, 450),
+        ZIndex = -1,
+        Parent = mainFrame
+    })
+
+    -- Top Accent Line
+    el("Frame", {
+        Name = "AccentLine",
+        Size = UDim2.new(1, 0, 0, 2),
+        Position = UDim2.new(0, 0, 0, 0),
+        BackgroundColor3 = Color3.new(1, 1, 1),
+        BorderSizePixel = 0,
+        ZIndex = 2,
+        Parent = mainFrame,
+        Gradient = {
+            Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.fromRGB(12, 12, 14)),
+                ColorSequenceKeypoint.new(0.5, mainColor),
+                ColorSequenceKeypoint.new(1, Color3.fromRGB(12, 12, 14))
+            })
+        }
+    })
     
+    -- Header Container
+    local header = el("Frame", {
+        Name = "Header",
+        Size = UDim2.new(1, 0, 0, 80),
+        BackgroundTransparency = 1,
+        Parent = mainFrame,
+        Padding = {Left = UDim.new(0, 24), Right = UDim.new(0, 24), Top = UDim.new(0, 24)}
+    })
+    
+    -- Title
+    el("TextLabel", {
+        Name = "Title",
+        Size = UDim2.new(1, -30, 0, 24),
+        Position = UDim2.new(0, 0, 0, 0),
+        BackgroundTransparency = 1,
+        Text = titleText,
+        TextColor3 = Color3.fromRGB(250, 250, 255),
+        TextSize = 20,
+        Font = Enum.Font.GothamBold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = header
+    })
+    
+    -- Description
+    el("TextLabel", {
+        Name = "Description",
+        Size = UDim2.new(1, 0, 0, 20),
+        Position = UDim2.new(0, 0, 0, 28),
+        BackgroundTransparency = 1,
+        Text = descText,
+        TextColor3 = Color3.fromRGB(160, 160, 170),
+        TextSize = 13,
+        Font = Enum.Font.Gotham,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = header
+    })
+    
+    -- Close Button
+    el("TextButton", {
+        Name = "CloseBtn",
+        Size = UDim2.new(0, 24, 0, 24),
+        Position = UDim2.new(1, 0, 0, 0),
+        AnchorPoint = Vector2.new(1, 0),
+        BackgroundTransparency = 1,
+        Text = "✕",
+        TextColor3 = Color3.fromRGB(120, 120, 130),
+        TextSize = 16,
+        Font = Enum.Font.GothamMedium,
+        Parent = header,
+        OnMouseEnter = function(self) CreateTween(self, {TextColor3 = Color3.fromRGB(255, 255, 255)}, 0.2) end,
+        OnMouseLeave = function(self) CreateTween(self, {TextColor3 = Color3.fromRGB(120, 120, 130)}, 0.2) end,
+        OnClick = function()
+            local tween = CreateTween(mainFrame, {Size = UDim2.new(0, 380, 0, 250), GroupTransparency = 1}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+            tween.Completed:Wait()
+            screenGui:Destroy()
+        end
+    })
+    
+    -- Content Container
+    local content = el("Frame", {
+        Name = "Content",
+        Size = UDim2.new(1, 0, 1, -80),
+        Position = UDim2.new(0, 0, 0, 80),
+        BackgroundTransparency = 1,
+        Parent = mainFrame,
+        Padding = {Left = UDim.new(0, 24), Right = UDim.new(0, 24), Bottom = UDim.new(0, 24)}
+    })
+    
+    -- Input Field
+    local inputContainer, inputBox = Library.Input({
+        Name = "KeyInput",
+        Size = UDim2.new(1, 0, 0, 44),
+        Position = UDim2.new(0, 0, 0, 10),
+        PlaceholderText = "Enter your license key...",
+        FocusColor = mainColor
+    })
+    inputContainer.Parent = content
+    
+    -- Status Label (Hidden initially)
+    local statusLabel = el("TextLabel", {
+        Name = "Status",
+        Size = UDim2.new(1, 0, 0, 20),
+        Position = UDim2.new(0, 0, 0, 58),
+        BackgroundTransparency = 1,
+        Text = "",
+        TextColor3 = Color3.fromRGB(255, 80, 80),
+        TextSize = 12,
+        Font = Enum.Font.GothamMedium,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextTransparency = 1,
+        Parent = content
+    })
+    
+    local function ShowStatus(text, color)
+        statusLabel.Text = text
+        statusLabel.TextColor3 = color or Color3.fromRGB(255, 80, 80)
+        CreateTween(statusLabel, {TextTransparency = 0}, 0.2)
+        task.delay(2.5, function()
+            CreateTween(statusLabel, {TextTransparency = 1}, 0.2)
+        end)
+    end
+
+    -- Buttons
+    local validateBtn = Library.PrimaryButton({
+        Name = "ValidateBtn",
+        Size = UDim2.new(1, 0, 0, 44),
+        Position = UDim2.new(0, 0, 1, -96),
+        Text = "Validate Key",
+        Color = mainColor,
+        OnClick = function()
+            local key = inputBox.Text
+            if key == "" then
+                ShowStatus("Please enter a key first.")
+                return
+            end
+            
+            if config.OnValidate then
+                local success = config.OnValidate(key)
+                if success then
+                    ShowStatus("Successfully authenticated!", Color3.fromRGB(80, 255, 120))
+                    task.wait(0.5)
+                    local tween = CreateTween(mainFrame, {Size = UDim2.new(0, 380, 0, 250), GroupTransparency = 1}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+                    tween.Completed:Wait()
+                    screenGui:Destroy()
+                else
+                    ShowStatus("Invalid key provided. Please try again.")
+                    inputBox.Text = ""
+                end
+            end
+        end
+    })
+    validateBtn.Parent = content
+    
+    local getKeyBtn = Library.SecondaryButton({
+        Name = "GetKeyBtn",
+        Size = UDim2.new(1, 0, 0, 44),
+        Position = UDim2.new(0, 0, 1, -44),
+        Text = "Get Free Key",
+        OnClick = function()
+            if config.OnGetKey then
+                config.OnGetKey()
+                ShowStatus("Link copied to clipboard!", Color3.fromRGB(150, 150, 160))
+            end
+        end
+    })
+    getKeyBtn.Parent = content
+    
+    -- CanvasGroup for overall transparency tweening
+    local canvasGroup = el("CanvasGroup", {
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Parent = mainFrame
+    })
+    -- Move children to canvas group for proper fading (except shadow and accent line which we handle separately if needed, but for simplicity we'll just tween the main frame size/transparency)
+    -- Actually, CanvasGroup can be buggy in some exploits. We'll stick to standard tweening.
+    canvasGroup:Destroy()
+
     -- Smooth Dragging Logic
     local dragging, dragInput, mousePos, framePos
     mainFrame.InputBegan:Connect(function(input)
@@ -274,16 +419,21 @@ function Library:CreateKeySystem(config)
     UserInputService.InputChanged:Connect(function(input)
         if input == dragInput and dragging then
             local delta = input.Position - mousePos
-            TweenService:Create(mainFrame, TweenInfo.new(0.1), {
+            -- Smooth lerp dragging
+            CreateTween(mainFrame, {
                 Position = UDim2.new(framePos.X.Scale, framePos.X.Offset + delta.X, framePos.Y.Scale, framePos.Y.Offset + delta.Y)
-            }):Play()
+            }, 0.1, Enum.EasingStyle.Linear)
         end
     end)
     
     -- Entrance Animation
-    mainFrame.Size = UDim2.new(0, 0, 0, 0)
-    TweenService:Create(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = UDim2.new(0, 420, 0, 280)}):Play()
+    mainFrame.Size = UDim2.new(0, 380, 0, 250)
+    mainFrame.GroupTransparency = 1 -- If using CanvasGroup, otherwise we just scale
+    CreateTween(mainFrame, {Size = UDim2.new(0, 400, 0, 270)}, 0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
     
+    -- We can simulate GroupTransparency by adding a CanvasGroup wrapper, but to ensure exploit compatibility, scaling is safest.
+    
+    mainFrame.Parent = screenGui
     return screenGui
 end
 
