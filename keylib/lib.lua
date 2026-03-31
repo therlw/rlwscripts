@@ -128,17 +128,27 @@ function Library.PrimaryButton(props)
         OnClick = props.OnClick
     })
 
+    -- Clipping container for the shine to ensure it NEVER leaks
+    local shineClip = el("Frame", {
+        Name = "ShineClip",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        ClipsDescendants = true,
+        ZIndex = 2,
+        Parent = btn
+    })
+
     -- Refined Smooth Shine Effect
     local shine = el("Frame", {
         Name = "Shine",
-        Size = UDim2.new(0, 150, 1, 0),
-        Position = UDim2.new(-1, 0, 0, 0),
+        Size = UDim2.new(0, 150, 1.5, 0), -- Taller to cover rotation
+        Position = UDim2.new(-1.5, 0, -0.25, 0),
         BackgroundColor3 = Color3.new(1, 1, 1),
         BackgroundTransparency = 0.85,
         Rotation = 25,
         BorderSizePixel = 0,
         ZIndex = 2,
-        Parent = btn,
+        Parent = shineClip,
         Gradient = {
             Color = ColorSequence.new({
                 ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
@@ -155,8 +165,8 @@ function Library.PrimaryButton(props)
     })
 
     local function PlayShine()
-        shine.Position = UDim2.new(-1, 0, 0, 0)
-        CreateTween(shine, {Position = UDim2.new(2, 0, 0, 0)}, 1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+        shine.Position = UDim2.new(-1.5, 0, -0.25, 0)
+        CreateTween(shine, {Position = UDim2.new(2, 0, -0.25, 0)}, 1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
     end
     
     btnTrigger.MouseEnter:Connect(function()
@@ -224,7 +234,8 @@ function Library.Input(props)
         Position = props.Position,
         BackgroundColor3 = Color3.fromRGB(15, 15, 17),
         CornerRadius = UDim.new(0, 8),
-        Stroke = {Color = strokeColor, Thickness = 1}
+        Stroke = {Color = strokeColor, Thickness = 1},
+        ClipsDescendants = true -- Prevent text from ever leaking out
     })
 
     -- Focus Glow
@@ -251,6 +262,7 @@ function Library.Input(props)
         TextSize = 14,
         TextXAlignment = Enum.TextXAlignment.Left,
         ClearTextOnFocus = false,
+        TextWrapped = false, -- Ensure it stays on one line
         Padding = {Left = UDim.new(0, 16), Right = UDim.new(0, 16)},
         Parent = container
     })
@@ -282,6 +294,10 @@ function Library:CreateKeySystem(config)
     local useBlur = config.UseBlur == nil and true or config.UseBlur
     local saveKey = config.SaveKey == nil and true or config.SaveKey
     
+    -- Prevent multiple instances
+    local oldGui = CoreGui:FindFirstChild("ProfessionalKeySystem") or gethui and gethui():FindFirstChild("ProfessionalKeySystem")
+    if oldGui then oldGui:Destroy() end
+
     local screenGui = el("ScreenGui", {
         Name = "ProfessionalKeySystem",
         ResetOnSpawn = false,
@@ -482,27 +498,57 @@ function Library:CreateKeySystem(config)
     })
     inputContainer.Parent = content
     
-    -- Status Label
-    local statusLabel = el("TextLabel", {
-        Name = "Status",
-        Size = UDim2.new(1, 0, 0, 20),
-        Position = UDim2.new(0, 0, 0, 58),
+    -- Toast Notification System (Moved to ScreenGui for better positioning)
+    local toastContainer = el("Frame", {
+        Name = "ToastContainer",
+        Size = UDim2.new(0, 300, 0, 40),
+        Position = UDim2.new(0.5, 0, 0, -50), -- Starts hidden above screen
+        AnchorPoint = Vector2.new(0.5, 0),
+        BackgroundColor3 = Color3.fromRGB(20, 20, 22),
+        CornerRadius = UDim.new(0, 8),
+        ZIndex = 1000,
+        Parent = screenGui,
+        Stroke = {Color = Color3.fromRGB(45, 45, 50), Thickness = 1}
+    })
+
+    -- Add a subtle glow to the toast
+    el("Frame", {
+        Name = "Glow",
+        Size = UDim2.new(1, 10, 1, 10),
+        Position = UDim2.new(0, -5, 0, -5),
+        BackgroundTransparency = 1,
+        ZIndex = -1,
+        Parent = toastContainer,
+        CornerRadius = UDim.new(0, 12),
+        Stroke = {Color = mainColor, Thickness = 2, Transparency = 0.8}
+    })
+
+    local toastLabel = el("TextLabel", {
+        Name = "Message",
+        Size = UDim2.new(1, 0, 1, 0),
         BackgroundTransparency = 1,
         Text = "",
-        TextColor3 = Color3.fromRGB(255, 80, 80),
-        TextSize = 12,
+        TextColor3 = Color3.new(1, 1, 1),
+        TextSize = 13,
         Font = Enum.Font.GothamMedium,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextTransparency = 1,
-        Parent = content
+        Parent = toastContainer
     })
-    
+
     local function ShowStatus(text, color)
-        statusLabel.Text = text
-        statusLabel.TextColor3 = color or Color3.fromRGB(255, 80, 80)
-        CreateTween(statusLabel, {TextTransparency = 0}, 0.2)
-        task.delay(2.5, function()
-            CreateTween(statusLabel, {TextTransparency = 1}, 0.2)
+        toastLabel.Text = text
+        local stroke = toastContainer:FindFirstChild("UIStroke")
+        local glow = toastContainer:FindFirstChild("Glow")
+        local glowStroke = glow and glow:FindFirstChild("UIStroke")
+        
+        if stroke then stroke.Color = color or Color3.fromRGB(255, 80, 80) end
+        if glowStroke then glowStroke.Color = color or Color3.fromRGB(255, 80, 80) end
+        
+        -- Slide Down from Top
+        CreateTween(toastContainer, {Position = UDim2.new(0.5, 0, 0, 40)}, 0.5, Enum.EasingStyle.Back)
+        
+        task.delay(3, function()
+            -- Slide Up to Hide
+            CreateTween(toastContainer, {Position = UDim2.new(0.5, 0, 0, -60)}, 0.5, Enum.EasingStyle.Back)
         end)
     end
 
