@@ -1,19 +1,13 @@
--- RLW Professional UI Library v3.0
--- Full-featured Script Hub with Tabs, Toggles, Sliders, and Dropdowns
--- Smooth Key System to Main Hub Transition
+-- Advanced React-Like Key System Library v2.0
+-- Professional, Modern, Sleek UI Design with Animations & Premium Features
 
 local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
-local TextService = game:GetService("TextService")
 
-local Library = {
-    Tabs = {},
-    Elements = {},
-    CurrentTab = nil
-}
+local Library = {}
 
 -- [[ UTILITIES ]]
 local function CreateTween(instance, properties, duration, style, direction)
@@ -23,14 +17,43 @@ local function CreateTween(instance, properties, duration, style, direction)
     return tween
 end
 
+-- Exploit File System Wrappers (Safe)
+local function SaveKeyToFile(key)
+    if writefile then
+        pcall(function() writefile("RLW_SavedKey.txt", key) end)
+    end
+end
+
+local function LoadKeyFromFile()
+    if readfile and isfile then
+        local success, result = pcall(function()
+            if isfile("RLW_SavedKey.txt") then
+                return readfile("RLW_SavedKey.txt")
+            end
+        end)
+        if success and result then return result end
+    end
+    return ""
+end
+
+-- [[ REACT-LIKE ELEMENT CREATOR ]]
 function Library.createElement(className, props, children)
     local inst = Instance.new(className)
+    
     if props then
         for k, v in pairs(props) do
             if type(v) == "function" and string.match(k, "^On") then
                 local eventName = string.sub(k, 3)
                 if eventName == "Click" then eventName = "MouseButton1Click" end
-                if inst[eventName] then inst[eventName]:Connect(v) end
+                if eventName == "Change" then eventName = "Changed" end
+                if eventName == "FocusLost" then eventName = "FocusLost" end
+                if eventName == "FocusGained" then eventName = "Focused" end
+                if eventName == "MouseEnter" then eventName = "MouseEnter" end
+                if eventName == "MouseLeave" then eventName = "MouseLeave" end
+                
+                if inst[eventName] then
+                    inst[eventName]:Connect(v)
+                end
             elseif k == "CornerRadius" then
                 local corner = Instance.new("UICorner")
                 corner.CornerRadius = v
@@ -59,169 +82,226 @@ function Library.createElement(className, props, children)
             end
         end
     end
+    
     if children then
         for _, child in ipairs(children) do
-            if typeof(child) == "Instance" then child.Parent = inst end
+            if typeof(child) == "Instance" then
+                child.Parent = inst
+            end
         end
     end
+    
     return inst
 end
 
 local el = Library.createElement
 
--- [[ COMPONENTS ]]
+-- [[ REUSABLE COMPONENTS ]]
 
-function Library:CreateToggle(parent, name, default, callback)
-    local enabled = default or false
-    local mainColor = Color3.fromRGB(99, 102, 241)
+function Library.PrimaryButton(props)
+    local mainColor = props.Color or Color3.fromRGB(99, 102, 241)
+    local h, s, v = mainColor:ToHSV()
+    local hoverColor = Color3.fromHSV(h, s, math.clamp(v - 0.1, 0, 1))
     
-    local container = el("Frame", {
-        Name = name .. "Toggle",
-        Size = UDim2.new(1, 0, 0, 40),
-        BackgroundTransparency = 1,
-        Parent = parent
+    -- Using CanvasGroup for PERFECT clipping of rotated shine effect
+    local btn = el("CanvasGroup", {
+        Name = props.Name or "PrimaryButton",
+        Size = props.Size or UDim2.new(1, 0, 0, 44),
+        Position = props.Position,
+        BackgroundColor3 = mainColor,
+        CornerRadius = UDim.new(0, 8),
+        ClipsDescendants = true,
+        GroupTransparency = 0
     })
-    
-    local label = el("TextLabel", {
-        Size = UDim2.new(1, -60, 1, 0),
-        BackgroundTransparency = 1,
-        Text = name,
-        TextColor3 = Color3.fromRGB(220, 220, 225),
-        TextSize = 14,
-        Font = Enum.Font.Gotham,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        Parent = container
-    })
-    
-    local bg = el("Frame", {
-        Size = UDim2.new(0, 44, 0, 22),
-        Position = UDim2.new(1, 0, 0.5, 0),
-        AnchorPoint = Vector2.new(1, 0.5),
-        BackgroundColor3 = enabled and mainColor or Color3.fromRGB(30, 30, 35),
-        CornerRadius = UDim.new(1, 0),
-        Stroke = {Color = Color3.fromRGB(45, 45, 50), Thickness = 1},
-        Parent = container
-    })
-    
-    local circle = el("Frame", {
-        Size = UDim2.new(0, 16, 0, 16),
-        Position = enabled and UDim2.new(1, -19, 0.5, 0) or UDim2.new(0, 3, 0.5, 0),
-        AnchorPoint = Vector2.new(0, 0.5),
-        BackgroundColor3 = Color3.new(1, 1, 1),
-        CornerRadius = UDim.new(1, 0),
-        Parent = bg
-    })
-    
-    local btn = el("TextButton", {
+
+    local btnTrigger = el("TextButton", {
+        Name = "Trigger",
         Size = UDim2.new(1, 0, 1, 0),
         BackgroundTransparency = 1,
-        Text = "",
-        Parent = container,
-        OnClick = function()
-            enabled = not enabled
-            CreateTween(bg, {BackgroundColor3 = enabled and mainColor or Color3.fromRGB(30, 30, 35)}, 0.2)
-            CreateTween(circle, {Position = enabled and UDim2.new(1, -19, 0.5, 0) or UDim2.new(0, 3, 0.5, 0)}, 0.2)
-            callback(enabled)
-        end
+        Text = props.Text or "Button",
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        Font = Enum.Font.GothamMedium,
+        TextSize = 14,
+        AutoButtonColor = false,
+        ZIndex = 5,
+        Parent = btn,
+        OnClick = props.OnClick
     })
-end
 
-function Library:CreateSlider(parent, name, min, max, default, callback)
-    local value = default or min
-    local mainColor = Color3.fromRGB(99, 102, 241)
-    
-    local container = el("Frame", {
-        Name = name .. "Slider",
-        Size = UDim2.new(1, 0, 0, 50),
-        BackgroundTransparency = 1,
-        Parent = parent
-    })
-    
-    local label = el("TextLabel", {
-        Size = UDim2.new(1, 0, 0, 20),
-        BackgroundTransparency = 1,
-        Text = name,
-        TextColor3 = Color3.fromRGB(220, 220, 225),
-        TextSize = 14,
-        Font = Enum.Font.Gotham,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        Parent = container
-    })
-    
-    local valLabel = el("TextLabel", {
-        Size = UDim2.new(0, 40, 0, 20),
-        Position = UDim2.new(1, 0, 0, 0),
-        AnchorPoint = Vector2.new(1, 0),
-        BackgroundTransparency = 1,
-        Text = tostring(value),
-        TextColor3 = mainColor,
-        TextSize = 14,
-        Font = Enum.Font.GothamBold,
-        TextXAlignment = Enum.TextXAlignment.Right,
-        Parent = container
-    })
-    
-    local track = el("Frame", {
-        Size = UDim2.new(1, 0, 0, 4),
-        Position = UDim2.new(0, 0, 1, -10),
-        BackgroundColor3 = Color3.fromRGB(30, 30, 35),
-        BorderSizePixel = 0,
-        CornerRadius = UDim.new(1, 0),
-        Parent = container
-    })
-    
-    local fill = el("Frame", {
-        Size = UDim2.new((value - min) / (max - min), 0, 1, 0),
-        BackgroundColor3 = mainColor,
-        BorderSizePixel = 0,
-        CornerRadius = UDim.new(1, 0),
-        Parent = track
-    })
-    
-    local knob = el("Frame", {
-        Size = UDim2.new(0, 12, 0, 12),
-        Position = UDim2.new(1, 0, 0.5, 0),
-        AnchorPoint = Vector2.new(0.5, 0.5),
+    -- Refined Smooth Shine Effect
+    local shine = el("Frame", {
+        Name = "Shine",
+        Size = UDim2.new(0, 150, 1, 0),
+        Position = UDim2.new(-1, 0, 0, 0),
         BackgroundColor3 = Color3.new(1, 1, 1),
-        CornerRadius = UDim.new(1, 0),
-        Stroke = {Color = mainColor, Thickness = 2},
-        Parent = fill
+        BackgroundTransparency = 0.85,
+        Rotation = 25,
+        BorderSizePixel = 0,
+        ZIndex = 2,
+        Parent = btn,
+        Gradient = {
+            Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+                ColorSequenceKeypoint.new(0.5, Color3.new(1, 1, 1)),
+                ColorSequenceKeypoint.new(1, Color3.new(1, 1, 1))
+            })
+        }
     })
-    
-    local dragging = false
-    local function Update(input)
-        local pos = math.clamp((input.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
-        value = math.floor(min + (max - min) * pos)
-        valLabel.Text = tostring(value)
-        CreateTween(fill, {Size = UDim2.new(pos, 0, 1, 0)}, 0.1)
-        callback(value)
+    local shineGrad = shine:FindFirstChildOfClass("UIGradient")
+    shineGrad.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 1),
+        NumberSequenceKeypoint.new(0.5, 0),
+        NumberSequenceKeypoint.new(1, 1)
+    })
+
+    local function PlayShine()
+        shine.Position = UDim2.new(-1, 0, 0, 0)
+        CreateTween(shine, {Position = UDim2.new(2, 0, 0, 0)}, 1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
     end
     
-    knob.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true end
+    btnTrigger.MouseEnter:Connect(function()
+        if not btn:GetAttribute("Disabled") then
+            CreateTween(btn, {BackgroundColor3 = hoverColor}, 0.3)
+            PlayShine()
+        end
     end)
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+    btnTrigger.MouseLeave:Connect(function()
+        if not btn:GetAttribute("Disabled") then
+            CreateTween(btn, {BackgroundColor3 = mainColor}, 0.3)
+        end
     end)
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then Update(input) end
+    
+    btnTrigger.MouseButton1Down:Connect(function()
+        if not btn:GetAttribute("Disabled") then
+            CreateTween(btn, {Size = UDim2.new(0.98, 0, 0, 42)}, 0.1)
+        end
     end)
+    btnTrigger.MouseButton1Up:Connect(function()
+        if not btn:GetAttribute("Disabled") then
+            CreateTween(btn, {Size = props.Size or UDim2.new(1, 0, 0, 44)}, 0.1)
+        end
+    end)
+    
+    return btn
 end
 
--- [[ MAIN WINDOW ]]
+function Library.SecondaryButton(props)
+    local defaultBg = Color3.fromRGB(20, 20, 22)
+    local hoverBg = Color3.fromRGB(30, 30, 35)
+    
+    local btn = el("TextButton", {
+        Name = props.Name or "SecondaryButton",
+        Size = props.Size or UDim2.new(1, 0, 0, 44),
+        Position = props.Position,
+        BackgroundColor3 = defaultBg,
+        Text = props.Text or "Button",
+        TextColor3 = Color3.fromRGB(220, 220, 225),
+        Font = Enum.Font.GothamMedium,
+        TextSize = 14,
+        AutoButtonColor = false,
+        CornerRadius = UDim.new(0, 8),
+        Stroke = {Color = Color3.fromRGB(45, 45, 50), Thickness = 1},
+        OnClick = props.OnClick
+    })
+    
+    btn.MouseEnter:Connect(function()
+        CreateTween(btn, {BackgroundColor3 = hoverBg}, 0.2)
+    end)
+    btn.MouseLeave:Connect(function()
+        CreateTween(btn, {BackgroundColor3 = defaultBg}, 0.2)
+    end)
+    
+    return btn
+end
 
-function Library:CreateWindow(config)
+function Library.Input(props)
+    local strokeColor = Color3.fromRGB(45, 45, 50)
+    local focusColor = props.FocusColor or Color3.fromRGB(99, 102, 241)
+    
+    local container = el("Frame", {
+        Name = props.Name or "InputContainer",
+        Size = props.Size or UDim2.new(1, 0, 0, 44),
+        Position = props.Position,
+        BackgroundColor3 = Color3.fromRGB(15, 15, 17),
+        CornerRadius = UDim.new(0, 8),
+        Stroke = {Color = strokeColor, Thickness = 1}
+    })
+
+    -- Focus Glow
+    local glow = el("Frame", {
+        Name = "Glow",
+        Size = UDim2.new(1, 6, 1, 6),
+        Position = UDim2.new(0, -3, 0, -3),
+        BackgroundTransparency = 1,
+        ZIndex = -1,
+        Parent = container,
+        CornerRadius = UDim.new(0, 11),
+        Stroke = {Color = focusColor, Thickness = 2, Transparency = 1}
+    })
+    
+    local input = el("TextBox", {
+        Name = "TextBox",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Text = props.DefaultText or "",
+        PlaceholderText = props.PlaceholderText or "Enter text...",
+        TextColor3 = Color3.fromRGB(240, 240, 245),
+        PlaceholderColor3 = Color3.fromRGB(110, 110, 115),
+        Font = Enum.Font.Gotham,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ClearTextOnFocus = false,
+        Padding = {Left = UDim.new(0, 16), Right = UDim.new(0, 16)},
+        Parent = container
+    })
+    
+    local stroke = container:FindFirstChild("UIStroke")
+    local glowStroke = glow:FindFirstChild("UIStroke")
+    
+    input.Focused:Connect(function()
+        if stroke then CreateTween(stroke, {Color = focusColor}, 0.2) end
+        if glowStroke then CreateTween(glowStroke, {Transparency = 0.7}, 0.2) end
+    end)
+    
+    input.FocusLost:Connect(function()
+        if stroke then CreateTween(stroke, {Color = strokeColor}, 0.2) end
+        if glowStroke then CreateTween(glowStroke, {Transparency = 1}, 0.2) end
+        if props.OnFocusLost then props.OnFocusLost(input.Text) end
+    end)
+    
+    return container, input
+end
+
+-- [[ MAIN SYSTEM BUILDER ]]
+
+function Library:CreateKeySystem(config)
     config = config or {}
     local titleText = config.Title or "RLWSCRIPTS"
+    local descText = config.Description or "Please enter your key to continue."
     local mainColor = config.MainColor or Color3.fromRGB(99, 102, 241)
+    local useBlur = config.UseBlur == nil and true or config.UseBlur
+    local saveKey = config.SaveKey == nil and true or config.SaveKey
     
-    local screenGui = el("ScreenGui", {Name = "RLW_Hub", ResetOnSpawn = false})
-    if gethui then screenGui.Parent = gethui() else screenGui.Parent = CoreGui end
+    local screenGui = el("ScreenGui", {
+        Name = "ProfessionalKeySystem",
+        ResetOnSpawn = false,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    })
     
-    local blur = Instance.new("BlurEffect", Lighting)
-    blur.Size = 0
-    CreateTween(blur, {Size = 15}, 0.5)
-    
+    if gethui then screenGui.Parent = gethui()
+    elseif syn and syn.protect_gui then syn.protect_gui(screenGui); screenGui.Parent = CoreGui
+    else screenGui.Parent = CoreGui end
+
+    -- Blur Effect
+    local blurEffect
+    if useBlur then
+        blurEffect = Instance.new("BlurEffect")
+        blurEffect.Size = 0
+        blurEffect.Parent = Lighting
+        CreateTween(blurEffect, {Size = 15}, 0.5)
+    end
+
+    -- Main Card (CanvasGroup for perfect corner clipping)
     local mainFrame = el("CanvasGroup", {
         Name = "Main",
         Size = UDim2.new(0, 400, 0, 270),
@@ -230,11 +310,25 @@ function Library:CreateWindow(config)
         BackgroundColor3 = Color3.fromRGB(12, 12, 14),
         CornerRadius = UDim.new(0, 12),
         Stroke = {Color = Color3.fromRGB(35, 35, 40), Thickness = 1},
-        ClipsDescendants = true,
-        Parent = screenGui
+        GroupTransparency = 0,
+        ClipsDescendants = true
+    })
+
+    -- Subtle Grid Background
+    el("ImageLabel", {
+        Name = "Grid",
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        Image = "rbxassetid://12501061320", -- Subtle grid pattern
+        ImageTransparency = 0.96,
+        ScaleType = Enum.ScaleType.Tile,
+        TileSize = UDim2.new(0, 64, 0, 64),
+        Parent = mainFrame
     })
     
+    -- Drop Shadow (Ultra-Subtle & Professional)
     local shadow = el("ImageLabel", {
+        Name = "Shadow",
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.new(0.5, 0, 0.5, 8),
         Size = UDim2.new(0, 420, 0, 290),
@@ -248,274 +342,290 @@ function Library:CreateWindow(config)
         Parent = screenGui
     })
 
-    -- Key System UI
-    local keySystem = el("Frame", {
-        Size = UDim2.new(1, 0, 1, 0),
+    -- Top Accent Line (Perfectly Clipped & Inset)
+    local accentLine = el("Frame", {
+        Name = "AccentLine",
+        Size = UDim2.new(1, -2, 0, 2),
+        Position = UDim2.new(0, 1, 0, 1),
+        BackgroundColor3 = Color3.new(1, 1, 1),
+        BorderSizePixel = 0,
+        ZIndex = 10,
+        Parent = mainFrame,
+        Gradient = {
+            Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.fromRGB(12, 12, 14)),
+                ColorSequenceKeypoint.new(0.5, mainColor),
+                ColorSequenceKeypoint.new(1, Color3.fromRGB(12, 12, 14))
+            })
+        }
+    })
+
+    -- Subtle Glow behind accent line
+    local accentGlow = el("Frame", {
+        Name = "Glow",
+        Size = UDim2.new(1, 0, 0, 15),
+        Position = UDim2.new(0, 0, 0, 0),
         BackgroundTransparency = 1,
-        Parent = mainFrame
+        ZIndex = 9,
+        Parent = mainFrame,
+        Gradient = {
+            Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, mainColor),
+                ColorSequenceKeypoint.new(1, mainColor)
+            }),
+            Rotation = 90
+        }
+    })
+    local glowGrad = accentGlow:FindFirstChildOfClass("UIGradient")
+    glowGrad.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0.8),
+        NumberSequenceKeypoint.new(1, 1)
     })
     
+    -- Animate Gradient
+    local grad = accentLine:FindFirstChildOfClass("UIGradient")
+    task.spawn(function()
+        local offset = 0
+        while grad and grad.Parent do
+            offset = offset + 0.01
+            grad.Offset = Vector2.new(math.sin(offset), 0)
+            task.wait(0.03)
+        end
+    end)
+    
+    -- Header Container
     local header = el("Frame", {
+        Name = "Header",
         Size = UDim2.new(1, 0, 0, 80),
         BackgroundTransparency = 1,
-        Parent = keySystem,
+        Parent = mainFrame,
         Padding = {Left = UDim.new(0, 24), Right = UDim.new(0, 24), Top = UDim.new(0, 24)}
     })
     
+    -- Title
     el("TextLabel", {
-        Text = titleText,
-        Size = UDim2.new(1, 0, 0, 24),
-        TextColor3 = Color3.new(1, 1, 1),
-        Font = Enum.Font.GothamBold,
-        TextSize = 20,
-        TextXAlignment = Enum.TextXAlignment.Left,
+        Name = "Title",
+        Size = UDim2.new(1, -30, 0, 24),
+        Position = UDim2.new(0, 0, 0, 0),
         BackgroundTransparency = 1,
+        Text = titleText,
+        TextColor3 = Color3.fromRGB(250, 250, 255),
+        TextSize = 20,
+        Font = Enum.Font.GothamBold,
+        TextXAlignment = Enum.TextXAlignment.Left,
         Parent = header
     })
     
+    -- Description
+    el("TextLabel", {
+        Name = "Description",
+        Size = UDim2.new(1, 0, 0, 20),
+        Position = UDim2.new(0, 0, 0, 28),
+        BackgroundTransparency = 1,
+        Text = descText,
+        TextColor3 = Color3.fromRGB(160, 160, 170),
+        TextSize = 13,
+        Font = Enum.Font.Gotham,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = header
+    })
+    
+    -- Close Function
+    local function CloseUI()
+        if blurEffect then
+            CreateTween(blurEffect, {Size = 0}, 0.3)
+            task.delay(0.3, function() blurEffect:Destroy() end)
+        end
+        local tween = CreateTween(mainFrame, {Size = UDim2.new(0, 380, 0, 250), Position = UDim2.new(0.5, 0, 0.5, 20), GroupTransparency = 1}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+        CreateTween(shadow, {Size = UDim2.new(0, 400, 0, 270), Position = UDim2.new(0.5, 0, 0.5, 24), ImageTransparency = 1}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+        
+        tween.Completed:Wait()
+        screenGui:Destroy()
+    end
+
+    -- Close Button
+    el("TextButton", {
+        Name = "CloseBtn",
+        Size = UDim2.new(0, 24, 0, 24),
+        Position = UDim2.new(1, 0, 0, 0),
+        AnchorPoint = Vector2.new(1, 0),
+        BackgroundTransparency = 1,
+        Text = "✕",
+        TextColor3 = Color3.fromRGB(120, 120, 130),
+        TextSize = 16,
+        Font = Enum.Font.GothamMedium,
+        Parent = header,
+        OnMouseEnter = function(self) CreateTween(self, {TextColor3 = Color3.fromRGB(255, 255, 255)}, 0.2) end,
+        OnMouseLeave = function(self) CreateTween(self, {TextColor3 = Color3.fromRGB(120, 120, 130)}, 0.2) end,
+        OnClick = CloseUI
+    })
+    
+    -- Content Container
     local content = el("Frame", {
+        Name = "Content",
         Size = UDim2.new(1, 0, 1, -80),
         Position = UDim2.new(0, 0, 0, 80),
         BackgroundTransparency = 1,
-        Parent = keySystem,
+        Parent = mainFrame,
         Padding = {Left = UDim.new(0, 24), Right = UDim.new(0, 24), Bottom = UDim.new(0, 24)}
     })
     
-    local inputFrame = el("Frame", {
+    -- Input Field
+    local initialKey = saveKey and LoadKeyFromFile() or ""
+    local inputContainer, inputBox = Library.Input({
+        Name = "KeyInput",
         Size = UDim2.new(1, 0, 0, 44),
-        BackgroundColor3 = Color3.fromRGB(15, 15, 17),
-        CornerRadius = UDim.new(0, 8),
-        Stroke = {Color = Color3.fromRGB(45, 45, 50), Thickness = 1},
+        Position = UDim2.new(0, 0, 0, 10),
+        PlaceholderText = "Enter your license key...",
+        DefaultText = initialKey,
+        FocusColor = mainColor
+    })
+    inputContainer.Parent = content
+    
+    -- Status Label
+    local statusLabel = el("TextLabel", {
+        Name = "Status",
+        Size = UDim2.new(1, 0, 0, 20),
+        Position = UDim2.new(0, 0, 0, 58),
+        BackgroundTransparency = 1,
+        Text = "",
+        TextColor3 = Color3.fromRGB(255, 80, 80),
+        TextSize = 12,
+        Font = Enum.Font.GothamMedium,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextTransparency = 1,
         Parent = content
     })
     
-    local inputBox = el("TextBox", {
-        Size = UDim2.new(1, 0, 1, 0),
-        BackgroundTransparency = 1,
-        PlaceholderText = "Enter key (123)...",
-        TextColor3 = Color3.new(1, 1, 1),
-        Font = Enum.Font.Gotham,
-        TextSize = 14,
-        Padding = {Left = UDim.new(0, 16)},
-        Parent = inputFrame
-    })
-    
-    -- Hub UI (Hidden initially)
-    local hubUI = el("Frame", {
-        Size = UDim2.new(1, 0, 1, 0),
-        BackgroundTransparency = 1,
-        Visible = false,
-        Parent = mainFrame
-    })
-    
-    local tabContainer = el("Frame", {
-        Size = UDim2.new(1, 0, 0, 50),
-        BackgroundTransparency = 1,
-        Parent = hubUI,
-        Padding = {Left = UDim.new(0, 24), Right = UDim.new(0, 24)}
-    })
-    
-    local tabList = el("Frame", {
-        Size = UDim2.new(1, -100, 1, 0),
-        BackgroundTransparency = 1,
-        Parent = tabContainer
-    })
-    el("UIListLayout", {FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 15), VerticalAlignment = Enum.VerticalAlignment.Center, Parent = tabList})
-    
-    el("TextLabel", {
-        Text = titleText,
-        Size = UDim2.new(0, 80, 1, 0),
-        Position = UDim2.new(1, 0, 0, 0),
-        AnchorPoint = Vector2.new(1, 0),
-        TextColor3 = mainColor,
-        Font = Enum.Font.GothamBold,
-        TextSize = 16,
-        BackgroundTransparency = 1,
-        Parent = tabContainer
-    })
-    
-    local pageContainer = el("Frame", {
-        Size = UDim2.new(1, 0, 1, -50),
-        Position = UDim2.new(0, 0, 0, 50),
-        BackgroundTransparency = 1,
-        Parent = hubUI,
-        Padding = {Left = UDim.new(0, 24), Right = UDim.new(0, 24), Bottom = UDim.new(0, 24)}
-    })
-
-    local function Transition()
-        CreateTween(keySystem, {GroupTransparency = 1}, 0.3).Completed:Wait()
-        keySystem.Visible = false
-        hubUI.Visible = true
-        hubUI.GroupTransparency = 1
-        
-        CreateTween(mainFrame, {Size = UDim2.new(0, 550, 0, 350)}, 0.5, Enum.EasingStyle.Back)
-        CreateTween(shadow, {Size = UDim2.new(0, 570, 0, 370)}, 0.5, Enum.EasingStyle.Back)
-        task.wait(0.2)
-        CreateTween(hubUI, {GroupTransparency = 0}, 0.3)
+    local function ShowStatus(text, color)
+        statusLabel.Text = text
+        statusLabel.TextColor3 = color or Color3.fromRGB(255, 80, 80)
+        CreateTween(statusLabel, {TextTransparency = 0}, 0.2)
+        task.delay(2.5, function()
+            CreateTween(statusLabel, {TextTransparency = 1}, 0.2)
+        end)
     end
 
-    local validateBtn = el("TextButton", {
+    local function ShakeUI()
+        local origPos = mainFrame.Position
+        for i = 1, 6 do
+            mainFrame.Position = origPos + UDim2.new(0, math.random(-4, 4), 0, math.random(-4, 4))
+            task.wait(0.04)
+        end
+        mainFrame.Position = origPos
+    end
+
+    -- Buttons
+    local validating = false
+    local validateBtn = Library.PrimaryButton({
+        Name = "ValidateBtn",
+        Size = UDim2.new(1, 0, 0, 44),
+        Position = UDim2.new(0, 0, 1, -96),
+        Text = "Validate Key",
+        Color = mainColor,
+        OnClick = function(self)
+            if validating then return end
+            local key = inputBox.Text
+            if key == "" then
+                ShowStatus("Please enter a key first.")
+                ShakeUI()
+                return
+            end
+            
+            if config.OnValidate then
+                validating = true
+                self:SetAttribute("Disabled", true)
+                
+                -- Loading Animation
+                local originalText = self.Text
+                local originalColor = self.BackgroundColor3
+                self.Text = "Validating..."
+                CreateTween(self, {BackgroundColor3 = Color3.fromRGB(60, 60, 70)}, 0.2)
+                
+                -- Simulate Network Delay for premium feel
+                task.wait(0.6)
+                
+                local success = config.OnValidate(key)
+                if success then
+                    if saveKey then SaveKeyToFile(key) end
+                    self.Text = "Success!"
+                    CreateTween(self, {BackgroundColor3 = Color3.fromRGB(46, 204, 113)}, 0.2)
+                    ShowStatus("Successfully authenticated!", Color3.fromRGB(46, 204, 113))
+                    task.wait(0.6)
+                    CloseUI()
+                else
+                    self.Text = "Invalid Key"
+                    CreateTween(self, {BackgroundColor3 = Color3.fromRGB(231, 76, 60)}, 0.2)
+                    ShowStatus("Invalid key provided. Please try again.")
+                    ShakeUI()
+                    inputBox.Text = ""
+                    task.wait(1)
+                    self.Text = originalText
+                    CreateTween(self, {BackgroundColor3 = originalColor}, 0.2)
+                    self:SetAttribute("Disabled", false)
+                    validating = false
+                end
+            end
+        end
+    })
+    validateBtn.Parent = content
+    
+    local getKeyBtn = Library.SecondaryButton({
+        Name = "GetKeyBtn",
         Size = UDim2.new(1, 0, 0, 44),
         Position = UDim2.new(0, 0, 1, -44),
-        BackgroundColor3 = mainColor,
-        Text = "Validate Key",
-        TextColor3 = Color3.new(1, 1, 1),
-        Font = Enum.Font.GothamBold,
-        CornerRadius = UDim.new(0, 8),
-        Parent = content,
+        Text = "Get Free Key",
         OnClick = function()
-            if inputBox.Text == "123" then
-                Transition()
+            if config.OnGetKey then
+                config.OnGetKey()
+                ShowStatus("Link copied to clipboard!", Color3.fromRGB(150, 150, 160))
             end
         end
     })
+    getKeyBtn.Parent = content
 
-    local window = {
-        TabList = tabList,
-        PageContainer = pageContainer,
-        Tabs = {}
-    }
-
-    function window:AddTab(name)
-        local page = el("ScrollingFrame", {
-            Size = UDim2.new(1, 0, 1, 0),
-            BackgroundTransparency = 1,
-            Visible = false,
-            ScrollBarThickness = 2,
-            ScrollBarImageColor3 = mainColor,
-            CanvasSize = UDim2.new(0, 0, 0, 0),
-            Parent = pageContainer
-        })
-        el("UIListLayout", {Padding = UDim.new(0, 10), Parent = page})
-        el("UIPadding", {PaddingTop = UDim.new(0, 5), Parent = page})
-        
-        local tabBtn = el("TextButton", {
-            Text = name,
-            Size = UDim2.new(0, 0, 0, 30),
-            AutomaticSize = Enum.AutomaticSize.X,
-            BackgroundTransparency = 1,
-            TextColor3 = Color3.fromRGB(150, 150, 160),
-            Font = Enum.Font.GothamMedium,
-            TextSize = 14,
-            Parent = tabList
-        })
-        
-        local underline = el("Frame", {
-            Size = UDim2.new(0, 0, 0, 2),
-            Position = UDim2.new(0, 0, 1, 0),
-            BackgroundColor3 = mainColor,
-            BorderSizePixel = 0,
-            Visible = false,
-            Parent = tabBtn
-        })
-
-        local function Select()
-            for _, t in pairs(window.Tabs) do
-                t.Button.TextColor3 = Color3.fromRGB(150, 150, 160)
-                t.Underline.Visible = false
-                t.Page.Visible = false
-            end
-            tabBtn.TextColor3 = Color3.new(1, 1, 1)
-            underline.Visible = true
-            underline.Size = UDim2.new(0, 0, 0, 2)
-            CreateTween(underline, {Size = UDim2.new(1, 0, 0, 2)}, 0.3)
-            page.Visible = true
+    -- Smooth Dragging Logic
+    local dragging, dragInput, mousePos, framePos, shadowPos
+    mainFrame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            mousePos = input.Position
+            framePos = mainFrame.Position
+            shadowPos = shadow.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
+            end)
         end
-
-        tabBtn.MouseButton1Click:Connect(Select)
-        
-        local tabObj = {Button = tabBtn, Underline = underline, Page = page}
-        table.insert(window.Tabs, tabObj)
-        
-        if #window.Tabs == 1 then Select() end
-
-        function tabObj:AddToggle(name, default, callback)
-            Library:CreateToggle(page, name, default, callback)
-            page.CanvasSize = UDim2.new(0, 0, 0, page.UIListLayout.AbsoluteContentSize.Y + 20)
+    end)
+    mainFrame.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then dragInput = input end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - mousePos
+            CreateTween(mainFrame, {
+                Position = UDim2.new(framePos.X.Scale, framePos.X.Offset + delta.X, framePos.Y.Scale, framePos.Y.Offset + delta.Y)
+            }, 0.1, Enum.EasingStyle.Linear)
+            CreateTween(shadow, {
+                Position = UDim2.new(shadowPos.X.Scale, shadowPos.X.Offset + delta.X, shadowPos.Y.Scale, shadowPos.Y.Offset + delta.Y)
+            }, 0.1, Enum.EasingStyle.Linear)
         end
-        
-        function tabObj:AddSlider(name, min, max, default, callback)
-            Library:CreateSlider(page, name, min, max, default, callback)
-            page.CanvasSize = UDim2.new(0, 0, 0, page.UIListLayout.AbsoluteContentSize.Y + 20)
-        end
-
-        function tabObj:AddButton(name, callback)
-            local btn = el("TextButton", {
-                Text = name,
-                Size = UDim2.new(1, 0, 0, 40),
-                BackgroundColor3 = Color3.fromRGB(25, 25, 30),
-                TextColor3 = Color3.new(1, 1, 1),
-                Font = Enum.Font.GothamMedium,
-                TextSize = 14,
-                CornerRadius = UDim.new(0, 6),
-                Stroke = {Color = Color3.fromRGB(45, 45, 50), Thickness = 1},
-                Parent = page,
-                OnClick = callback
-            })
-            page.CanvasSize = UDim2.new(0, 0, 0, page.UIListLayout.AbsoluteContentSize.Y + 20)
-        end
-
-        function tabObj:AddDropdown(name, options, callback)
-            local expanded = false
-            local selected = options[1] or "None"
-            
-            local container = el("Frame", {
-                Size = UDim2.new(1, 0, 0, 40),
-                BackgroundTransparency = 1,
-                ClipsDescendants = true,
-                Parent = page
-            })
-            
-            local btn = el("TextButton", {
-                Size = UDim2.new(1, 0, 0, 40),
-                BackgroundColor3 = Color3.fromRGB(25, 25, 30),
-                Text = name .. ": " .. selected,
-                TextColor3 = Color3.new(1, 1, 1),
-                Font = Enum.Font.GothamMedium,
-                TextSize = 14,
-                CornerRadius = UDim.new(0, 6),
-                Stroke = {Color = Color3.fromRGB(45, 45, 50), Thickness = 1},
-                Parent = container,
-                OnClick = function()
-                    expanded = not expanded
-                    CreateTween(container, {Size = expanded and UDim2.new(1, 0, 0, 40 + (#options * 30)) or UDim2.new(1, 0, 0, 40)}, 0.3)
-                    page.CanvasSize = UDim2.new(0, 0, 0, page.UIListLayout.AbsoluteContentSize.Y + 20)
-                end
-            })
-            
-            local list = el("Frame", {
-                Size = UDim2.new(1, 0, 0, #options * 30),
-                Position = UDim2.new(0, 0, 0, 40),
-                BackgroundTransparency = 1,
-                Parent = container
-            })
-            el("UIListLayout", {Parent = list})
-            
-            for _, opt in pairs(options) do
-                el("TextButton", {
-                    Size = UDim2.new(1, 0, 0, 30),
-                    BackgroundTransparency = 1,
-                    Text = opt,
-                    TextColor3 = Color3.fromRGB(180, 180, 190),
-                    Font = Enum.Font.Gotham,
-                    TextSize = 13,
-                    Parent = list,
-                    OnClick = function()
-                        selected = opt
-                        btn.Text = name .. ": " .. selected
-                        expanded = false
-                        CreateTween(container, {Size = UDim2.new(1, 0, 0, 40)}, 0.3)
-                        callback(opt)
-                    end
-                })
-            end
-            page.CanvasSize = UDim2.new(0, 0, 0, page.UIListLayout.AbsoluteContentSize.Y + 20)
-        end
-
-        return tabObj
-    end
-
-    return window
+    end)
+    
+    -- Entrance Animation
+    mainFrame.Size = UDim2.new(0, 380, 0, 250)
+    mainFrame.Position = UDim2.new(0.5, 0, 0.5, 20)
+    mainFrame.GroupTransparency = 1
+    
+    shadow.Size = UDim2.new(0, 410, 0, 280)
+    shadow.Position = UDim2.new(0.5, 0, 0.5, 24)
+    shadow.ImageTransparency = 1
+    
+    CreateTween(mainFrame, {Size = UDim2.new(0, 400, 0, 270), Position = UDim2.new(0.5, 0, 0.5, 0), GroupTransparency = 0}, 0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+    CreateTween(shadow, {Size = UDim2.new(0, 420, 0, 290), Position = UDim2.new(0.5, 0, 0.5, 8), ImageTransparency = 0.92}, 0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+    
+    mainFrame.Parent = screenGui
+    return screenGui
 end
 
 return Library
