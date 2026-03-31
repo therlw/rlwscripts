@@ -577,7 +577,7 @@ function Library:CreateKeySystem(config)
         Color = mainColor,
         OnClick = function(self)
             if validating then return end
-            local key = inputBox.Text
+            local key = string.gsub(inputBox.Text, '[%s%c"]', "") 
             if key == "" then
                 ShowStatus("Please enter a key first.")
                 ShakeUI()
