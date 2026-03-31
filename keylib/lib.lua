@@ -114,17 +114,17 @@ function Library.PrimaryButton(props)
         TextSize = 14,
         AutoButtonColor = false,
         CornerRadius = UDim.new(0, 8),
-        ClipsDescendants = true,
+        ClipsDescendants = true, -- Ensures shine stays inside
         OnClick = props.OnClick
     })
 
-    -- Shine Effect
+    -- Refined Smooth Shine Effect
     local shine = el("Frame", {
         Name = "Shine",
-        Size = UDim2.new(0, 50, 1, 0),
-        Position = UDim2.new(-0.5, 0, 0, 0),
+        Size = UDim2.new(0, 150, 1, 0), -- Wider for smoother transition
+        Position = UDim2.new(-1, 0, 0, 0),
         BackgroundColor3 = Color3.new(1, 1, 1),
-        BackgroundTransparency = 0.8,
+        BackgroundTransparency = 0.85,
         Rotation = 25,
         BorderSizePixel = 0,
         ZIndex = 2,
@@ -145,19 +145,19 @@ function Library.PrimaryButton(props)
     })
 
     local function PlayShine()
-        shine.Position = UDim2.new(-0.5, 0, 0, 0)
-        CreateTween(shine, {Position = UDim2.new(1.5, 0, 0, 0)}, 0.8, Enum.EasingStyle.Sine)
+        shine.Position = UDim2.new(-1, 0, 0, 0)
+        CreateTween(shine, {Position = UDim2.new(2, 0, 0, 0)}, 1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
     end
     
     btn.MouseEnter:Connect(function()
         if not btn:GetAttribute("Disabled") then
-            CreateTween(btn, {BackgroundColor3 = hoverColor}, 0.2)
+            CreateTween(btn, {BackgroundColor3 = hoverColor}, 0.3)
             PlayShine()
         end
     end)
     btn.MouseLeave:Connect(function()
         if not btn:GetAttribute("Disabled") then
-            CreateTween(btn, {BackgroundColor3 = mainColor}, 0.2)
+            CreateTween(btn, {BackgroundColor3 = mainColor}, 0.3)
         end
     end)
     
@@ -220,12 +220,12 @@ function Library.Input(props)
     -- Focus Glow
     local glow = el("Frame", {
         Name = "Glow",
-        Size = UDim2.new(1, 4, 1, 4),
-        Position = UDim2.new(0, -2, 0, -2),
+        Size = UDim2.new(1, 6, 1, 6),
+        Position = UDim2.new(0, -3, 0, -3),
         BackgroundTransparency = 1,
         ZIndex = -1,
         Parent = container,
-        CornerRadius = UDim.new(0, 10),
+        CornerRadius = UDim.new(0, 11),
         Stroke = {Color = focusColor, Thickness = 2, Transparency = 1}
     })
     
@@ -244,6 +244,74 @@ function Library.Input(props)
         Padding = {Left = UDim.new(0, 16), Right = UDim.new(0, 16)},
         Parent = container
     })
+
+    -- Soft Custom Caret (Cursor)
+    local caret = el("Frame", {
+        Name = "Caret",
+        Size = UDim2.new(0, 2, 0, 18),
+        Position = UDim2.new(0, 16, 0.5, 0),
+        AnchorPoint = Vector2.new(0, 0.5),
+        BackgroundColor3 = focusColor,
+        BorderSizePixel = 0,
+        BackgroundTransparency = 1,
+        ZIndex = 5,
+        Parent = container,
+        CornerRadius = UDim.new(1, 0) -- Rounded cursor
+    })
+
+    -- Caret Glow
+    el("UIStroke", {
+        Color = focusColor,
+        Thickness = 2,
+        Transparency = 0.6,
+        Parent = caret
+    })
+
+    local function UpdateCaret()
+        local text = input.Text
+        local cursorPosition = input.CursorPosition
+        
+        if cursorPosition == -1 then
+            caret.BackgroundTransparency = 1
+            if caret:FindFirstChild("UIStroke") then caret.UIStroke.Enabled = false end
+            return
+        end
+
+        local textBeforeCursor = string.sub(text, 1, cursorPosition - 1)
+        local textService = game:GetService("TextService")
+        local size = textService:GetTextSize(textBeforeCursor, input.TextSize, input.Font, Vector2.new(10000, 10000))
+        
+        caret.Position = UDim2.new(0, 16 + size.X, 0.5, 0)
+        
+        if input:IsFocused() then
+            caret.BackgroundTransparency = 0
+            if caret:FindFirstChild("UIStroke") then caret.UIStroke.Enabled = true end
+        else
+            caret.BackgroundTransparency = 1
+            if caret:FindFirstChild("UIStroke") then caret.UIStroke.Enabled = false end
+        end
+    end
+
+    -- Blinking Caret Logic
+    task.spawn(function()
+        while caret and caret.Parent do
+            if input:IsFocused() then
+                CreateTween(caret, {BackgroundTransparency = 0}, 0.4)
+                if caret:FindFirstChild("UIStroke") then CreateTween(caret.UIStroke, {Transparency = 0.6}, 0.4) end
+                task.wait(0.5)
+                CreateTween(caret, {BackgroundTransparency = 1}, 0.4)
+                if caret:FindFirstChild("UIStroke") then CreateTween(caret.UIStroke, {Transparency = 1}, 0.4) end
+                task.wait(0.5)
+            else
+                caret.BackgroundTransparency = 1
+                if caret:FindFirstChild("UIStroke") then caret.UIStroke.Transparency = 1 end
+                task.wait(0.1)
+            end
+        end
+    end)
+
+    input:GetPropertyChangedSignal("Text"):Connect(UpdateCaret)
+    input:GetPropertyChangedSignal("CursorPosition"):Connect(UpdateCaret)
     
     local stroke = container:FindFirstChild("UIStroke")
     local glowStroke = glow:FindFirstChild("UIStroke")
@@ -251,11 +319,13 @@ function Library.Input(props)
     input.Focused:Connect(function()
         if stroke then CreateTween(stroke, {Color = focusColor}, 0.2) end
         if glowStroke then CreateTween(glowStroke, {Transparency = 0.7}, 0.2) end
+        UpdateCaret()
     end)
     
     input.FocusLost:Connect(function()
         if stroke then CreateTween(stroke, {Color = strokeColor}, 0.2) end
         if glowStroke then CreateTween(glowStroke, {Transparency = 1}, 0.2) end
+        UpdateCaret()
         if props.OnFocusLost then props.OnFocusLost(input.Text) end
     end)
     
