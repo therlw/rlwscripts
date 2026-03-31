@@ -52,7 +52,9 @@ function Library.createElement(className, props, children)
                 if eventName == "MouseLeave" then eventName = "MouseLeave" end
                 
                 if inst[eventName] then
-                    inst[eventName]:Connect(v)
+                    inst[eventName]:Connect(function(...)
+                        v(inst, ...)
+                    end)
                 end
             elseif k == "CornerRadius" then
                 local corner = Instance.new("UICorner")
@@ -125,7 +127,11 @@ function Library.PrimaryButton(props)
         AutoButtonColor = false,
         ZIndex = 5,
         Parent = btn,
-        OnClick = props.OnClick
+        OnClick = function(_, ...)
+            if props.OnClick then
+                props.OnClick(btn, ...)
+            end
+        end
     })
 
     -- Clipping container for the shine to ensure it NEVER leaks
@@ -583,9 +589,9 @@ function Library:CreateKeySystem(config)
                 self:SetAttribute("Disabled", true)
                 
                 -- Loading Animation
-                local originalText = self.Text
+                local originalText = self.Trigger.Text
                 local originalColor = self.BackgroundColor3
-                self.Text = "Validating..."
+                self.Trigger.Text = "Validating..."
                 CreateTween(self, {BackgroundColor3 = Color3.fromRGB(60, 60, 70)}, 0.2)
                 
                 -- Simulate Network Delay for premium feel
@@ -594,19 +600,22 @@ function Library:CreateKeySystem(config)
                 local success = config.OnValidate(key)
                 if success then
                     if saveKey then SaveKeyToFile(key) end
-                    self.Text = "Success!"
+                    self.Trigger.Text = "Success!"
                     CreateTween(self, {BackgroundColor3 = Color3.fromRGB(46, 204, 113)}, 0.2)
                     ShowStatus("Successfully authenticated!", Color3.fromRGB(46, 204, 113))
                     task.wait(0.6)
                     CloseUI()
+                    if config.Callback then
+                        task.spawn(config.Callback)
+                    end
                 else
-                    self.Text = "Invalid Key"
+                    self.Trigger.Text = "Invalid Key"
                     CreateTween(self, {BackgroundColor3 = Color3.fromRGB(231, 76, 60)}, 0.2)
                     ShowStatus("Invalid key provided. Please try again.")
                     ShakeUI()
                     inputBox.Text = ""
                     task.wait(1)
-                    self.Text = originalText
+                    self.Trigger.Text = originalText
                     CreateTween(self, {BackgroundColor3 = originalColor}, 0.2)
                     self:SetAttribute("Disabled", false)
                     validating = false
