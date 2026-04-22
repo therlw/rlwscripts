@@ -85,7 +85,7 @@ local DefaultSettings = {Sniper = false, Seller = false}
 local FileSettings = {}
 local OGFileSettings = {}
 local FolderPath = "RLWSCRIPTS/" .. (table.find({PETSGO.Normal, PETSGO.Pro}, game.PlaceId) and "PETS GO" or "Pet Simulator 99")
-local FileName = FolderPath .. "/" .. LocalPlayer.Name .. " Plaza Plus.cfg"
+local FileName = FolderPath .. "/" .. LocalPlayer.Name .. " RLWSCRIPTS.cfg"
 if not isfolder("RLWSCRIPTS") then makefolder("RLWSCRIPTS") end
 if not isfolder(FolderPath) then makefolder(FolderPath) end
 if not isfile(FileName) then writefile(FileName, HttpService:JSONEncode(DefaultSettings)) end
@@ -432,7 +432,7 @@ local function GrabIDs(PlaceId)
             end
         end
     elseif Site.errors and Site.errors[1] and Site.errors[1].message == "Too many requests" then
-        warn("[Plaza Plus]: Roblox is rate-limiting you... waiting 15 seconds.")
+        warn("[RLWSCRIPTS]: Roblox is rate-limiting you... waiting 15 seconds.")
         task.wait(15)
         return GrabIDs(PlaceId)
     end 
@@ -466,7 +466,7 @@ local function Serverhop(NotPlaza)
     end
 end
 if not table.find({PS99.Normal, PS99.Pro, PETSGO.Normal, PETSGO.Pro}, game.PlaceId) then
-    warn("[Plaza Plus]: Incorrect Server, serverhopping...")
+    warn("[RLWSCRIPTS]: Incorrect Server, serverhopping...")
     while task.wait() do
         task.spawn(function()
             Library.Network.Invoke("Travel to Trading Plaza")
@@ -478,7 +478,7 @@ end
 task.spawn(function()
     if UI["Teleport Delay"] then
         while task.wait(UI["Teleport Delay"] + 120) and UI["Switch Servers"] and FileSettings.Sniper do
-            warn("[Plaza Plus]: +120s delay override, serverhopping...")
+            warn("[RLWSCRIPTS]: +120s delay override, serverhopping...")
             GrabIDs()
             Serverhop()
         end
@@ -723,7 +723,7 @@ local function FindItem(Data, ReturnAmount)
 
     for _, Inventory in pairs(Inventories) do
         if not Inventory or not Inventory._byUID then
-            print("[Plaza Plus]: Cannot scan for: " .. (Data.Class or "All Classes"))
+            print("[RLWSCRIPTS]: Cannot scan for: " .. (Data.Class or "All Classes"))
             return
         end
 
@@ -877,7 +877,7 @@ local function GlobalNotification(CurrentInfo, FindInfo, Percent)
     }
 
     local Message = {
-		["username"] = "RLWSCRIPTS | Plaza Plus",
+		["username"] = "RLWSCRIPTS",
         --["content"] = (tonumber(DiscordUserId) and "» <@"..tostring(DiscordUserId)..">" or ""),
         ["content"] = "",
         ["embeds"] = {
@@ -887,8 +887,7 @@ local function GlobalNotification(CurrentInfo, FindInfo, Percent)
                 ["description"] = table.concat(Description, "\n"),
                 ["timestamp"] = DateTime.now():ToIsoDate(),
                 ["footer"] = {
-                    ["icon_url"] = "https://i.gyazo.com/784ff41bd2b15e0046c8b621fab31990.png",
-                    ["text"] = "@Jxnt - discord.gg/Fyeju7nv3m"
+                    ["text"] = "powered by RLWSCRIPTS"
                 },
                 ["thumbnail"] = { 
                     ["url"] = "https://biggamesapi.io/image/"..Library.Functions.ParseAssetId(CurrentInfo.Icon)
@@ -911,8 +910,8 @@ local function SniperNotification(CurrentInfo, FindInfo, Percent)
     }
 
     local Message = {
-		["username"] = "RLWSCRIPTS | Plaza Plus",
-		["avatar_url"] = "https://i.gyazo.com/dbefd0df338c7ff9c08fc85ecea0df94.png",
+		["username"] = "RLWSCRIPTS",
+-- avatar removed
         ["embeds"] = {
             {
                 ["color"] = Color,
@@ -920,11 +919,7 @@ local function SniperNotification(CurrentInfo, FindInfo, Percent)
                 ["description"] = table.concat(Description, "\n"),
                 ["timestamp"] = DateTime.now():ToIsoDate(),
                 ["footer"] = {
-                    ["icon_url"] = "https://i.gyazo.com/784ff41bd2b15e0046c8b621fab31990.png",
-                    ["text"] = "@Jxnt - discord.gg/Fyeju7nv3m"
-                },
-                ["thumbnail"] = { 
-                    ["url"] = "https://biggamesapi.io/image/"..Library.Functions.ParseAssetId(CurrentInfo.Icon)
+                    ["text"] = "powered by RLWSCRIPTS"
                 },
             },
         },
@@ -947,8 +942,8 @@ local function SellerNotification(CurrentInfo)
     }
 
     local Message = {
-		["username"] = "RLWSCRIPTS | Plaza Plus",
-		["avatar_url"] = "https://i.gyazo.com/dbefd0df338c7ff9c08fc85ecea0df94.png",
+		["username"] = "RLWSCRIPTS",
+-- avatar removed
         ["embeds"] = {
             {
                 ["color"] = 12035327,
@@ -956,8 +951,7 @@ local function SellerNotification(CurrentInfo)
                 ["description"] = table.concat(Description, "\n"),
                 ["timestamp"] = DateTime.now():ToIsoDate(),
                 ["footer"] = {
-                    ["icon_url"] = "https://i.gyazo.com/784ff41bd2b15e0046c8b621fab31990.png",
-                    ["text"] = "@Jxnt - discord.gg/Fyeju7nv3m"
+                    ["text"] = "powered by RLWSCRIPTS"
                 },
                 ["thumbnail"] = { 
                     ["url"] = "https://biggamesapi.io/image/"..Library.Functions.ParseAssetId(CurrentInfo.Icon)
@@ -1033,7 +1027,7 @@ local function ProcessItem(CurrentInfo, Data, Booth)
     else
         TempPercent = "N/A%"
     end
-    print("[Plaza Plus]: Found: " .. CurrentInfo.Display .. " @ " .. TempPercent .. " (" .. tostring(CurrentInfo.Value or CurrentInfo.Cost) .. ") ".."("..tostring(Result)..")")
+    print("[RLWSCRIPTS]: Found: " .. CurrentInfo.Display .. " @ " .. TempPercent .. " (" .. tostring(CurrentInfo.Value or CurrentInfo.Cost) .. ") ".."("..tostring(Result)..")")
 
     local PriceData = {
         IsPercentage = type(Data.Price) == "string" and Data.Price:find("%%"),
@@ -1065,7 +1059,7 @@ local function ProcessItem(CurrentInfo, Data, Booth)
             TrueBuyCount = math.min(TrueBuyCount, Data.MaxAmount)
         end
         if TrueBuyCount <= 0 then return end
-        warn("[Plaza Plus]: Sniping: x" .. TrueBuyCount .. " " .. CurrentInfo.Display .. ".")
+        warn("[RLWSCRIPTS]: Sniping: x" .. TrueBuyCount .. " " .. CurrentInfo.Display .. ".")
         HumanoidRootPart.CFrame = BoothsInteractive[Booth.BoothID]:WaitForChild("Interact", 7).CFrame * CFrame.new(0,-2, -6)
         task.wait(0.5)
 
@@ -1159,7 +1153,7 @@ local function SearchTerminal(Class, Encoded, SearchQuery)
         local IsRainbow = SearchQuery.pt and SearchQuery.pt == 2 and "true" or "false"
         local IsShiny = SearchQuery.sh and SearchQuery.sh and "true" or "false"
         local HasTier = SearchQuery.tn and SearchQuery.tn and "true" or "false"
-        return warn("[Plaza Plus]: Incorrect Item Data! Cannot search for item: "..SearchQuery.id, "| Class: "..Class.." | IsRainbow: "..IsRainbow.." | IsGolden: "..IsGolden.." | IsShiny: "..IsShiny.." | Tier: "..HasTier)
+        return warn("[RLWSCRIPTS]: Incorrect Item Data! Cannot search for item: "..SearchQuery.id, "| Class: "..Class.." | IsRainbow: "..IsRainbow.." | IsGolden: "..IsGolden.." | IsShiny: "..IsShiny.." | Tier: "..HasTier)
     end
     if type(FoundServer) == "table" and FoundServer["place_id"] and FoundServer["job_id"] then
         if (CanUsePro and table.find({PS99.Pro, PETSGO.Pro}, FoundServer["place_id"])) or (not UI["Only Pro"] and table.find({PS99.Normal, PETSGO.Normal}, FoundServer["place_id"])) then
@@ -1194,12 +1188,12 @@ task.spawn(function()
     if Settings.Sniper and Settings.Sniper.Active and FileSettings.Sniper then
         for Name, Data in next, Settings.Sniper.Items do
             if type(Name) ~= "string" or Name == "SearchTerminal" then continue end
-            warn("[Plaza Plus]: Searching for: "..Name..".")
+            warn("[RLWSCRIPTS]: Searching for: "..Name..".")
         end
         if Settings.Sniper.Items.SearchTerminal then
             for Name, Data in next, Settings.Sniper.Items.SearchTerminal do
                 if type(Name) ~= "string" then continue end
-                warn("[Plaza Plus]: Searching for: "..Name..".")
+                warn("[RLWSCRIPTS]: Searching for: "..Name..".")
             end
         end
     end
@@ -1233,7 +1227,7 @@ task.spawn(function()
                 FileSettings.Seller = true
             else
                 FileSettings.Sniper = false
-                return LocalPlayer:Kick("[Plaza Plus]: Limits Reached")
+                return LocalPlayer:Kick("[RLWSCRIPTS]: Limits Reached")
             end
         end
         if UI["Diamonds Hit"] then
@@ -1243,7 +1237,7 @@ task.spawn(function()
                     FileSettings.Seller = true
                 else
                     FileSettings.Sniper = false
-                    return LocalPlayer:Kick("[Plaza Plus]: Diamonds Reached")
+                    return LocalPlayer:Kick("[RLWSCRIPTS]: Diamonds Reached")
                 end
             end
         end
@@ -1257,7 +1251,7 @@ task.spawn(function()
                     else
                         FileSettings.SniperTime = nil
                         FileSettings.Sniper = false
-                        return LocalPlayer:Kick("[Plaza Plus]: Timer Reached")
+                        return LocalPlayer:Kick("[RLWSCRIPTS]: Timer Reached")
                     end
                 elseif (os.time() - FileSettings.SniperTime) > 21600 then
                     FileSettings.SniperTime = os.time()
@@ -1438,7 +1432,7 @@ if Settings.Seller and Settings.Seller.Active and FileSettings.Seller then
     
     ClaimOptimalBooth()
     repeat task.wait() until ClaimedBooths[LocalPlayer]
-    warn("[Plaza Plus]: Booth was claimed, listing items...")   
+    warn("[RLWSCRIPTS]: Booth was claimed, listing items...")   
 
     Library.Network.Fired("Booths: Add History"):Connect(function(Info)
     --ReplicatedStorage.Network["Booths: Add History"].OnClientEvent:Connect(function(Info)
@@ -1452,7 +1446,7 @@ if Settings.Seller and Settings.Seller.Active and FileSettings.Seller then
         end
         for Class, ClassTable in next, Info["Given"] do
             for UID, Items in ClassTable do
-                warn("[Plaza Plus]: "..Items.id.." ("..UID..") was sold!")
+                warn("[RLWSCRIPTS]: "..Items.id.." ("..UID..") was sold!")
                 if UI["URL"] and not table.find(LastUIDDs, UID) then
                     table.insert(LastUIDDs, UID)
 
@@ -1573,7 +1567,7 @@ if Settings.Seller and Settings.Seller.Active and FileSettings.Seller then
                 return
             end
             if PriceData.RealPrice <= 0 or not PriceData.RealPrice then
-                return print("[Plaza Plus]: ERROR LISTING ITEM: ".. ItemData.ID, "("..ItemData.Class..") for price: "..tostring(PriceData.RealPrice))
+                return print("[RLWSCRIPTS]: ERROR LISTING ITEM: ".. ItemData.ID, "("..ItemData.Class..") for price: "..tostring(PriceData.RealPrice))
             end
             local MaxAmount = table.find({PS99.Normal, PS99.Pro}, game.PlaceId) and 50000 or 5000
             print("Attempting to list: ".. ItemData.ID, "("..ItemData.Class..") for price: "..tostring(PriceData.RealPrice))
@@ -1592,12 +1586,12 @@ if Settings.Seller and Settings.Seller.Active and FileSettings.Seller then
                 repeat task.wait() until Success or (os.time() - SellTimer) >= 10
                 UsedSlots = FindItemsInBooth()
                 if Success then
-                    warn("[Plaza Plus]: Added item:", ItemData.ID, "x" .. math.min(Amount, MaxAmount))
+                    warn("[RLWSCRIPTS]: Added item:", ItemData.ID, "x" .. math.min(Amount, MaxAmount))
                     Amount = Amount - MaxAmount
                 else
                     yessir = yessir + 1
                     table.remove(LastUIDs, table.find(LastUIDs, UID))
-                    warn("[Plaza Plus]: FAILED to add item:", ItemData.ID, "x" .. math.min(Amount, MaxAmount))
+                    warn("[RLWSCRIPTS]: FAILED to add item:", ItemData.ID, "x" .. math.min(Amount, MaxAmount))
                 end
                 if yessir >= 3 then
                     break
@@ -1639,7 +1633,7 @@ if Settings.Seller and Settings.Seller.Active and FileSettings.Seller then
                         FileSettings.Seller = false
                     else
                         FileSettings.Seller = false
-                        return LocalPlayer:Kick("[Plaza Plus]: Booth Runout")
+                        return LocalPlayer:Kick("[RLWSCRIPTS]: Booth Runout")
                     end
                 end
             end
@@ -1650,7 +1644,7 @@ if Settings.Seller and Settings.Seller.Active and FileSettings.Seller then
                     FileSettings.Seller = false
                 else
                     FileSettings.Seller = false
-                    return LocalPlayer:Kick("[Plaza Plus]: Diamonds Reached")
+                    return LocalPlayer:Kick("[RLWSCRIPTS]: Diamonds Reached")
                 end
             end
             if UI["Minutes Timer"] then
@@ -1663,7 +1657,7 @@ if Settings.Seller and Settings.Seller.Active and FileSettings.Seller then
                         else
                             FileSettings.Seller = false
                             FileSettings.SellerTime = nil
-                            return LocalPlayer:Kick("[Plaza Plus]: Timer Reached1")
+                            return LocalPlayer:Kick("[RLWSCRIPTS]: Timer Reached1")
                         end
                     elseif (os.time() - FileSettings.SellerTime) > 21600 then
                         FileSettings.SellerTime = os.time()
