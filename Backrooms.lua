@@ -1,8 +1,4 @@
--- ==========================================================
--- 🚀 THE ULTIMATE BACKROOMS AUTOFARM & FINDER (RAYFIELD UI)
--- Geliştirici: Antigravity AI
--- Açıklama: Boss ve Egg Hatching Odalarını Saniyeler İçinde Bulur.
--- ==========================================================
+
 
 local Players = game:GetService("Players")
 local CollectionService = game:GetService("CollectionService")
