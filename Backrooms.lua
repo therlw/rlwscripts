@@ -1,4 +1,4 @@
-
+-- RLW
 
 local Players = game:GetService("Players")
 local CollectionService = game:GetService("CollectionService")
@@ -20,10 +20,150 @@ getgenv().Config = {
         BackroomsBossDamage = false,
         BackroomsExtraLootRoll = false,
         BackroomsTokenFind = false
-    }
+    },
+    WebhookEnabled = false,
+    WebhookURL = ""
 }
 
 local TargetEggRooms = {}
+
+-- ==========================
+-- 🔗 WEBHOOK & INVENTORY SİSTEMİ
+-- ==========================
+local KnownUIDs      = {}
+local StartHuges     = 0
+local StartTitanics  = 0
+local CurrentHuges   = 0
+local CurrentTitanics= 0
+
+local function GetPetDir()
+    local petDir = {}
+    pcall(function() petDir = require(ReplicatedStorage.Library.Directory.Pets) end)
+    if not next(petDir) then
+        pcall(function()
+            local dir = require(ReplicatedStorage.Library.Directory)
+            petDir = (dir and dir.Pet) or {}
+        end)
+    end
+    return petDir
+end
+
+local function InitSessionStats()
+    pcall(function()
+        local save = require(ReplicatedStorage.Library.Client.Save).Get()
+        if not save or not save.Inventory or not save.Inventory.Pet then return end
+        local pets   = save.Inventory.Pet
+        local petDir = GetPetDir()
+
+        for uid, data in pairs(pets) do
+            KnownUIDs[uid] = true
+            local pId = tostring(data.id or "")
+            local def = petDir[pId]
+            local isH = (def and def.huge) or string.match(pId, "^Huge ")
+            local isT = (def and def.titanic) or string.match(pId, "^Titanic ")
+            
+            if isH then StartHuges    = StartHuges    + 1 end
+            if isT then StartTitanics = StartTitanics + 1 end
+        end
+    end)
+end
+InitSessionStats()
+
+local function SendWebhook(title, desc, color, thumbId)
+    if not getgenv().Config.WebhookEnabled then return end
+    if not getgenv().Config.WebhookURL or getgenv().Config.WebhookURL == "" then return end
+    local requestFn = (getgenv and getgenv().request) or (syn and syn.request) or request
+    if not requestFn then return end
+
+    local embed = {
+        ["title"]       = title,
+        ["description"] = desc,
+        ["color"]       = color or 0x00ff00,
+        ["timestamp"]   = DateTime.now():ToIsoDate(),
+        ["footer"]      = { ["text"] = "powered by RLWSCRIPTS" }
+    }
+    
+    if thumbId and tostring(thumbId) ~= "" then
+        embed["thumbnail"] = { ["url"] = "https://ps99.biggamesapi.io/image/" .. tostring(thumbId) }
+    end
+
+    pcall(function()
+        requestFn({
+            Url     = getgenv().Config.WebhookURL,
+            Method  = "POST",
+            Headers = { ["Content-Type"] = "application/json" },
+            Body    = HttpService:JSONEncode({
+                ["username"] = "RLWSCRIPTS Notification",
+                ["embeds"]   = { embed }
+            })
+        })
+    end)
+end
+
+local function UpdateInventoryMonitor()
+    local success, err = pcall(function()
+        local save = require(ReplicatedStorage.Library.Client.Save).Get()
+        if not save or not save.Inventory or not save.Inventory.Pet then return end
+        local pets   = save.Inventory.Pet
+        local petDir = GetPetDir()
+
+        local currentH = 0
+        local currentT = 0
+
+        for uid, data in pairs(pets) do
+            local pId = tostring(data.id or "")
+            local def = petDir[pId]
+            
+            -- DIRECT STRING MATCHING: En garanti yol.
+            local isH = (def and def.huge) or string.match(pId, "^Huge ")
+            local isT = (def and def.titanic) or string.match(pId, "^Titanic ")
+
+            if isH then currentH = currentH + 1 end
+            if isT then currentT = currentT + 1 end
+
+            -- Yeni pet tespiti
+            if not KnownUIDs[uid] then
+                KnownUIDs[uid] = true
+                if isH or isT then
+                    local pName = (def and def.DisplayName) or pId
+                    local col   = isH and 0x00ff00 or 0xffd700
+                    local title = isH and "🎉 NEW HUGE CAUGHT! 🎉" or "🌟 NEW TITANIC CAUGHT! 🌟"
+                    
+                    local imageId = nil
+                    if def and def.thumbnail then
+                        imageId = string.match(def.thumbnail, "%d+")
+                    end
+                    
+                    local desc = string.format(
+                        "🐾 **Pet:** `%s`\n" ..
+                        "👤 **User:** `%s`\n" ..
+                        "⏱️ **Time:** `%s`\n\n" ..
+                        "📊 **Session Stats:**\n" ..
+                        "🟢 `%d` Huges  |  🟡 `%d` Titanics",
+                        pName, LocalPlayer.Name, os.date("%X"),
+                        currentH - StartHuges, currentT - StartTitanics
+                    )
+                    
+                    SendWebhook(title, desc, col, imageId)
+                end
+            end
+        end
+
+        CurrentHuges    = currentH - StartHuges
+        CurrentTitanics = currentT - StartTitanics
+    end)
+    
+    if not success then
+        warn("[Webhook Error] UpdateInventoryMonitor failed: " .. tostring(err))
+    end
+end
+
+task.spawn(function()
+    while task.wait(3) do
+        UpdateInventoryMonitor()
+    end
+end)
+
 
 -- ==========================
 -- 🛡️ GELİŞMİŞ ANTİ-AFK SİSTEMİ
@@ -926,6 +1066,43 @@ TabUpgrades:CreateToggle({
     Flag = "Tgl_UpgTokenFind",
     Callback = function(Value)
         getgenv().Config.AutoUpgrades.BackroomsTokenFind = Value
+    end
+})
+local TabWebhook = Window:CreateTab("🔔 Webhook", 4483362458)
+
+TabWebhook:CreateSection("Discord Notifications (Huge/Titanic)")
+
+TabWebhook:CreateToggle({
+    Name = "Enable Discord Webhook",
+    CurrentValue = false,
+    Flag = "Tgl_Webhook",
+    Callback = function(Value)
+        getgenv().Config.WebhookEnabled = Value
+    end
+})
+
+TabWebhook:CreateInput({
+    Name = "Discord Webhook URL",
+    PlaceholderText = "https://discord.com/api/webhooks/...",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(Text)
+        getgenv().Config.WebhookURL = Text
+    end,
+})
+
+TabWebhook:CreateButton({
+    Name = "Test Webhook",
+    Callback = function()
+        if not getgenv().Config.WebhookEnabled then
+            Rayfield:Notify({Title = "Error", Content = "Please enable the Webhook toggle first!", Duration = 3})
+            return
+        end
+        if getgenv().Config.WebhookURL == "" then
+            Rayfield:Notify({Title = "Error", Content = "Please enter a valid Webhook URL!", Duration = 3})
+            return
+        end
+        SendWebhook("✅ Webhook Test Successful!", "Your Webhook is working perfectly.\nYou will receive Huge and Titanic notifications here.", 0x00ff00)
+        Rayfield:Notify({Title = "Success", Content = "Test message sent to your Discord!", Duration = 3})
     end
 })
 
