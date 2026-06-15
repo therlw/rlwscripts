@@ -143,8 +143,18 @@ local function UpdateInventoryMonitor()
                     local title = isH and "🎉 NEW HUGE CAUGHT! 🎉" or "🌟 NEW TITANIC CAUGHT! 🌟"
                     
                     local imageId = nil
-                    if def and def.thumbnail then
-                        imageId = string.match(def.thumbnail, "%d+")
+                    if def then
+                        local thumb = def.thumbnail
+                        -- Oyun dosyalarında eğer özel thumbnail varsa onu kullan:
+                        if data.pt == 1 and def.goldenThumbnail then
+                            thumb = def.goldenThumbnail
+                        elseif data.pt == 2 and def.rainbowThumbnail then
+                            thumb = def.rainbowThumbnail
+                        end
+                        
+                        if thumb then
+                            imageId = string.match(thumb, "%d+")
+                        end
                     end
                     
                     local desc = string.format(
