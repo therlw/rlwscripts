@@ -1,4 +1,4 @@
--- RLW
+--RLW
 
 local Players = game:GetService("Players")
 local CollectionService = game:GetService("CollectionService")
@@ -13,6 +13,8 @@ getgenv().Config = {
     MetaFarmActive = false,
     TargetKeyCount = 5,
     FindKeepOutEgg = false,
+    FindFreeEggRoom = false,
+    TargetEggMultiplier = 50,
     AutoLoot = false,
     GodMode = false,
     TeleportDelay = 0.8,
@@ -250,6 +252,7 @@ local visitedCount = 0
 
 local Toggle_MetaFarm = nil
 local Toggle_KeepOutEgg = nil
+local Toggle_FreeEgg = nil
 
 -- ==========================
 -- 🔑 ANAHTAR SAYISI OKUMA
@@ -619,6 +622,36 @@ end)
 -- ==========================
 -- 🔄 FARM ANA DÖNGÜSÜ
 -- ==========================
+local LastInstanceJoinAttempt = 0
+
+local function IsInBackroomsInstance()
+    local container = workspace:FindFirstChild("__THINGS")
+    if container then
+        local instanceContainer = container:FindFirstChild("__INSTANCE_CONTAINER")
+        if instanceContainer and instanceContainer:FindFirstChild("Active") then
+            return instanceContainer.Active:FindFirstChild("Backrooms") ~= nil
+        end
+    end
+    return false
+end
+
+local function HandleInstanceEntry()
+    if IsInBackroomsInstance() then return end
+    if os.clock() - LastInstanceJoinAttempt < 60 then return end
+    LastInstanceJoinAttempt = os.clock()
+    
+    if Rayfield then
+        Rayfield:Notify({Title = "🚀 Backrooms", Content = "Backrooms'a otomatik giriş yapılıyor...", Duration = 5})
+    end
+
+    pcall(function()
+        local Network = game:GetService("ReplicatedStorage"):WaitForChild("Network")
+        -- Giriş Yap
+        Network:WaitForChild("Instancing_PlayerEnterInstance"):InvokeServer("Backrooms")
+    end)
+    task.wait(5)
+end
+
 task.spawn(function()
     while task.wait(0.2) do
 
@@ -634,9 +667,11 @@ task.spawn(function()
         local root = getRootPart()
         if not root then continue end
 
-        if not (getgenv().Config.MetaFarmActive or getgenv().Config.FindKeepOutEgg) then
+        if not (getgenv().Config.MetaFarmActive or getgenv().Config.FindKeepOutEgg or getgenv().Config.FindFreeEggRoom) then
             continue
         end
+
+        HandleInstanceEntry()
 
         -- STATE MACHINE
         local isKeyFarmPhase = false
@@ -667,11 +702,20 @@ task.spawn(function()
             local lowerID = string.lower(roomID)
 
             local isEgg = lowerID:find("keepout") or lowerID:find("hugeegg") or lowerID:find("titanicegg")
+            local isFreeEgg = lowerID:find("freeegg")
+            local multiplier = isFreeEgg and tonumber(room:GetAttribute("EggMultiplier")) or 0
+            
             local isBoss = lowerID:find("bosschest") or lowerID:find("minichest")
                 or lowerID:find("miniboss") or lowerID:find("boss")
                 or room:GetAttribute("BossChestUID") or room:GetAttribute("ActiveMinichests")
             local isVault = lowerID:find("vault") or lowerID:find("chest")
             local isBreakable = lowerID:find("breakable")
+
+            if getgenv().Config.FindFreeEggRoom and isFreeEgg and multiplier >= getgenv().Config.TargetEggMultiplier and bestRoomType < 5 then
+                bestRoom = room
+                bestRoomType = 5
+                break
+            end
 
             if getgenv().Config.FindKeepOutEgg and isEgg and bestRoomType < 4 then
                 bestRoom = room
@@ -702,18 +746,33 @@ task.spawn(function()
             local Network = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
             local fireCustom = Network and Network:FindFirstChild("Instancing_FireCustomFromClient")
 
-            -- Kapı açma
-            if fireCustom and bestRoom:FindFirstChild("LockedDoors") then
-                if bestRoomType == 4 then
-                    fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
-                elseif bestRoomType == 3 then
-                    fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
+            -- Kapı açma: Önce ışınlan, streaming yüklenmesini bekle, sonra karar ver
+            if fireCustom then
+                if bestRoomType == 5 or bestRoomType == 4 then
+                    if bestRoom:FindFirstChild("LockedDoors") then
+                        fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
+                    end
                 end
+                -- Type 3 (Boss): teleport sonrası yükleme beklendiğinde kontrol edilecek
             end
 
             safeTeleport(bestRoom, false)
 
-            if bestRoomType == 4 then
+            if bestRoomType == 6 then
+                -- (Bu branch artık kullanılmıyor, streaming nedeniyle aşağıda handle ediliyor)
+
+            elseif bestRoomType == 5 then
+                -- print("🎉 İSTENEN FREE EGG ODASI BULUNDU! (" .. roomID .. ")")
+                local mult = bestRoom:GetAttribute("EggMultiplier") or "Bilinmeyen"
+                getgenv().Config.FindFreeEggRoom = false
+                getgenv().Config.MetaFarmActive = false
+                if Rayfield and Toggle_FreeEgg then Toggle_FreeEgg:Set(false) end
+                if Rayfield and Toggle_MetaFarm then Toggle_MetaFarm:Set(false) end
+                if Rayfield then
+                    Rayfield:Notify({Title = "🎁 Free Egg Room!", Content = mult .. "x Huge Chance odası bulundu!", Duration = 10, Image = 4483362458})
+                end
+
+            elseif bestRoomType == 4 then
                 -- print("🎉 GİZLİ YUMURTA ODASI BULUNDU! (" .. roomID .. ")")
                 getgenv().Config.FindKeepOutEgg = false
                 getgenv().Config.MetaFarmActive = false
@@ -724,41 +783,59 @@ task.spawn(function()
                 end
 
             elseif bestRoomType == 3 then
-                -- print("[SİSTEM] 💎 Boss Odası bulundu: " .. roomID)
-                local emptySeconds = 0
+                -- ✅ Boss odasına ışınlandık. Şimdi streaming yüklenmesini bekleyip kapı durumunu kontrol ediyoruz.
+                task.wait(2.5) -- Streaming yüklenmesi için yeterli süre
+
+                local isAlreadyOpen = not bestRoom:FindFirstChild("LockedDoors")
+                local hasBoss = bestRoom:GetAttribute("BossChestUID") or bestRoom:GetAttribute("ActiveMinichests")
+
+                if isAlreadyOpen and hasBoss then
+                    -- Kapı zaten açık! Anahtar harcamadan kamp kur.
+                    if Rayfield then
+                        Rayfield:Notify({
+                            Title = "🎯 Açık Boss Odası!",
+                            Content = "Kapı zaten açık, anahtar harcanmadı! Kamp kuruluyor...",
+                            Duration = 6
+                        })
+                    end
+                elseif bestRoom:FindFirstChild("LockedDoors") then
+                    -- Kapı kapalı, anahtar harca.
+                    local Network2 = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
+                    local fireCustom2 = Network2 and Network2:FindFirstChild("Instancing_FireCustomFromClient")
+                    if fireCustom2 then
+                        fireCustom2:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
+                    end
+                else
+                    -- Kapı yok ama boss da yok, normal Boss Odası belki boş
+                end
+
+                -- Her iki durumda da odada kal ve kamp kur
+                local isWaitingRespawn = false
+                local notifiedRespawn = false
                 while getgenv().Config.MetaFarmActive do
                     task.wait(1)
-                    local currentKeys = getDaydreamKeyCount()
-                    if currentKeys < getgenv().Config.TargetKeyCount then
-                        -- print("[SİSTEM] 🔄 Anahtar sayısı düştü! Boss bırakılıyor...")
-                        break
-                    end
-
-                    local breakablesExist = false
-                    local breakablesFolder = workspace:FindFirstChild("__THINGS")
-                        and workspace.__THINGS:FindFirstChild("Breakables")
-                    if breakablesFolder then
-                        local pos = getRootPart() and getRootPart().Position or Vector3.new(0,0,0)
-                        for _, b in ipairs(breakablesFolder:GetChildren()) do
-                            local part = b:FindFirstChild("Hitbox")
-                                or (b:IsA("Model") and b.PrimaryPart)
-                                or b:FindFirstChildWhichIsA("BasePart")
-                            if part and (part.Position - pos).Magnitude < 150 then
-                                breakablesExist = true
-                                break
+                    local respawnTs = nil
+                    pcall(function() respawnTs = bestRoom:GetAttribute("RespawnTimestamp") end)
+                    local now = workspace:GetServerTimeNow()
+                    if respawnTs and respawnTs > now then
+                        local remaining = math.ceil(respawnTs - now)
+                        if not isWaitingRespawn then
+                            isWaitingRespawn = true
+                            notifiedRespawn = false
+                            if Rayfield then
+                                Rayfield:Notify({Title = "⏳ Boss Öldü!", Content = "Yeniden doğma: " .. remaining .. " saniye. Bekliyoruz...", Duration = 5})
                             end
                         end
-                    end
-
-                    if not breakablesExist then
-                        emptySeconds = emptySeconds + 1
-                        if emptySeconds >= 4 then
-                            -- print("[FARM] ⚠️ Oda boşaldı! Yeni odaya geçiliyor...")
-                            VisitedRooms[roomUID] = true
-                            break
-                        end
+                        local waitTime = math.max(respawnTs - workspace:GetServerTimeNow() - 1, 0)
+                        if waitTime > 2 then task.wait(waitTime) end
                     else
-                        emptySeconds = 0
+                        if isWaitingRespawn and not notifiedRespawn then
+                            notifiedRespawn = true
+                            isWaitingRespawn = false
+                            if Rayfield then
+                                Rayfield:Notify({Title = "⚔️ Boss Geri Döndü!", Content = "Saldırı başlıyor...", Duration = 3})
+                            end
+                        end
                     end
                 end
 
@@ -847,7 +924,7 @@ task.spawn(function()
             continue
         end
 
-        local isSearchingOnly = isBossHuntPhase or getgenv().Config.FindKeepOutEgg
+        local isSearchingOnly = isBossHuntPhase or getgenv().Config.FindKeepOutEgg or getgenv().Config.FindFreeEggRoom
 
         -- Sadece EN UZAK odaya zıpla (1 oda per döngü)
         local roomData = sortedRooms[1]
@@ -874,8 +951,7 @@ task.spawn(function()
 
                 if isBossHuntPhase and isBossRoom then
                     fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
-                    -- print("[SİSTEM] 💎 Boss kapısı açıldı!")
-                elseif getgenv().Config.FindKeepOutEgg and isEggRoom then
+                elseif (getgenv().Config.FindKeepOutEgg or getgenv().Config.FindFreeEggRoom) and isEggRoom then
                     fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
                 else
                     -- print("[TASARRUF] 🚫 Bu modda kapı açılmadı: " .. roomID)
@@ -973,7 +1049,11 @@ local Window = Rayfield:CreateWindow({
     Name = "RLWSCRIPTS Event Script (Backrooms!)",
     LoadingTitle = "RLWSCRIPTS Event Script (Backrooms!)",
     LoadingSubtitle = "by RLW",
-    ConfigurationSaving = { Enabled = false }
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "RLWSCRIPTS",
+        FileName = "BackroomsConfig"
+    }
 })
 
 local TabMain = Window:CreateTab("🔥 Meta Farm", 4483362458)
@@ -1008,6 +1088,27 @@ Toggle_KeepOutEgg = TabMain:CreateToggle({
     Callback = function(Value)
         getgenv().Config.FindKeepOutEgg = Value
     end
+})
+
+Toggle_FreeEgg = TabMain:CreateToggle({
+    Name = "🎁 Find Free Egg Room",
+    CurrentValue = false,
+    Flag = "Tgl_FreeEgg",
+    Callback = function(Value)
+        getgenv().Config.FindFreeEggRoom = Value
+    end
+})
+
+TabMain:CreateDropdown({
+    Name = "🎯 Target Egg Multiplier",
+    Options = {"2x", "3x", "5x", "10x", "20x", "50x", "100x"},
+    CurrentOption = {"50x"},
+    MultipleOptions = false,
+    Flag = "Drp_Multiplier",
+    Callback = function(Option)
+        local val = string.gsub(Option[1], "x", "")
+        getgenv().Config.TargetEggMultiplier = tonumber(val) or 50
+    end,
 })
 
 TabMain:CreateSection("Phase 3: Speed & Safety Settings")
