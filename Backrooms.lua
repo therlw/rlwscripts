@@ -159,7 +159,7 @@ local function UpdateInventoryMonitor()
                     
                     local desc = string.format(
                         "🐾 **Pet:** `%s`\n" ..
-                        "👤 **User:** `%s`\n" ..
+                        "👤 **User:** ||%s||\n" ..
                         "⏱️ **Time:** `%s`",
                         pName, LocalPlayer.Name, os.date("%X")
                     )
