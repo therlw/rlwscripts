@@ -1,4 +1,4 @@
---RLW
+--ps99
 
 local Players = game:GetService("Players")
 local CollectionService = game:GetService("CollectionService")
@@ -645,9 +645,13 @@ local function HandleInstanceEntry()
     end
 
     pcall(function()
-        local Network = game:GetService("ReplicatedStorage"):WaitForChild("Network")
-        -- Giriş Yap
-        Network:WaitForChild("Instancing_PlayerEnterInstance"):InvokeServer("Backrooms")
+        local InstancingCmds = require(game:GetService("ReplicatedStorage").Library.Client.InstancingCmds)
+        if InstancingCmds and InstancingCmds.Enter then
+            InstancingCmds.Enter("Backrooms")
+        else
+            local Network = game:GetService("ReplicatedStorage"):WaitForChild("Network")
+            Network:WaitForChild("Instancing_PlayerEnterInstance"):InvokeServer("Backrooms")
+        end
     end)
     task.wait(5)
 end
