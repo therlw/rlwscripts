@@ -1024,11 +1024,7 @@ task.spawn(function()
                                 if dist < closestDist then
                                     closestDist = dist
                                     eggModel = eggObj._model
-                                    if eggModel and type(eggModel.Name) == "string" and #eggModel.Name > 10 then
-                                        customUid = eggModel.Name
-                                    else
-                                        customUid = uid
-                                    end
+                                    customUid = uid
                                     closestName = tostring(eggObj._id or eggObj.id or (eggModel and eggModel.Name) or "")
                                 end
                             end
