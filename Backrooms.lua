@@ -16,6 +16,7 @@ getgenv().Config = {
     FindFreeEggRoom = false,
     TargetEggMultiplier = {50, 75, 100},
     TargetSpecificEgg = {"Any"},
+    AutoBuyFreeEgg = false,
     AutoLoot = false,
     GodMode = false,
     TeleportDelay = 0.8,
@@ -857,9 +858,11 @@ task.spawn(function()
                 end
 
                 if getgenv().Config.FindFreeEggRoom and isFreeEgg and isValidMultiplier then
-                    if bestRoomType < 5 or (bestRoomType == 5 and roomUID < bestRoom:GetAttribute("RoomUID")) then
+                    local targetType = getgenv().Config.AutoBuyFreeEgg and 4 or 5
+                    if bestRoomType < targetType or (bestRoomType == targetType and roomUID < (bestRoom and bestRoom:GetAttribute("RoomUID") or 999999)) then
                         bestRoom = room
-                        bestRoomType = 5
+                        bestRoomType = targetType
+                        bestMultiplier = multiplier
                     end
                 end
 
@@ -986,7 +989,7 @@ task.spawn(function()
 
                 local hasTeleportedToEgg = false
                 local missingEggCounter = 0
-                while getgenv().Config.FindKeepOutEgg do
+                while getgenv().Config.MetaFarmActive and (getgenv().Config.FindKeepOutEgg or getgenv().Config.AutoBuyFreeEgg or isHybridEggPhase) do
                     local timeNow = workspace:GetServerTimeNow()
                     
                     -- YUMURTA SÜRE KONTROLÜ (Oyunun Kendi Sayacı)
