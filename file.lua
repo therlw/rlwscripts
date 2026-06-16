@@ -14,6 +14,7 @@ getgenv().Config = {
     TargetKeyCount = 5,
     FindKeepOutEgg = false,
     FindFreeEggRoom = false,
+    TargetEggType = "Any",
     TargetEggMultiplier = 50,
     AutoLoot = false,
     GodMode = false,
@@ -779,13 +780,23 @@ task.spawn(function()
                 local isFreeEgg = lowerID:find("freeegg")
                 local multiplier = isFreeEgg and tonumber(room:GetAttribute("EggMultiplier")) or 0
                 
+                local matchSpecificEgg = true
+                if getgenv().Config.TargetEggType ~= "Any" then
+                    local targetStr = string.lower(string.gsub(getgenv().Config.TargetEggType, " ", ""))
+                    local eggAttr = tostring(room:GetAttribute("EggType") or room:GetAttribute("EggName") or room:GetAttribute("Egg") or "")
+                    local attrStr = string.lower(string.gsub(eggAttr, " ", ""))
+                    if not lowerID:find(targetStr) and not attrStr:find(targetStr) then
+                        matchSpecificEgg = false
+                    end
+                end
+                
                 local isBoss = lowerID:find("bosschest") or lowerID:find("minichest")
                     or lowerID:find("miniboss") or lowerID:find("boss")
                     or room:GetAttribute("BossChestUID") or room:GetAttribute("ActiveMinichests")
                 local isVault = lowerID:find("vault") or lowerID:find("chest")
                 local isBreakable = lowerID:find("breakable")
 
-                if getgenv().Config.FindFreeEggRoom and isFreeEgg and multiplier >= getgenv().Config.TargetEggMultiplier and bestRoomType < 5 then
+                if getgenv().Config.FindFreeEggRoom and isFreeEgg and matchSpecificEgg and multiplier >= getgenv().Config.TargetEggMultiplier and bestRoomType < 5 then
                     bestRoom = room
                     bestRoomType = 5
                     break
@@ -1429,6 +1440,17 @@ Toggle_FreeEgg = TabMain:CreateToggle({
     Callback = function(Value)
         getgenv().Config.FindFreeEggRoom = Value
     end
+})
+
+TabMain:CreateDropdown({
+    Name = "🥚 Target Specific Egg",
+    Options = {"Any", "Nightmare", "Smile", "Flower", "Gooey", "Scribble", "Tentacles", "Keep Out", "Night Terror", "Fear", "Swirl", "Overgrown", "Ender", "Corrupt", "Titanic", "Huge"},
+    CurrentOption = {"Any"},
+    MultipleOptions = false,
+    Flag = "Drp_SpecificEgg",
+    Callback = function(Option)
+        getgenv().Config.TargetEggType = Option[1]
+    end,
 })
 
 TabMain:CreateDropdown({
