@@ -1457,7 +1457,7 @@ TabMain:CreateDropdown({
 
 TabMain:CreateDropdown({
     Name = "🎯 Target Egg Multiplier",
-    Options = {"2x", "3x", "5x", "10x", "20x", "50x", "100x"},
+    Options = {"2x", "3x", "5x", "10x", "15x", "20x", "50x", "100x"},
     CurrentOption = {"50x"},
     MultipleOptions = false,
     Flag = "Drp_Multiplier",
