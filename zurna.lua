@@ -116,14 +116,12 @@ local function UpdateInventoryMonitor()
             local pId = tostring(data.id or "")
             local def = petDir[pId]
             
-            -- DIRECT STRING MATCHING: En garanti yol.
             local isH = (def and def.huge) or string.match(pId, "^Huge ")
             local isT = (def and def.titanic) or string.match(pId, "^Titanic ")
 
             if isH then currentH = currentH + 1 end
             if isT then currentT = currentT + 1 end
 
-            -- Yeni pet tespiti
             if not KnownUIDs[uid] then
                 KnownUIDs[uid] = true
                 if isH or isT then
@@ -173,14 +171,11 @@ end)
 pcall(function()
     local VirtualUser = game:GetService("VirtualUser")
 
-    -- 1. Oyunun Kendi AFK Scriptlerini Kapat
     local coreScripts = LocalPlayer:WaitForChild("PlayerScripts"):WaitForChild("Scripts"):WaitForChild("Core")
     if coreScripts:FindFirstChild("Idle Tracking") then
         coreScripts["Idle Tracking"].Enabled = false
-        -- print("[Anti-AFK] Oyunun dahili takip sistemi kapatıldı.")
     end
 
-    -- 2. Sunucuya 'Dur' Sinyali Gönder
     task.spawn(function()
         while task.wait(30) do
             pcall(function()
@@ -199,13 +194,10 @@ pcall(function()
         end
     end)
 
-    -- 3. Genel Roblox AFK Kick Engelleyici (Idled Event)
     LocalPlayer.Idled:Connect(function() 
         VirtualUser:CaptureController() 
         VirtualUser:ClickButton2(Vector2.new()) 
-        -- print("[Anti-AFK] Roblox AFK atması simüle edilerek engellendi.")
     end)
-    -- print("[Anti-AFK] Sistem aktif!")
 end)
 
 -- ==========================
@@ -216,7 +208,7 @@ pcall(function()
     local oldNew = Message.New
     Message.New = function(msg, ...)
         if msg and type(msg) == "string" and msg:lower():find("mini%-boss") then
-            return -- "Mini-boss defeated!" yazısını tamamen engelle
+            return
         end
         return oldNew(msg, ...)
     end
@@ -246,7 +238,6 @@ if not antiVoid then
     antiVoid.Parent = workspace
 end
 
--- ✅ TEK bir VisitedRooms tanımı
 local VisitedRooms = {}
 local visitedCount = 0
 
@@ -431,7 +422,6 @@ local function GetBackroomsTargets()
     if not hrp then return targets end
     local pos = hrp.Position
 
-    -- MiniBossRoom Özel Hedefleri
     local mbBossZone = nil
     local mbMiniPoints = {}
     pcall(function()
@@ -577,15 +567,17 @@ task.spawn(function()
     local RequestEggRooms = Network:FindFirstChild("Backrooms: Request Egg Rooms")
 
     while task.wait(10) do
-        if getgenv().Config.FindEggRooms and RequestEggRooms then
-            local success, response = pcall(function()
-                return RequestEggRooms:InvokeServer()
-            end)
-            if success and type(response) == "table" then
-                TargetEggRooms = {}
-                for _, eggData in ipairs(response) do
-                    if eggData.UID then
-                        TargetEggRooms[eggData.UID] = eggData
+        if getgenv().Config.FindKeepOutEgg or getgenv().Config.FindFreeEggRoom then
+            if RequestEggRooms then
+                local success, response = pcall(function()
+                    return RequestEggRooms:InvokeServer()
+                end)
+                if success and type(response) == "table" then
+                    TargetEggRooms = {}
+                    for _, eggData in ipairs(response) do
+                        if eggData.UID then
+                            TargetEggRooms[eggData.UID] = eggData
+                        end
                     end
                 end
             end
@@ -613,7 +605,7 @@ task.spawn(function()
                         local maxTier = #upgradeData.TierPowers
                         if currentTier < maxTier then
                             EventUpgradeCmds.Purchase(upgradeData)
-                            task.wait(0.5) -- İki satın alma arası ufak bekleme süresi
+                            task.wait(0.5)
                         end
                     end
                 end
@@ -626,6 +618,13 @@ end)
 -- 🔄 FARM ANA DÖNGÜSÜ
 -- ==========================
 local LastInstanceJoinAttempt = 0
+local CustomEggsCmds = nil
+local maxHatch = 1
+
+pcall(function()
+    CustomEggsCmds = require(game:GetService("ReplicatedStorage").Library.Client.CustomEggsCmds)
+    maxHatch = require(game:GetService("ReplicatedStorage").Library.Client.EggCmds).GetMaxHatch() or 1
+end)
 
 local function IsInBackroomsInstance()
     local container = workspace:FindFirstChild("__THINGS")
@@ -732,8 +731,6 @@ task.spawn(function()
                 end
             end
         else
-            -- PARADOX FIX: Sadece Yumurta açık olsa bile, ilerlemek için en az 1 anahtara ihtiyacımız var!
-            -- Yoksa kapalı kapılara kafa atıp kısır döngüye girer.
             if getgenv().Config.FindKeepOutEgg and currentKeys == 0 then
                 isKeyFarmPhase = true
             end
@@ -746,11 +743,10 @@ task.spawn(function()
             continue
         end
 
-        -- Öncelikli hedef arama (Egg, Boss, Vault, Breakable)
         local bestRoom = nil
         local bestRoomType = 0
 
-        -- 1. ADIM: KAYITLI YUMURTA ODASI KONTROLÜ
+        -- 1. ADIM: KAYITLI YUMURTA ODASI KONTROLÜ (sadece Keep Out için)
         local checkEggCache = isHybridEggPhase or (getgenv().Config.FindKeepOutEgg and not getgenv().Config.MetaFarmActive)
         if checkEggCache and getgenv().SmartFarmState.EggRoomUID then
             for _, room in ipairs(rooms) do
@@ -771,7 +767,6 @@ task.spawn(function()
 
                 local isEgg = lowerID:find("keepout") or lowerID:find("hugeegg") or lowerID:find("titanicegg")
                 
-                -- ARKA PLANDA YUMURTA ODASI KAYDET (Kullanıcı sonradan açarsa diye)
                 if isEgg and not getgenv().SmartFarmState.EggRoomUID then
                     getgenv().SmartFarmState.EggRoomUID = roomUID
                 end
@@ -785,9 +780,11 @@ task.spawn(function()
                 local isVault = lowerID:find("vault") or lowerID:find("chest")
                 local isBreakable = lowerID:find("breakable")
 
+                -- Free Egg öncelikli (en yüksek öncelik)
                 if getgenv().Config.FindFreeEggRoom and isFreeEgg and multiplier >= getgenv().Config.TargetEggMultiplier and bestRoomType < 5 then
                     bestRoom = room
                     bestRoomType = 5
+                    -- free egg bulduysak diğerlerine bakmaya gerek yok
                     break
                 end
 
@@ -813,7 +810,6 @@ task.spawn(function()
             end
         end
 
-        -- Öncelikli oda bulundu → direkt işle
         if bestRoom and bestRoomType > 0 then
             local roomUID = bestRoom:GetAttribute("RoomUID")
             local roomID = bestRoom:GetAttribute("RoomID") or ""
@@ -821,39 +817,90 @@ task.spawn(function()
 
             local Network = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
             local fireCustom = Network and Network:FindFirstChild("Instancing_FireCustomFromClient")
+            local invokeCustom = Network and Network:FindFirstChild("Instancing_InvokeCustomFromClient")
 
-            -- Kapı açma: Önce ışınlan, streaming yüklenmesini bekle, sonra karar ver
             if fireCustom then
                 if bestRoomType == 5 or bestRoomType == 4 then
                     if bestRoom:FindFirstChild("LockedDoors") then
                         fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
                     end
                 end
-                -- Type 3 (Boss): teleport sonrası yükleme beklendiğinde kontrol edilecek
             end
 
             safeTeleport(bestRoom, false)
 
-            if bestRoomType == 6 then
-                -- (Bu branch artık kullanılmıyor, streaming nedeniyle aşağıda handle ediliyor)
-
-            elseif bestRoomType == 5 then
-                -- print("🎉 İSTENEN FREE EGG ODASI BULUNDU! (" .. roomID .. ")")
-                local mult = bestRoom:GetAttribute("EggMultiplier") or "Bilinmeyen"
-                getgenv().Config.FindFreeEggRoom = false
-                getgenv().Config.MetaFarmActive = false
-                if Rayfield and Toggle_FreeEgg then Toggle_FreeEgg:Set(false) end
-                if Rayfield and Toggle_MetaFarm then Toggle_MetaFarm:Set(false) end
+            if bestRoomType == 5 then
+                -- FREE EGG ROOM
                 if Rayfield then
-                    Rayfield:Notify({Title = "🎁 Free Egg Room!", Content = mult .. "x Huge Chance odası bulundu!", Duration = 10, Image = 4483362458})
+                    Rayfield:Notify({Title = "🎁 Free Egg Room!", Content = roomID .. " - Opening eggs...", Duration = 4})
+                end
+
+                local eggIdToBuy = "Free Egg"
+                if lowerID:find("titanicegg") then eggIdToBuy = "Titanic Backrooms Egg" end
+                if lowerID:find("hugeegg") then eggIdToBuy = "Huge Backrooms Egg" end
+
+                local NetworkFE = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
+                local buyEggRemoteFE = NetworkFE and (NetworkFE:FindFirstChild("Eggs_RequestPurchase") or NetworkFE:FindFirstChild("Eggs: RequestPurchase"))
+                local customHatchRemoteFE = NetworkFE and NetworkFE:FindFirstChild("CustomEggs_Hatch")
+
+                local hasTeleportedToEgg = false
+
+                while getgenv().Config.FindFreeEggRoom do
+                    local customUidFE = nil
+                    local eggModelFE = nil
+                    local closestDistFE = 99999
+
+                    if CustomEggsCmds and getRootPart() then
+                        for uid, eggObj in pairs(CustomEggsCmds.All()) do
+                            if eggObj._position then
+                                local dist = (getRootPart().Position - eggObj._position).Magnitude
+                                if dist < closestDistFE then
+                                    closestDistFE = dist
+                                    customUidFE = uid
+                                    eggModelFE = eggObj._model
+                                end
+                            end
+                        end
+                    end
+
+                    if customUidFE and customHatchRemoteFE then
+                        if not hasTeleportedToEgg and eggModelFE then
+                            getRootPart().CFrame = eggModelFE:GetPivot() + Vector3.new(0, 5, 0)
+                            hasTeleportedToEgg = true
+                            task.wait(0.2)
+                        end
+
+                        task.spawn(function()
+                            pcall(function()
+                                if customHatchRemoteFE:IsA("RemoteEvent") then
+                                    customHatchRemoteFE:FireServer(customUidFE, maxHatch)
+                                else
+                                    customHatchRemoteFE:InvokeServer(customUidFE, maxHatch)
+                                end
+                            end)
+                        end)
+                    elseif buyEggRemoteFE then
+                        task.spawn(function()
+                            pcall(function()
+                                if buyEggRemoteFE:IsA("RemoteEvent") then
+                                    buyEggRemoteFE:FireServer(eggIdToBuy, maxHatch)
+                                else
+                                    buyEggRemoteFE:InvokeServer(eggIdToBuy, maxHatch)
+                                end
+                            end)
+                        end)
+                    else
+                        warn("[FREE EGG] Ne custom ne normal egg remote bulunamadı!")
+                    end
+                    task.wait(1.5)
                 end
 
             elseif bestRoomType == 4 then
+                -- KEEP OUT EGG (mevcut kod)
                 if isHybridEggPhase and not getgenv().SmartFarmState.EggRoomUID then
                     getgenv().SmartFarmState.EggRoomUID = roomUID
                 end
                 
-                local Network3 = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
                 if Rayfield then
                     if isHybridEggPhase then
                         Rayfield:Notify({Title = "🥚 Hibrit Egg Farm!", Content = "Boss doğana kadar yumurta açılıyor...", Duration = 4})
@@ -862,102 +909,88 @@ task.spawn(function()
                     end
                 end
                 
-                -- Yumurta açılış animasyonunu kapat
                 pcall(function()
                     local fe = getsenv(LocalPlayer.PlayerScripts.Scripts.Game["Egg Opening Frontend"])
                     if fe and fe.PlayEggAnimation then fe.PlayEggAnimation = function() end end
                 end)
                 
-                local CustomEggsCmds = nil
-                pcall(function() CustomEggsCmds = require(game:GetService("ReplicatedStorage").Library.Client.CustomEggsCmds) end)
+                local Network4 = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
+                local buyEggRemote4 = Network4 and (Network4:FindFirstChild("Eggs_RequestPurchase") or Network4:FindFirstChild("Eggs: RequestPurchase"))
+                local customHatchRemote4 = Network4 and Network4:FindFirstChild("CustomEggs_Hatch")
                 
-                local buyEggRemote = Network3 and (Network3:FindFirstChild("Eggs_RequestPurchase") or Network3:FindFirstChild("Eggs: RequestPurchase"))
-                local customHatchRemote = Network3 and Network3:FindFirstChild("CustomEggs_Hatch")
-                
-                local maxHatch = 1
-                pcall(function() maxHatch = require(game:GetService("ReplicatedStorage").Library.Client.EggCmds).GetMaxHatch() or 1 end)
-                
-                local eggIdToBuy = "Keep Out Egg"
-                if lowerID:find("titanicegg") then eggIdToBuy = "Titanic Backrooms Egg" end
-                if lowerID:find("hugeegg") then eggIdToBuy = "Huge Backrooms Egg" end
+                local eggIdToBuy4 = "Keep Out Egg"
+                if lowerID:find("titanicegg") then eggIdToBuy4 = "Titanic Backrooms Egg" end
+                if lowerID:find("hugeegg") then eggIdToBuy4 = "Huge Backrooms Egg" end
 
-                local hasTeleportedToEgg = false
+                local hasTeleportedToEgg4 = false
+
                 while getgenv().Config.FindKeepOutEgg do
                     local timeNow = workspace:GetServerTimeNow()
                     
                     if isHybridEggPhase then
                         local remaining = (getgenv().SmartFarmState.BossRespawningUntil or 0) - timeNow
                         if remaining > 0 and remaining <= 8 then
-                            break -- Boss doğmak üzere, döngüden çık
+                            break
                         end
                     end
                     
-                    local customUid = nil
-                    local eggModel = nil
-                    local closestDist = 99999
+                    local customUid4 = nil
+                    local eggModel4 = nil
+                    local closestDist4 = 99999
                     
                     if CustomEggsCmds and getRootPart() then
                         for uid, eggObj in pairs(CustomEggsCmds.All()) do
                             if eggObj._position then
                                 local dist = (getRootPart().Position - eggObj._position).Magnitude
-                                if dist < closestDist then
-                                    closestDist = dist
-                                    customUid = uid
-                                    eggModel = eggObj._model
+                                if dist < closestDist4 then
+                                    closestDist4 = dist
+                                    customUid4 = uid
+                                    eggModel4 = eggObj._model
                                 end
                             end
                         end
                     end
 
-                    if customUid and customHatchRemote then
-                        if not hasTeleportedToEgg and eggModel then
-                            getRootPart().CFrame = eggModel:GetPivot() + Vector3.new(0, 5, 0)
-                            hasTeleportedToEgg = true
+                    if customUid4 and customHatchRemote4 then
+                        if not hasTeleportedToEgg4 and eggModel4 then
+                            getRootPart().CFrame = eggModel4:GetPivot() + Vector3.new(0, 5, 0)
+                            hasTeleportedToEgg4 = true
                             task.wait(0.2)
                         end
 
-                        -- ASENKRON SATIN ALMA: Sunucunun 60 saniye bekletmesini engellemek için task.spawn eklendi!
                         task.spawn(function()
-                            local pcallSuccess, res1, res2
-                            if customHatchRemote:IsA("RemoteEvent") then
-                                pcallSuccess, res1 = pcall(function() customHatchRemote:FireServer(customUid, maxHatch) end)
-                            else
-                                pcallSuccess, res1, res2 = pcall(function() return customHatchRemote:InvokeServer(customUid, maxHatch) end)
-                            end
-                            
-                            if not pcallSuccess then
-                                warn("[HATCH CRASH] Script çöktü! Hata: " .. tostring(res1))
-                            elseif customHatchRemote:IsA("RemoteFunction") and res1 == false then
-                                -- print("[HATCH REJECTED] Sunucu reddetti (Cooldown/Spam): " .. tostring(res2))
-                            else
-                                -- print("[HATCH SUCCESS] İstek başarıyla işlendi.")
-                            end
+                            pcall(function()
+                                if customHatchRemote4:IsA("RemoteEvent") then
+                                    customHatchRemote4:FireServer(customUid4, maxHatch)
+                                else
+                                    customHatchRemote4:InvokeServer(customUid4, maxHatch)
+                                end
+                            end)
                         end)
-                    elseif buyEggRemote then
-                        local success, err
-                        if buyEggRemote:IsA("RemoteEvent") then
-                            success, err = pcall(function() buyEggRemote:FireServer(eggIdToBuy, maxHatch) end)
-                        else
-                            success, err = pcall(function() return buyEggRemote:InvokeServer(eggIdToBuy, maxHatch) end)
-                        end
-                        if not success then
-                            warn("[HATCH ERROR] Eski sistem satın alımı başarısız! Hata: " .. tostring(err))
-                        end
+                    elseif buyEggRemote4 then
+                        task.spawn(function()
+                            pcall(function()
+                                if buyEggRemote4:IsA("RemoteEvent") then
+                                    buyEggRemote4:FireServer(eggIdToBuy4, maxHatch)
+                                else
+                                    buyEggRemote4:InvokeServer(eggIdToBuy4, maxHatch)
+                                end
+                            end)
+                        end)
                     else
-                        warn("[HATCH ERROR] Ne customUid bulundu ne de buyEggRemote!")
+                        warn("[KEEP OUT EGG] Ne custom ne normal egg remote bulunamadı!")
                     end
                     task.wait(1.5)
                 end
 
             elseif bestRoomType == 3 then
-                -- ✅ Boss odasına ışınlandık. Şimdi streaming yüklenmesini bekleyip kapı durumunu kontrol ediyoruz.
-                task.wait(2.5) -- Streaming yüklenmesi için yeterli süre
+                -- BOSS ROOM
+                task.wait(2.5)
 
                 local isAlreadyOpen = not bestRoom:FindFirstChild("LockedDoors")
                 local hasBoss = bestRoom:GetAttribute("BossChestUID") or bestRoom:GetAttribute("ActiveMinichests")
 
                 if isAlreadyOpen and hasBoss then
-                    -- Kapı zaten açık! Anahtar harcamadan kamp kur.
                     if Rayfield then
                         Rayfield:Notify({
                             Title = "🎯 Açık Boss Odası!",
@@ -966,17 +999,13 @@ task.spawn(function()
                         })
                     end
                 elseif bestRoom:FindFirstChild("LockedDoors") then
-                    -- Kapı kapalı, anahtar harca.
                     local Network2 = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
                     local fireCustom2 = Network2 and Network2:FindFirstChild("Instancing_FireCustomFromClient")
                     if fireCustom2 then
                         fireCustom2:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
                     end
-                else
-                    -- Kapı yok ama boss da yok, normal Boss Odası belki boş
                 end
 
-                -- Her iki durumda da odada kal ve kamp kur
                 local isWaitingRespawn = false
                 local notifiedRespawn = false
                 while getgenv().Config.MetaFarmActive do
@@ -987,15 +1016,14 @@ task.spawn(function()
                     if respawnTs and respawnTs > now then
                         local remaining = math.ceil(respawnTs - now)
                         
-                        -- HİBRİT KONTROL: Eğer doğmasına 15 saniyeden fazla varsa odadan ayrıl ve yumurta ara!
                         if remaining > 15 and getgenv().Config.FindKeepOutEgg then
                             if Rayfield then
                                 Rayfield:Notify({Title = "🚀 Hibrit Mod Aktif!", Content = "Boss beklenirken yumurta farmına geçiliyor...", Duration = 5})
                             end
                             getgenv().SmartFarmState.BossRespawningUntil = respawnTs
                             getgenv().SmartFarmState.BossRoomUID = roomUID
-                            VisitedRooms[roomUID] = true -- Aramayı boss odasına kitlememesi için
-                            break -- Döngüden çık, main döngü Egg bulacak!
+                            VisitedRooms[roomUID] = true
+                            break
                         end
 
                         if not isWaitingRespawn then
@@ -1019,8 +1047,6 @@ task.spawn(function()
                 end
 
             elseif bestRoomType == 1 or bestRoomType == 2 then
-                local label = bestRoomType == 2 and "🏦 Vault/Chest Odası" or "⛏️ Breakable Oda"
-                -- print("[SİSTEM] " .. label .. " bulundu: " .. roomID)
                 local emptySeconds = 0
                 local bigCheckTimer = 0
                 
@@ -1028,10 +1054,7 @@ task.spawn(function()
                     task.wait(1)
                     local currentKeys = getDaydreamKeyCount()
                     if currentKeys >= getgenv().Config.TargetKeyCount then
-                        -- print("[SİSTEM] 🎯 Hedef anahtara ulaşıldı! Boss Avına geçiliyor.")
                         break
-                    else
-                        -- print("[FARM] ⏳ Anahtar: " .. currentKeys .. "/" .. getgenv().Config.TargetKeyCount)
                     end
 
                     local breakablesExist = false
@@ -1049,7 +1072,6 @@ task.spawn(function()
                             if part and (part.Position - pos).Magnitude < 150 then
                                 breakablesExist = true
                                 
-                                -- Büyüklük/Değer kontrolü (Sağlam/Büyük objeler)
                                 local bName = string.lower(b.Name)
                                 local bId = string.lower(tostring(b:GetAttribute("BreakableID") or ""))
                                 local health = b:GetAttribute("MaxHealth") or b:GetAttribute("Health") or 0
@@ -1063,7 +1085,6 @@ task.spawn(function()
                     
                     bigCheckTimer = bigCheckTimer + 1
                     if bigCheckTimer == 3 and not foundBig then
-                        -- print("[FARM] ❌ Bu odada sadece KÜÇÜK eşyalar var! Büyük kasa/eşya olan başka odaya geçiliyor...")
                         VisitedRooms[roomUID] = true
                         break
                     end
@@ -1071,7 +1092,6 @@ task.spawn(function()
                     if not breakablesExist then
                         emptySeconds = emptySeconds + 1
                         if emptySeconds >= 4 then
-                            -- print("[FARM] ⚠️ Oda boşaldı! Yeni odaya geçiliyor...")
                             VisitedRooms[roomUID] = true
                             break
                         end
@@ -1081,7 +1101,7 @@ task.spawn(function()
                 end
             end
 
-            continue -- Bir sonraki döngü turuna geç
+            continue
         end
 
         -- Öncelikli oda bulunamadı → haritayı genişlet (en uzak odaya zıpla)
@@ -1103,28 +1123,21 @@ task.spawn(function()
             continue
         end
 
-        local isSearchingOnly = isBossHuntPhase or getgenv().Config.FindKeepOutEgg or getgenv().Config.FindFreeEggRoom
-
-        -- Sadece EN UZAK odaya zıpla (1 oda per döngü)
         local roomData = sortedRooms[1]
         local room = roomData.Room
         local roomUID = roomData.UID
         local roomID = room:GetAttribute("RoomID") or ""
         local lowerID = string.lower(roomID)
 
-        -- print(string.format("[ARAMA] Harita Genişletiliyor -> Oda: %s | Mesafe: %d", roomID, math.floor(roomData.Dist)))
+        safeTeleport(room, false)
+        task.wait(getgenv().Config.TeleportDelay)
 
-        safeTeleport(room, isSearchingOnly)
-        task.wait(isSearchingOnly and 0.15 or getgenv().Config.TeleportDelay)
-
-        -- PARADOX FİX 2: Odanın merkezine zıplamak, devasa odalarda sunucunun (server) yeni odaları yüklemesi için
-        -- gereken yakınlık (proximity) şartını sağlamayabilir. Bu yüzden karakteri odanın tüm kapılarına (uç noktalara)
-        -- sürtüyoruz ki oyun yeni odaları Stream etsin!
+        -- Harita genişletmek için kapılara yaklaş
         if room:FindFirstChild("LockedDoors") then
             for _, door in ipairs(room.LockedDoors:GetChildren()) do
                 if door:IsA("Model") or door:IsA("BasePart") then
                     safeTeleport(door, true)
-                    task.wait(0.2) -- Odanın yüklenmesi için süreyi uzattık
+                    task.wait(0.2)
                 end
             end
         end
@@ -1151,17 +1164,15 @@ task.spawn(function()
                         or lowerID:find("miniboss") or lowerID:find("boss")
                         or room:GetAttribute("BossChestUID") or room:GetAttribute("ActiveMinichests")
                     local isEggRoom = lowerID:find("titanicegg") or lowerID:find("hugeegg") or lowerID:find("egg") or lowerID:find("keepout")
+                    local isFreeEggRoom = lowerID:find("freeegg")
 
                     local shouldUnlock = false
 
                     if isBossHuntPhase and isBossRoom then
                         shouldUnlock = true
-                    elseif (getgenv().Config.FindKeepOutEgg or getgenv().Config.FindFreeEggRoom or isHybridEggPhase) and isEggRoom then
+                    elseif (getgenv().Config.FindKeepOutEgg or getgenv().Config.FindFreeEggRoom or isHybridEggPhase) and (isEggRoom or isFreeEggRoom) then
                         shouldUnlock = true
                     else
-                        -- PARADOX FIX: Eğer haritayı genişletme aşamasındaysak (frontier) ve öncelikli hedef bulamadıysak,
-                        -- yeni odaların yüklenmesi için kapıyı açmak ZORUNDAYIZ.
-                        -- Yoksa oyun yeni oda göndermez ve 3-4 oda arasında kısır döngüye gireriz.
                         shouldUnlock = true
                     end
 
@@ -1171,12 +1182,10 @@ task.spawn(function()
                 end
             end
 
-            -- ChestChoose
             if lowerID:find("chestchoose") then
                 fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "PickChest", 1)
             end
 
-            -- Buttons
             local buttons = room:FindFirstChild("Buttons")
             if buttons then
                 for _, btn in ipairs(buttons:GetChildren()) do
@@ -1188,7 +1197,6 @@ task.spawn(function()
                 fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "ButtonPressed")
             end
 
-            -- Levers
             local levers = room:FindFirstChild("Levers")
             if levers then
                 for _, lever in ipairs(levers:GetChildren()) do
@@ -1199,7 +1207,6 @@ task.spawn(function()
                 end
             end
 
-            -- Faucets
             local faucets = room:FindFirstChild("Faucets")
             if faucets then
                 for _, faucet in ipairs(faucets:GetChildren()) do
@@ -1211,7 +1218,6 @@ task.spawn(function()
             end
         end
 
-        -- AutoLoot
         if getgenv().Config.AutoLoot and invokeCustom then
             for _, obj in ipairs(room:GetChildren()) do
                 if obj.Name:find("RandomReward") and obj:IsA("Model") then
@@ -1227,7 +1233,6 @@ task.spawn(function()
             end
         end
 
-        -- ProximityPrompt tetikleme
         for _, prompt in ipairs(room:GetDescendants()) do
             if prompt:IsA("ProximityPrompt") and prompt.Enabled then
                 local parentPart = prompt.Parent
@@ -1255,7 +1260,7 @@ task.spawn(function()
             visitedCount = 0
         end
 
-    end -- while döngüsü sonu
+    end
 end)
 
 -- ==========================
@@ -1309,7 +1314,7 @@ Toggle_KeepOutEgg = TabMain:CreateToggle({
 })
 
 Toggle_FreeEgg = TabMain:CreateToggle({
-    Name = "🎁 Find Free Egg Room",
+    Name = "🎁 Find & Open Free Egg Rooms",
     CurrentValue = false,
     Flag = "Tgl_FreeEgg",
     Callback = function(Value)
@@ -1318,7 +1323,7 @@ Toggle_FreeEgg = TabMain:CreateToggle({
 })
 
 TabMain:CreateDropdown({
-    Name = "🎯 Target Egg Multiplier",
+    Name = "🎯 Target Egg Multiplier (Free Egg)",
     Options = {"2x", "3x", "5x", "10x", "20x", "50x", "100x"},
     CurrentOption = {"50x"},
     MultipleOptions = false,
@@ -1387,6 +1392,7 @@ TabUpgrades:CreateToggle({
         getgenv().Config.AutoUpgrades.BackroomsTokenFind = Value
     end
 })
+
 local TabWebhook = Window:CreateTab("🔔 Webhook", 4483362458)
 
 TabWebhook:CreateSection("Discord Notifications (Huge/Titanic)")
