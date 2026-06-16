@@ -1005,10 +1005,15 @@ task.spawn(function()
         -- AutoLoot
         if getgenv().Config.AutoLoot and invokeCustom then
             for _, obj in ipairs(room:GetChildren()) do
-                if obj.Name:find("RandomReward") then
-                    task.spawn(function()
-                        invokeCustom:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", roomUID, "ClaimRandomReward", obj)
-                    end)
+                if obj.Name:find("RandomReward") and obj:IsA("Model") then
+                    local part = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
+                    if part then
+                        safeTeleport(part, false)
+                        task.wait(0.2)
+                        pcall(function()
+                            invokeCustom:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", roomUID, "ClaimRandomReward", obj)
+                        end)
+                    end
                 end
             end
         end
