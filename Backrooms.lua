@@ -942,6 +942,7 @@ task.spawn(function()
                 if lowerID:find("hugeegg") then eggIdToBuy = "Huge Backrooms Egg" end
 
                 local hasTeleportedToEgg = false
+                local missingEggCounter = 0
                 while getgenv().Config.FindKeepOutEgg do
                     local timeNow = workspace:GetServerTimeNow()
                     
@@ -968,13 +969,18 @@ task.spawn(function()
                             end
                         end
                         
-                        -- EGG DESPAWN CHECK: Eğer en yakın yumurta 300 stud'dan uzaksa veya hiç yoksa (99999)
+                        -- EGG DESPAWN CHECK: Yükleme (Streaming) gecikmesi olabileceği için 5 kez şans ver.
                         if closestDist > 300 then
-                            if Rayfield then
-                                Rayfield:Notify({Title = "Egg Despawned!", Content = "Bu odadaki yumurtanın süresi dolmuş, yeni oda aranıyor...", Duration = 4})
+                            missingEggCounter = missingEggCounter + 1
+                            if missingEggCounter >= 5 then
+                                if Rayfield then
+                                    Rayfield:Notify({Title = "Egg Despawned!", Content = "Yumurta silinmiş veya yüklenemedi, yeni oda aranıyor...", Duration = 4})
+                                end
+                                getgenv().SmartFarmState.EggRoomUID = nil
+                                break
                             end
-                            getgenv().SmartFarmState.EggRoomUID = nil
-                            break
+                        else
+                            missingEggCounter = 0 -- Bulduğu an sıfırlanır
                         end
                     end
 
