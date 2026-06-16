@@ -25,7 +25,8 @@ getgenv().Config = {
     },
     WebhookEnabled = false,
     WebhookURL = "",
-    UnlockDeepBackrooms = false
+    UnlockDeepBackrooms = false,
+    AntiJumpscare = true
 }
 
 local TargetEggRooms = {}
@@ -239,6 +240,30 @@ pcall(function()
             return -- "Mini-boss defeated!" yazısını tamamen engelle
         end
         return oldNew(msg, ...)
+    end
+end)
+
+-- ==========================
+-- 💡 ANTİ-JUMPSCARE / FULLBRIGHT
+-- ==========================
+task.spawn(function()
+    while task.wait(1) do
+        if getgenv().Config.AntiJumpscare then
+            -- Oyunun ışıkları titreten 'flicker' sistemini kör ediyoruz.
+            -- Işıklardan "BackroomsLight" etiketini silince oyun onları titreme listesine alamıyor!
+            for _, light in ipairs(CollectionService:GetTagged("BackroomsLight")) do
+                CollectionService:RemoveTag(light, "BackroomsLight")
+                -- Işıkları sabit olarak açık bırak
+                pcall(function()
+                    if light:IsA("BasePart") then
+                        light.Material = Enum.Material.Neon
+                        light.Transparency = 0.5
+                    end
+                    local point = light:FindFirstChildOfClass("SurfaceLight") or light:FindFirstChildOfClass("PointLight")
+                    if point then point.Enabled = true end
+                end)
+            end
+        end
     end
 end)
 
@@ -1286,17 +1311,23 @@ task.spawn(function()
             end
         end
 
-        -- AutoLoot
+        -- AutoLoot (Random Rewards)
         if getgenv().Config.AutoLoot and invokeCustom then
             for _, obj in ipairs(room:GetChildren()) do
-                if obj.Name:find("RandomReward") and obj:IsA("Model") then
+                if obj.Name == "RandomReward" and obj:IsA("Model") then
                     local part = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
                     if part then
                         safeTeleport(part, false)
-                        task.wait(0.2)
-                        pcall(function()
+                        task.wait(0.1) -- Bekleme süresini optimize ettik
+                        
+                        local success = pcall(function()
                             invokeCustom:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", roomUID, "ClaimRandomReward", obj)
                         end)
+                        
+                        -- Topladıktan sonra anında siliyoruz ki script aynı ödüle tekrar takılıp kalmasın!
+                        if success then
+                            pcall(function() obj:Destroy() end)
+                        end
                     end
                 end
             end
@@ -1425,6 +1456,13 @@ TabMain:CreateToggle({
     CurrentValue = false,
     Flag = "Tgl_AutoLoot",
     Callback = function(Value) getgenv().Config.AutoLoot = Value end
+})
+
+TabMain:CreateToggle({
+    Name = "💡 Anti-Jumpscare (Fullbright)",
+    CurrentValue = true,
+    Flag = "Tgl_AntiJumpscare",
+    Callback = function(Value) getgenv().Config.AntiJumpscare = Value end
 })
 
 TabMain:CreateSlider({
