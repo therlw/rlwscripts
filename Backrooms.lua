@@ -1015,6 +1015,7 @@ task.spawn(function()
                     local customUid = nil
                     local eggModel = nil
                     local closestDist = 99999
+                    local closestName = ""
                     
                     if CustomEggsCmds and getRootPart() then
                         for uid, eggObj in pairs(CustomEggsCmds.All()) do
@@ -1022,8 +1023,13 @@ task.spawn(function()
                                 local dist = (getRootPart().Position - eggObj._position).Magnitude
                                 if dist < closestDist then
                                     closestDist = dist
-                                    customUid = uid
                                     eggModel = eggObj._model
+                                    if eggModel and type(eggModel.Name) == "string" and #eggModel.Name > 10 then
+                                        customUid = eggModel.Name
+                                    else
+                                        customUid = uid
+                                    end
+                                    closestName = tostring(eggObj._id or eggObj.id or (eggModel and eggModel.Name) or "")
                                 end
                             end
                         end
@@ -1045,42 +1051,37 @@ task.spawn(function()
                         end
                     end
 
-                    if customUid and customHatchRemote then
+                    if customUid then
                         if not hasTeleportedToEgg and eggModel then
                             getRootPart().CFrame = eggModel:GetPivot() + Vector3.new(0, 5, 0)
                             hasTeleportedToEgg = true
                             task.wait(0.2)
                         end
 
-                        -- ASENKRON SATIN ALMA: Sunucunun 60 saniye bekletmesini engellemek için task.spawn eklendi!
                         task.spawn(function()
-                            local pcallSuccess, res1, res2
-                            if customHatchRemote:IsA("RemoteEvent") then
-                                pcallSuccess, res1 = pcall(function() customHatchRemote:FireServer(customUid, maxHatch) end)
-                            else
-                                pcallSuccess, res1, res2 = pcall(function() return customHatchRemote:InvokeServer(customUid, maxHatch) end)
-                            end
-                            
-                            if not pcallSuccess then
-                                warn("[HATCH CRASH] Script çöktü! Hata: " .. tostring(res1))
-                            elseif customHatchRemote:IsA("RemoteFunction") and res1 == false then
-                                -- print("[HATCH REJECTED] Sunucu reddetti (Cooldown/Spam): " .. tostring(res2))
-                            else
-                                -- print("[HATCH SUCCESS] İstek başarıyla işlendi.")
+                            if customHatchRemote then
+                                pcall(function()
+                                    if customHatchRemote:IsA("RemoteEvent") then
+                                        customHatchRemote:FireServer(customUid, maxHatch)
+                                        if maxHatch > 1 then task.wait(0.1) customHatchRemote:FireServer(customUid, 1) end
+                                    else
+                                        local res = customHatchRemote:InvokeServer(customUid, maxHatch)
+                                        if res == false and maxHatch > 1 then
+                                            -- Eğer server çoklu açılımı reddederse, 1 tane açmayı zorla (Free Egg'lerde sıkça olur)
+                                            customHatchRemote:InvokeServer(customUid, 1)
+                                        end
+                                    end
+                                end)
                             end
                         end)
                     elseif buyEggRemote then
-                        local success, err
-                        if buyEggRemote:IsA("RemoteEvent") then
-                            success, err = pcall(function() buyEggRemote:FireServer(eggIdToBuy, maxHatch) end)
-                        else
-                            success, err = pcall(function() return buyEggRemote:InvokeServer(eggIdToBuy, maxHatch) end)
-                        end
-                        if not success then
-                            warn("[HATCH ERROR] Eski sistem satın alımı başarısız! Hata: " .. tostring(err))
-                        end
-                    else
-                        warn("[HATCH ERROR] Ne customUid bulundu ne de buyEggRemote!")
+                        pcall(function()
+                            if buyEggRemote:IsA("RemoteEvent") then
+                                buyEggRemote:FireServer(eggIdToBuy, maxHatch)
+                            else
+                                buyEggRemote:InvokeServer(eggIdToBuy, maxHatch)
+                            end
+                        end)
                     end
                     task.wait(1.5)
                 end
