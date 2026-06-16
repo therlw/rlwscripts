@@ -772,7 +772,6 @@ task.spawn(function()
                 end
 
                 local isFreeEgg = lowerID:find("freeegg")
-                -- multiplier odanın attribute'u olabilir, ama biz içerdeki egg'leri tarayacağız, şimdilik sadece isFreeEgg yeterli
                 
                 local isBoss = lowerID:find("bosschest") or lowerID:find("minichest")
                     or lowerID:find("miniboss") or lowerID:find("boss")
@@ -830,13 +829,12 @@ task.spawn(function()
 
             if bestRoomType == 5 then
                 -- ============================================================
-                -- 🎯 FREE EGG ROOM – Akıllı Seçim ve Otomatik Açma
+                -- 🎯 FREE EGG ROOM (goto yok, tamamen standart Lua)
                 -- ============================================================
                 if Rayfield then
                     Rayfield:Notify({Title = "🎁 Free Egg Room!", Content = "Taranıyor ve en iyi yumurta seçiliyor...", Duration = 4})
                 end
 
-                -- Yumurta açma animasyonunu kapat (opsiyonel)
                 pcall(function()
                     local fe = getsenv(LocalPlayer.PlayerScripts.Scripts.Game["Egg Opening Frontend"])
                     if fe and fe.PlayEggAnimation then fe.PlayEggAnimation = function() end end
@@ -844,112 +842,95 @@ task.spawn(function()
 
                 local NetworkFE = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
                 local customHatchRemoteFE = NetworkFE and NetworkFE:FindFirstChild("CustomEggs_Hatch")
+                
                 if not customHatchRemoteFE then
                     warn("[FREE EGG] CustomEggs_Hatch remote bulunamadı!")
                     if Rayfield then
                         Rayfield:Notify({Title = "Hata", Content = "CustomEggs_Hatch remote yok!", Duration = 5})
                     end
-                    goto continue_loop
-                end
-
-                -- Hedef çarpan eşiği
-                local targetMultiplier = getgenv().Config.TargetEggMultiplier or 50
-
-                -- Bu odadaki uygun egg'leri tutacak liste
-                local suitableEggs = {}
-
-                -- Tüm custom egg'leri tara
-                if CustomEggsCmds then
-                    local allEggs = CustomEggsCmds.All()
-                    local rootPos = getRootPart() and getRootPart().Position or Vector3.new(0,0,0)
-
-                    for uid, eggObj in pairs(allEggs) do
-                        -- Sadece bu odaya yakın olanları al (mesafe < 50)
-                        if eggObj._position and (eggObj._position - rootPos).Magnitude < 50 then
-                            local eggName = eggObj._dir and eggObj._dir.name or ""
-                            -- Çarpanı parse et: "Backrooms Swirl Egg 3x" -> 3
-                            local multiplier = tonumber(string.match(eggName, "(%d+)x"))
-                            if multiplier and multiplier >= targetMultiplier then
-                                table.insert(suitableEggs, {
-                                    uid = uid,
-                                    name = eggName,
-                                    multiplier = multiplier,
-                                    obj = eggObj
-                                })
-                            end
-                        end
-                    end
-                end
-
-                -- Eğer uygun egg yoksa, odayı terk et ve başka oda ara
-                if #suitableEggs == 0 then
-                    if Rayfield then
-                        Rayfield:Notify({Title = "⚠️ Uygun Egg Yok", Content = "Bu odada " .. targetMultiplier .. "x üzeri egg bulunamadı, geçiliyor...", Duration = 4})
-                    end
                     VisitedRooms[roomUID] = true
-                    goto continue_loop
-                end
+                else
+                    local targetMultiplier = getgenv().Config.TargetEggMultiplier or 50
+                    local suitableEggs = {}
 
-                -- En yüksek çarpanlı olanı seç
-                table.sort(suitableEggs, function(a, b) return a.multiplier > b.multiplier end)
-                local bestEgg = suitableEggs[1]
-                if Rayfield then
-                    Rayfield:Notify({Title = "🥚 Seçilen Egg", Content = bestEgg.name .. " (" .. bestEgg.multiplier .. "x) açılıyor...", Duration = 5})
-                end
+                    if CustomEggsCmds then
+                        local allEggs = CustomEggsCmds.All()
+                        local rootPos = getRootPart() and getRootPart().Position or Vector3.new(0,0,0)
 
-                -- Seçilen egg'i sürekli aç
-                local hatchCount = 0
-                while getgenv().Config.FindFreeEggRoom do
-                    -- Egg hala mevcut mu kontrol et
-                    local currentEgg = CustomEggsCmds.Get(bestEgg.uid)
-                    if not currentEgg or currentEgg._destroyed then
-                        -- Mevcut egg bitti, listeden kaldır ve sıradakini seç
-                        table.remove(suitableEggs, 1)
-                        if #suitableEggs == 0 then
-                            if Rayfield then
-                                Rayfield:Notify({Title = "❌ Tüm Egg'ler Bitti", Content = "Bu odadaki tüm uygun egg'ler açıldı, yeni oda aranıyor...", Duration = 4})
+                        for uid, eggObj in pairs(allEggs) do
+                            if eggObj._position and (eggObj._position - rootPos).Magnitude < 50 then
+                                local eggName = eggObj._dir and eggObj._dir.name or ""
+                                local multiplier = tonumber(string.match(eggName, "(%d+)x"))
+                                if multiplier and multiplier >= targetMultiplier then
+                                    table.insert(suitableEggs, {
+                                        uid = uid,
+                                        name = eggName,
+                                        multiplier = multiplier,
+                                        obj = eggObj
+                                    })
+                                end
                             end
-                            VisitedRooms[roomUID] = true
-                            break
                         end
-                        bestEgg = suitableEggs[1]
+                    end
+
+                    if #suitableEggs == 0 then
                         if Rayfield then
-                            Rayfield:Notify({Title = "🔄 Sıradaki Egg", Content = bestEgg.name .. " (" .. bestEgg.multiplier .. "x) açılıyor...", Duration = 4})
+                            Rayfield:Notify({Title = "⚠️ Uygun Egg Yok", Content = "Bu odada " .. targetMultiplier .. "x üzeri egg bulunamadı, geçiliyor...", Duration = 4})
                         end
-                        -- Yeni egg'e yaklaş
-                        if bestEgg.obj and bestEgg.obj._model then
-                            safeTeleport(bestEgg.obj._model, true)
-                            task.wait(0.5)
+                        VisitedRooms[roomUID] = true
+                    else
+                        table.sort(suitableEggs, function(a, b) return a.multiplier > b.multiplier end)
+                        local bestEgg = suitableEggs[1]
+                        if Rayfield then
+                            Rayfield:Notify({Title = "🥚 Seçilen Egg", Content = bestEgg.name .. " (" .. bestEgg.multiplier .. "x) açılıyor...", Duration = 5})
                         end
-                        -- Devam et
-                    end
 
-                    -- Egg'e ışınlan (eğer daha önce yapılmadıysa)
-                    if bestEgg.obj and bestEgg.obj._model then
-                        local rootPos = getRootPart()
-                        if rootPos and (rootPos.Position - bestEgg.obj._position).Magnitude > 15 then
-                            safeTeleport(bestEgg.obj._model, true)
-                            task.wait(0.3)
-                        end
-                    end
-
-                    -- Satın al / Hatch
-                    task.spawn(function()
-                        pcall(function()
-                            if customHatchRemoteFE:IsA("RemoteEvent") then
-                                customHatchRemoteFE:FireServer(bestEgg.uid, maxHatch or 1)
-                            else
-                                customHatchRemoteFE:InvokeServer(bestEgg.uid, maxHatch or 1)
+                        while getgenv().Config.FindFreeEggRoom do
+                            local currentEgg = CustomEggsCmds and CustomEggsCmds.Get(bestEgg.uid)
+                            if not currentEgg or currentEgg._destroyed then
+                                table.remove(suitableEggs, 1)
+                                if #suitableEggs == 0 then
+                                    if Rayfield then
+                                        Rayfield:Notify({Title = "❌ Tüm Egg'ler Bitti", Content = "Bu odadaki tüm uygun egg'ler açıldı, yeni oda aranıyor...", Duration = 4})
+                                    end
+                                    VisitedRooms[roomUID] = true
+                                    break
+                                end
+                                bestEgg = suitableEggs[1]
+                                if Rayfield then
+                                    Rayfield:Notify({Title = "🔄 Sıradaki Egg", Content = bestEgg.name .. " (" .. bestEgg.multiplier .. "x) açılıyor...", Duration = 4})
+                                end
+                                if bestEgg.obj and bestEgg.obj._model then
+                                    safeTeleport(bestEgg.obj._model, true)
+                                    task.wait(0.5)
+                                end
                             end
-                        end)
-                    end)
 
-                    hatchCount = hatchCount + 1
-                    task.wait(1.5) -- bekleme süresi, sunucu spam koruması için
+                            if bestEgg.obj and bestEgg.obj._model then
+                                local rootPos = getRootPart()
+                                if rootPos and (rootPos.Position - bestEgg.obj._position).Magnitude > 15 then
+                                    safeTeleport(bestEgg.obj._model, true)
+                                    task.wait(0.3)
+                                end
+                            end
+
+                            task.spawn(function()
+                                pcall(function()
+                                    if customHatchRemoteFE:IsA("RemoteEvent") then
+                                        customHatchRemoteFE:FireServer(bestEgg.uid, maxHatch or 1)
+                                    else
+                                        customHatchRemoteFE:InvokeServer(bestEgg.uid, maxHatch or 1)
+                                    end
+                                end)
+                            end)
+
+                            task.wait(1.5)
+                        end
+                    end
                 end
 
             elseif bestRoomType == 4 then
-                -- KEEP OUT EGG (mevcut kod, değişmedi)
+                -- KEEP OUT EGG
                 if isHybridEggPhase and not getgenv().SmartFarmState.EggRoomUID then
                     getgenv().SmartFarmState.EggRoomUID = roomUID
                 end
@@ -1037,7 +1018,7 @@ task.spawn(function()
                 end
 
             elseif bestRoomType == 3 then
-                -- BOSS ROOM (mevcut kod, değişmedi)
+                -- BOSS ROOM
                 task.wait(2.5)
 
                 local isAlreadyOpen = not bestRoom:FindFirstChild("LockedDoors")
@@ -1100,7 +1081,7 @@ task.spawn(function()
                 end
 
             elseif bestRoomType == 1 or bestRoomType == 2 then
-                -- BREAKABLE / VAULT (mevcut kod, değişmedi)
+                -- BREAKABLE / VAULT
                 local emptySeconds = 0
                 local bigCheckTimer = 0
                 
@@ -1155,7 +1136,7 @@ task.spawn(function()
                 end
             end
 
-            ::continue_loop::
+            -- Buradaki `continue` doğal olarak bir sonraki döngü turuna geçer
             continue
         end
 
@@ -1321,15 +1302,7 @@ end)
 -- ==========================
 -- 🎨 RAYFIELD UI
 -- ==========================
-local Rayfield
-local rayfieldSrc = game:HttpGet('https://sirius.menu/rayfield')
-local rayfieldFunc = loadstring(rayfieldSrc)
-if type(rayfieldFunc) == "function" then
-    Rayfield = rayfieldFunc()
-else
-    warn("Rayfield yüklenemedi! (loadstring başarısız veya engellendi)")
-    return
-end
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
     Name = "RLWSCRIPTS Event Script (Backrooms!)",
