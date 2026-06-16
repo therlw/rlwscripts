@@ -30,6 +30,7 @@ getgenv().Config = {
 }
 
 local TargetEggRooms = {}
+getgenv().DespawnedEggRooms = getgenv().DespawnedEggRooms or {}
 
 -- ==========================
 -- 🔗 WEBHOOK & INVENTORY SİSTEMİ
@@ -817,7 +818,7 @@ task.spawn(function()
                 local isEgg = lowerID:find("keepout") or lowerID:find("hugeegg") or lowerID:find("titanicegg")
                 
                 -- ARKA PLANDA YUMURTA ODASI KAYDET (Kullanıcı sonradan açarsa diye)
-                if isEgg and not getgenv().SmartFarmState.EggRoomUID then
+                if isEgg and not getgenv().SmartFarmState.EggRoomUID and not getgenv().DespawnedEggRooms[roomUID] then
                     getgenv().SmartFarmState.EggRoomUID = roomUID
                 end
 
@@ -853,7 +854,7 @@ task.spawn(function()
                 end
 
                 local shouldFarmEgg = (getgenv().Config.FindKeepOutEgg and not getgenv().Config.MetaFarmActive) or isHybridEggPhase
-                if shouldFarmEgg and isEgg then
+                if shouldFarmEgg and isEgg and not getgenv().DespawnedEggRooms[roomUID] then
                     if bestRoomType < 4 or (bestRoomType == 4 and roomUID < bestRoom:GetAttribute("RoomUID")) then
                         bestRoom = room
                         bestRoomType = 4
@@ -1001,6 +1002,7 @@ task.spawn(function()
                                 if Rayfield then
                                     Rayfield:Notify({Title = "Egg Despawned!", Content = "Yumurta silinmiş veya yüklenemedi, yeni oda aranıyor...", Duration = 4})
                                 end
+                                getgenv().DespawnedEggRooms[roomUID] = true
                                 getgenv().SmartFarmState.EggRoomUID = nil
                                 break
                             end
