@@ -925,52 +925,14 @@ task.spawn(function()
                 -- (Bu branch artık kullanılmıyor, streaming nedeniyle aşağıda handle ediliyor)
 
             elseif bestRoomType == 5 then
-                local isCorrectEgg = true
-                if getgenv().Config.TargetSpecificEgg and getgenv().Config.TargetSpecificEgg ~= "Any" then
-                    isCorrectEgg = false
-                    local CustomEggsCmds = nil
-                    pcall(function() CustomEggsCmds = require(game:GetService("ReplicatedStorage").Library.Client.CustomEggsCmds) end)
-                    if CustomEggsCmds and getRootPart() then
-                        local closestDist = 99999
-                        local closestName = ""
-                        for uid, eggObj in pairs(CustomEggsCmds.All()) do
-                            if eggObj._position then
-                                local dist = (getRootPart().Position - eggObj._position).Magnitude
-                                if dist < closestDist then
-                                    closestDist = dist
-                                    closestName = tostring(eggObj._id or eggObj.id or (eggObj._model and eggObj._model.Name) or "")
-                                end
-                            end
-                        end
-                        if closestName ~= "" and closestDist < 300 then
-                            local lowerName = closestName:lower()
-                            local targetName = getgenv().Config.TargetSpecificEgg:lower()
-                            if lowerName:find(targetName) then
-                                isCorrectEgg = true
-                            else
-                                if Rayfield then
-                                    Rayfield:Notify({Title = "Yanlış Yumurta Odası!", Content = "Bulunan: " .. closestName .. "\nİstenen: " .. getgenv().Config.TargetSpecificEgg .. "\nAtlanıyor...", Duration = 3})
-                                end
-                            end
-                        else
-                            isCorrectEgg = false
-                        end
-                    end
-                end
-
-                if isCorrectEgg then
-                    local mult = bestRoom:GetAttribute("EggMultiplier") or "Bilinmeyen"
-                    getgenv().Config.FindFreeEggRoom = false
-                    getgenv().Config.MetaFarmActive = false
-                    if Rayfield and Toggle_FreeEgg then Toggle_FreeEgg:Set(false) end
-                    if Rayfield and Toggle_MetaFarm then Toggle_MetaFarm:Set(false) end
-                    if Rayfield then
-                        local eggTitle = getgenv().Config.TargetSpecificEgg == "Any" and "Egg" or getgenv().Config.TargetSpecificEgg
-                        Rayfield:Notify({Title = "🎁 İstenen Egg Bulundu!", Content = mult .. "x " .. eggTitle .. " Odası!", Duration = 10, Image = 4483362458})
-                    end
-                else
-                    VisitedRooms[roomUID] = true
-                    continue
+                local mult = bestRoom:GetAttribute("EggMultiplier") or "Bilinmeyen"
+                getgenv().Config.FindFreeEggRoom = false
+                getgenv().Config.MetaFarmActive = false
+                if Rayfield and Toggle_FreeEgg then Toggle_FreeEgg:Set(false) end
+                if Rayfield and Toggle_MetaFarm then Toggle_MetaFarm:Set(false) end
+                if Rayfield then
+                    local eggTitle = getgenv().Config.TargetSpecificEgg == "Any" and "Egg" or getgenv().Config.TargetSpecificEgg
+                    Rayfield:Notify({Title = "🎁 İstenen Egg Bulundu!", Content = mult .. "x " .. eggTitle .. " Odası!", Duration = 10, Image = 4483362458})
                 end
 
             elseif bestRoomType == 4 then
@@ -1270,6 +1232,43 @@ task.spawn(function()
 
         safeTeleport(room, isSearchingOnly)
         task.wait(getgenv().Config.TeleportDelay)
+
+        -- SPESİFİK YUMURTA KONTROLÜ (Tüm modlar için geçerli)
+        local isFreeEggRoom = lowerID:find("freeegg")
+        if isFreeEggRoom and getgenv().Config.TargetSpecificEgg and getgenv().Config.TargetSpecificEgg ~= "Any" then
+            local CustomEggsCmds = nil
+            pcall(function() CustomEggsCmds = require(game:GetService("ReplicatedStorage").Library.Client.CustomEggsCmds) end)
+            local isCorrect = false
+            if CustomEggsCmds and getRootPart() then
+                local closestDist = 99999
+                local closestName = ""
+                for uid, eggObj in pairs(CustomEggsCmds.All()) do
+                    if eggObj._position then
+                        local dist = (getRootPart().Position - eggObj._position).Magnitude
+                        if dist < closestDist then
+                            closestDist = dist
+                            closestName = tostring(eggObj._id or eggObj.id or (eggObj._model and eggObj._model.Name) or "")
+                        end
+                    end
+                end
+                if closestName ~= "" and closestDist < 300 then
+                    local lowerName = closestName:lower()
+                    local targetName = getgenv().Config.TargetSpecificEgg:lower()
+                    if lowerName:find(targetName) then
+                        isCorrect = true
+                    else
+                        if Rayfield then
+                            Rayfield:Notify({Title = "Yanlış Yumurta!", Content = "Bulunan: " .. closestName .. "\nİstenen: " .. getgenv().Config.TargetSpecificEgg .. "\nAtlanıyor...", Duration = 3})
+                        end
+                    end
+                end
+            end
+
+            if not isCorrect then
+                VisitedRooms[roomUID] = true
+                continue
+            end
+        end
 
         -- PARADOX FİX 2: Odanın merkezine zıplamak, devasa odalarda sunucunun (server) yeni odaları yüklemesi için
         -- gereken yakınlık (proximity) şartını sağlamayabilir. Bu yüzden karakteri odanın tüm kapılarına (uç noktalara)
