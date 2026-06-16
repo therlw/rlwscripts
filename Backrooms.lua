@@ -1056,18 +1056,24 @@ task.spawn(function()
 
                         task.spawn(function()
                             if customHatchRemote then
-                                pcall(function()
-                                    if customHatchRemote:IsA("RemoteEvent") then
-                                        customHatchRemote:FireServer(customUid, maxHatch)
-                                        if maxHatch > 1 then task.wait(0.1) customHatchRemote:FireServer(customUid, 1) end
-                                    else
-                                        local res = customHatchRemote:InvokeServer(customUid, maxHatch)
-                                        if res == false and maxHatch > 1 then
-                                            -- Eğer server çoklu açılımı reddederse, 1 tane açmayı zorla (Free Egg'lerde sıkça olur)
-                                            customHatchRemote:InvokeServer(customUid, 1)
-                                        end
+                                if customHatchRemote:IsA("RemoteEvent") then
+                                    pcall(function() customHatchRemote:FireServer(customUid, maxHatch) end)
+                                    if maxHatch > 1 then
+                                        task.wait(0.1)
+                                        pcall(function() customHatchRemote:FireServer(customUid, 1) end)
                                     end
-                                end)
+                                else
+                                    local success, res = pcall(function()
+                                        return customHatchRemote:InvokeServer(customUid, maxHatch)
+                                    end)
+                                    
+                                    -- Eğer hata verdiyse (success = false) veya sunucu reddettiyse, 1'li açmayı zorla!
+                                    if (not success or res == false or type(res) == "string") and maxHatch > 1 then
+                                        pcall(function()
+                                            customHatchRemote:InvokeServer(customUid, 1)
+                                        end)
+                                    end
+                                end
                             end
                         end)
                     elseif buyEggRemote then
