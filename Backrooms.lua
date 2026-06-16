@@ -14,8 +14,8 @@ getgenv().Config = {
     TargetKeyCount = 5,
     FindKeepOutEgg = false,
     FindFreeEggRoom = false,
-    TargetEggMultiplier = 50,
-    TargetSpecificEgg = "Any",
+    TargetEggMultiplier = {50, 75, 100},
+    TargetSpecificEgg = {"Any"},
     AutoLoot = false,
     GodMode = false,
     TeleportDelay = 0.8,
@@ -825,6 +825,22 @@ task.spawn(function()
 
                 local isFreeEgg = lowerID:find("freeegg")
                 local multiplier = isFreeEgg and tonumber(room:GetAttribute("EggMultiplier")) or 0
+
+                local isValidMultiplier = false
+                if type(getgenv().Config.TargetEggMultiplier) == "table" then
+                    if #getgenv().Config.TargetEggMultiplier == 0 then
+                        isValidMultiplier = true -- Hiçbir şey seçilmediyse hepsini kabul et
+                    else
+                        for _, v in ipairs(getgenv().Config.TargetEggMultiplier) do
+                            if multiplier == v then
+                                isValidMultiplier = true
+                                break
+                            end
+                        end
+                    end
+                else
+                    isValidMultiplier = multiplier >= (getgenv().Config.TargetEggMultiplier or 50)
+                end
                 
                 local isBoss = lowerID:find("bosschest") or lowerID:find("minichest")
                     or lowerID:find("miniboss") or lowerID:find("boss")
@@ -840,7 +856,7 @@ task.spawn(function()
                     end
                 end
 
-                if getgenv().Config.FindFreeEggRoom and isFreeEgg and multiplier >= getgenv().Config.TargetEggMultiplier then
+                if getgenv().Config.FindFreeEggRoom and isFreeEgg and isValidMultiplier then
                     if bestRoomType < 5 or (bestRoomType == 5 and roomUID < bestRoom:GetAttribute("RoomUID")) then
                         bestRoom = room
                         bestRoomType = 5
@@ -931,7 +947,7 @@ task.spawn(function()
                 if Rayfield and Toggle_FreeEgg then Toggle_FreeEgg:Set(false) end
                 if Rayfield and Toggle_MetaFarm then Toggle_MetaFarm:Set(false) end
                 if Rayfield then
-                    local eggTitle = getgenv().Config.TargetSpecificEgg == "Any" and "Egg" or getgenv().Config.TargetSpecificEgg
+                    local eggTitle = (type(getgenv().Config.TargetSpecificEgg) == "string" and getgenv().Config.TargetSpecificEgg) or "Egg"
                     Rayfield:Notify({Title = "🎁 İstenen Egg Bulundu!", Content = mult .. "x " .. eggTitle .. " Odası!", Duration = 10, Image = 4483362458})
                 end
 
@@ -1235,38 +1251,48 @@ task.spawn(function()
 
         -- SPESİFİK YUMURTA KONTROLÜ (Tüm modlar için geçerli)
         local isFreeEggRoom = lowerID:find("freeegg")
-        if isFreeEggRoom and getgenv().Config.TargetSpecificEgg and getgenv().Config.TargetSpecificEgg ~= "Any" then
-            local CustomEggsCmds = nil
-            pcall(function() CustomEggsCmds = require(game:GetService("ReplicatedStorage").Library.Client.CustomEggsCmds) end)
-            local isCorrect = false
-            if CustomEggsCmds and getRootPart() then
-                local closestDist = 99999
-                local closestName = ""
-                for uid, eggObj in pairs(CustomEggsCmds.All()) do
-                    if eggObj._position then
-                        local dist = (getRootPart().Position - eggObj._position).Magnitude
-                        if dist < closestDist then
-                            closestDist = dist
-                            closestName = tostring(eggObj._id or eggObj.id or (eggObj._model and eggObj._model.Name) or "")
-                        end
-                    end
-                end
-                if closestName ~= "" and closestDist < 300 then
-                    local lowerName = closestName:lower()
-                    local targetName = getgenv().Config.TargetSpecificEgg:lower()
-                    if lowerName:find(targetName) then
-                        isCorrect = true
-                    else
-                        if Rayfield then
-                            Rayfield:Notify({Title = "Yanlış Yumurta!", Content = "Bulunan: " .. closestName .. "\nİstenen: " .. getgenv().Config.TargetSpecificEgg .. "\nAtlanıyor...", Duration = 3})
-                        end
-                    end
-                end
+        if isFreeEggRoom and type(getgenv().Config.TargetSpecificEgg) == "table" then
+            local hasAny = false
+            for _, v in ipairs(getgenv().Config.TargetSpecificEgg) do
+                if v == "Any" then hasAny = true break end
             end
 
-            if not isCorrect then
-                VisitedRooms[roomUID] = true
-                continue
+            if not hasAny and #getgenv().Config.TargetSpecificEgg > 0 then
+                local CustomEggsCmds = nil
+                pcall(function() CustomEggsCmds = require(game:GetService("ReplicatedStorage").Library.Client.CustomEggsCmds) end)
+                local isCorrect = false
+                if CustomEggsCmds and getRootPart() then
+                    local closestDist = 99999
+                    local closestName = ""
+                    for uid, eggObj in pairs(CustomEggsCmds.All()) do
+                        if eggObj._position then
+                            local dist = (getRootPart().Position - eggObj._position).Magnitude
+                            if dist < closestDist then
+                                closestDist = dist
+                                closestName = tostring(eggObj._id or eggObj.id or (eggObj._model and eggObj._model.Name) or "")
+                            end
+                        end
+                    end
+                    if closestName ~= "" and closestDist < 300 then
+                        local lowerName = closestName:lower()
+                        for _, target in ipairs(getgenv().Config.TargetSpecificEgg) do
+                            if lowerName:find(target:lower()) then
+                                isCorrect = true
+                                break
+                            end
+                        end
+                        if not isCorrect then
+                            if Rayfield then
+                                Rayfield:Notify({Title = "Yanlış Yumurta!", Content = "Bulunan: " .. closestName .. "\nİstenenlerden Değil! Atlanıyor...", Duration = 3})
+                            end
+                        end
+                    end
+                end
+
+                if not isCorrect then
+                    VisitedRooms[roomUID] = true
+                    continue
+                end
             end
         end
 
@@ -1470,14 +1496,18 @@ Toggle_FreeEgg = TabMain:CreateToggle({
 })
 
 TabMain:CreateDropdown({
-    Name = "🎯 Target Egg Multiplier",
-    Options = {"2x", "3x", "5x", "10x", "20x", "50x", "100x"},
-    CurrentOption = {"50x"},
-    MultipleOptions = false,
-    Flag = "Drp_Multiplier",
+    Name = "Target Egg Multiplier",
+    Options = {"2x", "3x", "5x", "10x", "20x", "30x", "50x", "75x", "100x"},
+    CurrentOption = {"50x", "75x", "100x"},
+    MultipleOptions = true,
+    Flag = "Drp_EggMultiplier",
     Callback = function(Option)
-        local val = string.gsub(Option[1], "x", "")
-        getgenv().Config.TargetEggMultiplier = tonumber(val) or 50
+        local multiTable = {}
+        for _, opt in ipairs(Option) do
+            local val = string.gsub(opt, "x", "")
+            table.insert(multiTable, tonumber(val) or 0)
+        end
+        getgenv().Config.TargetEggMultiplier = multiTable
     end,
 })
 
