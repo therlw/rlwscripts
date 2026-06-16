@@ -1321,7 +1321,15 @@ end)
 -- ==========================
 -- 🎨 RAYFIELD UI
 -- ==========================
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+local Rayfield
+local rayfieldSrc = game:HttpGet('https://sirius.menu/rayfield')
+local rayfieldFunc = loadstring(rayfieldSrc)
+if type(rayfieldFunc) == "function" then
+    Rayfield = rayfieldFunc()
+else
+    warn("Rayfield yüklenemedi! (loadstring başarısız veya engellendi)")
+    return
+end
 
 local Window = Rayfield:CreateWindow({
     Name = "RLWSCRIPTS Event Script (Backrooms!)",
