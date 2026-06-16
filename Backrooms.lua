@@ -128,22 +128,41 @@ local function UpdateInventoryMonitor()
                 KnownUIDs[uid] = true
                 if isH or isT then
                     local pName = (def and def.DisplayName) or pId
+                    
+                    -- Rarity Prefixes (Gerçek isimleri almak için)
+                    local prefix = ""
+                    if data.sh then prefix = prefix .. "Shiny " end
+                    if data.pt == 1 then prefix = prefix .. "Golden " end
+                    if data.pt == 2 then prefix = prefix .. "Rainbow " end
+                    
+                    pName = prefix .. pName
+
                     local col   = isH and 0x00ff00 or 0xffd700
                     local title = isH and "🎉 NEW HUGE CAUGHT! 🎉" or "🌟 NEW TITANIC CAUGHT! 🌟"
                     
+                    if data.sh then
+                        title = isH and "✨ NEW SHINY HUGE CAUGHT! ✨" or "✨ NEW SHINY TITANIC CAUGHT! ✨"
+                        col = 0x00ffff -- Shiny için Cyan renk
+                    end
+                    
                     local imageId = nil
-                    if def and def.thumbnail then
-                        imageId = string.match(def.thumbnail, "%d+")
+                    if def then
+                        local thumb = def.thumbnail
+                        -- Golden ise altın resmi kullan, değilse normal (Rainbowlar da normal fotoyu kullanır oyun içi efekt basar)
+                        if data.pt == 1 and def.goldenThumbnail then
+                            thumb = def.goldenThumbnail
+                        end
+                        
+                        if thumb then
+                            imageId = string.match(thumb, "%d+")
+                        end
                     end
                     
                     local desc = string.format(
                         "🐾 **Pet:** `%s`\n" ..
                         "👤 **User:** `%s`\n" ..
-                        "⏱️ **Time:** `%s`\n\n" ..
-                        "📊 **Session Stats:**\n" ..
-                        "🟢 `%d` Huges  |  🟡 `%d` Titanics",
-                        pName, LocalPlayer.Name, os.date("%X"),
-                        currentH - StartHuges, currentT - StartTitanics
+                        "⏱️ **Time:** `%s`",
+                        pName, LocalPlayer.Name, os.date("%X")
                     )
                     
                     SendWebhook(title, desc, col, imageId)
@@ -785,27 +804,30 @@ task.spawn(function()
                 local isVault = lowerID:find("vault") or lowerID:find("chest")
                 local isBreakable = lowerID:find("breakable")
 
-                if getgenv().Config.FindFreeEggRoom and isFreeEgg and multiplier >= getgenv().Config.TargetEggMultiplier and bestRoomType < 5 then
-                    bestRoom = room
-                    bestRoomType = 5
-                    break
+                if getgenv().Config.FindFreeEggRoom and isFreeEgg and multiplier >= getgenv().Config.TargetEggMultiplier then
+                    if bestRoomType < 5 or (bestRoomType == 5 and roomUID < bestRoom:GetAttribute("RoomUID")) then
+                        bestRoom = room
+                        bestRoomType = 5
+                    end
                 end
 
-                if isBossHuntPhase and isBoss and bestRoomType < 3 then
-                    bestRoom = room
-                    bestRoomType = 3
-                    break
+                if isBossHuntPhase and isBoss then
+                    if bestRoomType < 3 or (bestRoomType == 3 and roomUID < bestRoom:GetAttribute("RoomUID")) then
+                        bestRoom = room
+                        bestRoomType = 3
+                    end
                 end
 
                 local shouldFarmEgg = (getgenv().Config.FindKeepOutEgg and not getgenv().Config.MetaFarmActive) or isHybridEggPhase
-                if shouldFarmEgg and isEgg and bestRoomType < 4 then
-                    bestRoom = room
-                    bestRoomType = 4
-                    break
+                if shouldFarmEgg and isEgg then
+                    if bestRoomType < 4 or (bestRoomType == 4 and roomUID < bestRoom:GetAttribute("RoomUID")) then
+                        bestRoom = room
+                        bestRoomType = 4
+                    end
                 end
 
-                if isKeyFarmPhase then
-                    if isBreakable and bestRoomType < 1 then
+                if isKeyFarmPhase and isBreakable then
+                    if bestRoomType < 1 or (bestRoomType == 1 and roomUID < bestRoom:GetAttribute("RoomUID")) then
                         bestRoom = room
                         bestRoomType = 1
                     end
