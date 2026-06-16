@@ -28,7 +28,8 @@ getgenv().Config = {
     WebhookEnabled = false,
     WebhookURL = "",
     UnlockDeepBackrooms = false,
-    AntiJumpscare = true
+    AntiJumpscare = true,
+    PotatoMode = false
 }
 
 local TargetEggRooms = {}
@@ -1546,6 +1547,54 @@ TabMain:CreateSlider({
     Range = {0.1, 3}, Increment = 0.1, Suffix = "s", CurrentValue = 0.8,
     Flag = "Sld_Teleport",
     Callback = function(Value) getgenv().Config.TeleportDelay = Value end
+})
+
+TabMain:CreateToggle({
+    Name = "🥔 Potato Mode (Max FPS)",
+    CurrentValue = false,
+    Flag = "Tgl_PotatoMode",
+    Callback = function(Value)
+        getgenv().Config.PotatoMode = Value
+        if Value then
+            task.spawn(function()
+                pcall(function()
+                    game.Lighting.GlobalShadows = false
+                    game.Lighting.FogEnd = 9e9
+                    game.Lighting.ShadowSoftness = 0
+                    for _, v in ipairs(game.Lighting:GetDescendants()) do
+                        if v:IsA("PostEffect") or v:IsA("BlurEffect") or v:IsA("BloomEffect") or v:IsA("ColorCorrectionEffect") or v:IsA("SunRaysEffect") or v:IsA("Atmosphere") then
+                            v.Enabled = false
+                        end
+                    end
+                    for _, v in ipairs(workspace:GetDescendants()) do
+                        if v:IsA("Texture") or v:IsA("Decal") then
+                            v.Transparency = 1
+                        elseif v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") then
+                            v.Enabled = false
+                        elseif v:IsA("BasePart") and not (v.Parent and v.Parent:FindFirstChild("Humanoid")) then
+                            v.Material = Enum.Material.SmoothPlastic
+                        end
+                    end
+                end)
+                
+                if not getgenv().PotatoConnection then
+                    getgenv().PotatoConnection = workspace.DescendantAdded:Connect(function(v)
+                        if getgenv().Config.PotatoMode then
+                            pcall(function()
+                                if v:IsA("Texture") or v:IsA("Decal") then
+                                    v.Transparency = 1
+                                elseif v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") then
+                                    v.Enabled = false
+                                elseif v:IsA("BasePart") and not (v.Parent and v.Parent:FindFirstChild("Humanoid")) then
+                                    v.Material = Enum.Material.SmoothPlastic
+                                end
+                            end)
+                        end
+                    end)
+                end
+            end)
+        end
+    end
 })
 
 TabMain:CreateToggle({
