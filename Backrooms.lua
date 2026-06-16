@@ -128,40 +128,22 @@ local function UpdateInventoryMonitor()
                 KnownUIDs[uid] = true
                 if isH or isT then
                     local pName = (def and def.DisplayName) or pId
-                    
-                    -- Shiny / Golden / Rainbow eklentileri (Save datası üzerinden)
-                    local prefixes = {}
-                    if data.sh then table.insert(prefixes, "Shiny") end
-                    if data.pt == 1 then table.insert(prefixes, "Golden")
-                    elseif data.pt == 2 then table.insert(prefixes, "Rainbow") end
-                    
-                    if #prefixes > 0 then
-                        pName = table.concat(prefixes, " ") .. " " .. pName
-                    end
-
                     local col   = isH and 0x00ff00 or 0xffd700
                     local title = isH and "🎉 NEW HUGE CAUGHT! 🎉" or "🌟 NEW TITANIC CAUGHT! 🌟"
                     
                     local imageId = nil
-                    if def then
-                        local thumb = def.thumbnail
-                        -- Oyun dosyalarında eğer özel thumbnail varsa onu kullan:
-                        if data.pt == 1 and def.goldenThumbnail then
-                            thumb = def.goldenThumbnail
-                        elseif data.pt == 2 and def.rainbowThumbnail then
-                            thumb = def.rainbowThumbnail
-                        end
-                        
-                        if thumb then
-                            imageId = string.match(thumb, "%d+")
-                        end
+                    if def and def.thumbnail then
+                        imageId = string.match(def.thumbnail, "%d+")
                     end
                     
                     local desc = string.format(
                         "🐾 **Pet:** `%s`\n" ..
-                        "👤 **User:** ||%s||\n" ..
-                        "⏱️ **Time:** `%s`",
-                        pName, LocalPlayer.Name, os.date("%X")
+                        "👤 **User:** `%s`\n" ..
+                        "⏱️ **Time:** `%s`\n\n" ..
+                        "📊 **Session Stats:**\n" ..
+                        "🟢 `%d` Huges  |  🟡 `%d` Titanics",
+                        pName, LocalPlayer.Name, os.date("%X"),
+                        currentH - StartHuges, currentT - StartTitanics
                     )
                     
                     SendWebhook(title, desc, col, imageId)
@@ -1208,6 +1190,7 @@ TabWebhook:CreateInput({
     Name = "Discord Webhook URL",
     PlaceholderText = "https://discord.com/api/webhooks/...",
     RemoveTextAfterFocusLost = false,
+    Flag = "Inp_WebhookURL",
     Callback = function(Text)
         getgenv().Config.WebhookURL = Text
     end,
