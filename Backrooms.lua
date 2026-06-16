@@ -1519,10 +1519,19 @@ TabMain:CreateDropdown({
     Name = "🎯 Target Specific Free Egg",
     Options = {"Any", "Smile", "Flower", "Scribble", "Swirl", "Keep Out", "Nightmare", "Overgrown", "Gooey", "Night Terror", "Fear", "Corrupt"},
     CurrentOption = {"Any"},
-    MultipleOptions = false,
+    MultipleOptions = true,
     Flag = "Drp_SpecificEgg",
     Callback = function(Option)
-        getgenv().Config.TargetSpecificEgg = Option[1]
+        getgenv().Config.TargetSpecificEgg = Option
+    end,
+})
+
+TabMain:CreateToggle({
+    Name = "Auto Buy Targeted Free Egg",
+    CurrentValue = false,
+    Flag = "Tgl_AutoBuyFreeEgg",
+    Callback = function(Value)
+        getgenv().Config.AutoBuyFreeEgg = Value
     end,
 })
 
