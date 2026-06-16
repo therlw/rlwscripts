@@ -1118,6 +1118,27 @@ task.spawn(function()
                         end
                     end
 
+                    -- FALLBACK: CustomEggsCmds henüz yüklemediyse workspace'ten doğrudan bul
+                    if not customUid4 and root4 then
+                        local eggsFolder = workspace:FindFirstChild("__THINGS") and workspace.__THINGS:FindFirstChild("CustomEggs")
+                        if eggsFolder then
+                            for _, model in pairs(eggsFolder:GetChildren()) do
+                                if model:IsA("Model") and #model.Name > 20 then
+                                    local pivot = model:GetPivot()
+                                    local dist = (root4.Position - pivot.Position).Magnitude
+                                    if dist < closestDist4 then
+                                        closestDist4 = dist
+                                        customUid4 = model.Name
+                                        eggModel4 = model
+                                    end
+                                end
+                            end
+                        end
+                        if customUid4 then
+                            print("[HATCH] Workspace fallback uid bulundu:", customUid4, "dist:", math.floor(closestDist4))
+                        end
+                    end
+
                     if not customUid4 then
                         missingEggCounter = missingEggCounter + 1
                         if missingEggCounter >= 5 then
