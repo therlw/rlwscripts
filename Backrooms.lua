@@ -1011,6 +1011,18 @@ task.spawn(function()
                 while getgenv().Config.FindKeepOutEgg do
                     local timeNow = workspace:GetServerTimeNow()
                     
+                    -- YUMURTA SÜRE KONTROLÜ (Oyunun Kendi Sayacı)
+                    local expireTs = bestRoom:GetAttribute("EggExpireTimestamp")
+                    if expireTs and type(expireTs) == "number" and timeNow > expireTs then
+                        if Rayfield then
+                            Rayfield:Notify({Title = "Yumurta Yok Oldu!", Content = "Süresi dolduğu için yumurta kayboldu, yeni odaya geçiliyor.", Duration = 3})
+                        end
+                        DespawnedEggRooms[roomUID] = true
+                        getgenv().SmartFarmState.EggRoomUID = nil
+                        getgenv().Config.MetaFarmActive = true
+                        break
+                    end
+                    
                     if isHybridEggPhase then
                         local remaining = (getgenv().SmartFarmState.BossRespawningUntil or 0) - timeNow
                         if remaining > 0 and remaining <= 8 then
@@ -1035,7 +1047,8 @@ task.spawn(function()
                         end
                         
                         -- EGG DESPAWN CHECK: Yükleme (Streaming) gecikmesi olabileceği için 5 kez şans ver.
-                        if closestDist > 300 then
+                        -- Uzaklığı 60'a düşürdük, çünkü yan odadaki bir yumurtayı görüp beklemesini istemiyoruz.
+                        if closestDist > 60 then
                             missingEggCounter = missingEggCounter + 1
                             if missingEggCounter >= 5 then
                                 if Rayfield then
