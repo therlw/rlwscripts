@@ -1258,11 +1258,6 @@ task.spawn(function()
                         shouldUnlock = true
                     elseif (getgenv().Config.FindKeepOutEgg or getgenv().Config.FindFreeEggRoom or isHybridEggPhase) and isEggRoom then
                         shouldUnlock = true
-                    else
-                        -- PARADOX FIX: Eğer haritayı genişletme aşamasındaysak (frontier) ve öncelikli hedef bulamadıysak,
-                        -- yeni odaların yüklenmesi için kapıyı açmak ZORUNDAYIZ.
-                        -- Yoksa oyun yeni oda göndermez ve 3-4 oda arasında kısır döngüye gireriz.
-                        shouldUnlock = true
                     end
 
                     if shouldUnlock then
