@@ -1483,7 +1483,7 @@ TabMain:CreateDropdown({
 
 TabMain:CreateDropdown({
     Name = "🎯 Target Specific Free Egg",
-    Options = {"Any", "Slime", "Flower", "Scribble", "Swirl", "Keep Out"},
+    Options = {"Any", "Smile", "Flower", "Scribble", "Swirl", "Keep Out", "Nightmare", "Overgrown", "Gooey", "Night Terror", "Fear", "Corrupt"},
     CurrentOption = {"Any"},
     MultipleOptions = false,
     Flag = "Drp_SpecificEgg",
