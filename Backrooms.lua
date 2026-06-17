@@ -513,7 +513,7 @@ end
 
 task.spawn(function()
     while task.wait(getgenv().SmartFarmState.PetAssignInterval) do
-        if not getgenv().Config.MetaFarmActive then continue end
+        if not (getgenv().Config.MetaFarmActive or getgenv().Config.FastFarmBreakables) then continue end
         local targets = GetBackroomsTargets()
         local allTargets = {}
         
@@ -532,7 +532,7 @@ end)
 
 task.spawn(function()
     while task.wait(getgenv().SmartFarmState.AutoTapInterval) do
-        if not getgenv().Config.MetaFarmActive then continue end
+        if not (getgenv().Config.MetaFarmActive or getgenv().Config.FastFarmBreakables) then continue end
         local targets = GetBackroomsTargets()
         local hitCount = 0
         local Network = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
@@ -582,7 +582,7 @@ end
 
 task.spawn(function()
     while task.wait(0.1) do
-        if not getgenv().Config.MetaFarmActive then continue end
+        if not (getgenv().Config.MetaFarmActive or getgenv().Config.FastFarmBreakables) then continue end
         pcall(CollectOrbs)
     end
 end)
@@ -1511,6 +1511,17 @@ local TabUpgrades = Window:CreateTab("🆙 Upgrades")
 local TabWebhook = Window:CreateTab("🔔 Webhook")
 
 -- ⚔️ AUTO FARM TAB --
+TabAutoFarm:CreateSection("Standalone Farm")
+
+TabAutoFarm:CreateToggle({
+    Name = "⚡ Fast Farm Breakables",
+    CurrentValue = false,
+    Flag = "Tgl_FastFarm",
+    Callback = function(Value)
+        getgenv().Config.FastFarmBreakables = Value
+    end
+})
+
 TabAutoFarm:CreateSection("Phase 1: Smart Loop (Meta)")
 
 TabAutoFarm:CreateToggle({
@@ -1754,9 +1765,9 @@ TabScanner:CreateButton({
                     label = "👹 " .. label
                 end
                 
-                label = label .. " (UID: " .. roomUID .. ")"
+                label = label .. " (UID: " .. tostring(roomUID) .. ")"
                 table.insert(scannedRoomsList, label)
-                scannedRoomsMap[roomUID] = room
+                scannedRoomsMap[tostring(roomUID)] = room
             end
         end
         
