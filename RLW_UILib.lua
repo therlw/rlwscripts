@@ -195,12 +195,14 @@ function RLW_Library:CreateWindow(options)
     CloseBtn.Font = Enum.Font.Ubuntu
 
     -- Açma (Show UI) Butonu (Mobil Uyumlu)
-    local openBtnY = 10 -- Always near the very top
-    local openBtnHideY = -50
+    local openBtnX = -80 -- 80px from the right edge
+    local openBtnY = 35 -- 35px from top
+    local openBtnHideX = 100 -- Off-screen to the right
     
     local OpenBtn = Instance.new("TextButton", RLWGui)
+    OpenBtn.AnchorPoint = Vector2.new(0.5, 0.5)
     OpenBtn.Size = UDim2.new(0, 120, 0, 35)
-    OpenBtn.Position = UDim2.new(0.5, -60, 0, openBtnHideY)
+    OpenBtn.Position = UDim2.new(1, openBtnHideX, 0, openBtnY)
     OpenBtn.BackgroundColor3 = Theme.MainBG
     OpenBtn.Text = "Show UI"
     OpenBtn.TextColor3 = Theme.Accent
@@ -227,20 +229,20 @@ function RLW_Library:CreateWindow(options)
         task.wait(0.3)
         MainFrame.Visible = false
         OpenBtn.Visible = true
-        OpenBtn.Position = UDim2.new(0.5, -60, 0, openBtnHideY)
-        tween(OpenBtn, {Position = UDim2.new(0.5, -60, 0, openBtnY)}, 0.35)
+        OpenBtn.Position = UDim2.new(1, openBtnHideX, 0, openBtnY)
+        tween(OpenBtn, {Position = UDim2.new(1, openBtnX, 0, openBtnY)}, 0.35)
         task.wait(0.35)
         isAnimating = false
     end)
 
-    OpenBtn.MouseEnter:Connect(function() tween(OpenBtn, {Size = UDim2.new(0, 126, 0, 38), Position = UDim2.new(0.5, -63, 0, openBtnY - 2)}, 0.2) end)
-    OpenBtn.MouseLeave:Connect(function() tween(OpenBtn, {Size = UDim2.new(0, 120, 0, 35), Position = UDim2.new(0.5, -60, 0, openBtnY)}, 0.2) end)
+    OpenBtn.MouseEnter:Connect(function() tween(OpenBtn, {Size = UDim2.new(0, 126, 0, 38)}, 0.2) end)
+    OpenBtn.MouseLeave:Connect(function() tween(OpenBtn, {Size = UDim2.new(0, 120, 0, 35)}, 0.2) end)
 
     OpenBtn.MouseButton1Click:Connect(function()
         if uiVisible or isAnimating then return end
         isAnimating = true
         uiVisible = true
-        tween(OpenBtn, {Position = UDim2.new(0.5, -60, 0, openBtnHideY)}, 0.25)
+        tween(OpenBtn, {Position = UDim2.new(1, openBtnHideX, 0, openBtnY)}, 0.25)
         task.wait(0.25)
         OpenBtn.Visible = false
         MainFrame.Visible = true
