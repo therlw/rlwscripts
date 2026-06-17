@@ -770,6 +770,16 @@ function RLW_Library:CreateWindow(options)
                 if opts.Callback then opts.Callback({current}) end
             end
 
+            function Element:RefreshOptions(newOptions)
+                options = newOptions
+                listHeight = #options * 32
+                ListContainer.Size = UDim2.new(1, -10, 0, listHeight)
+                if isOpen then
+                    DropdownFrame.Size = UDim2.new(1, -10, 0, 48 + listHeight)
+                end
+                refreshList()
+            end
+
             local function refreshList()
                 for _, child in ipairs(ListContainer:GetChildren()) do
                     if child:IsA("TextButton") then child:Destroy() end
