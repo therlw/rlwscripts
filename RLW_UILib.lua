@@ -770,21 +770,6 @@ function RLW_Library:CreateWindow(options)
                 if opts.Callback then opts.Callback({current}) end
             end
 
-            function Element:RefreshOptions(newOptions)
-                options = newOptions
-                listHeight = #options * 32
-                ListContainer.Size = UDim2.new(1, -10, 0, listHeight)
-                if isOpen then
-                    DropdownFrame.Size = UDim2.new(1, -10, 0, 48 + listHeight)
-                end
-                refreshList()
-                if #options > 0 then
-                    current = tostring(options[1])
-                    SelectedText.Text = current
-                    if opts.Flag then Window.Flags[opts.Flag] = current end
-                end
-            end
-
             local function refreshList()
                 for _, child in ipairs(ListContainer:GetChildren()) do
                     if child:IsA("TextButton") then child:Destroy() end
@@ -814,6 +799,22 @@ function RLW_Library:CreateWindow(options)
                     end)
                 end
             end
+            
+            function Element:RefreshOptions(newOptions)
+                options = newOptions
+                listHeight = #options * 32
+                ListContainer.Size = UDim2.new(1, -10, 0, listHeight)
+                if isOpen then
+                    DropdownFrame.Size = UDim2.new(1, -10, 0, 48 + listHeight)
+                end
+                refreshList()
+                if #options > 0 then
+                    current = tostring(options[1])
+                    SelectedText.Text = current
+                    if opts.Flag then Window.Flags[opts.Flag] = current end
+                end
+            end
+
             refreshList()
             
             ToggleBtn.MouseButton1Click:Connect(function()
