@@ -671,7 +671,13 @@ local function isEggAlive(room)
         if customEggs then
             local eggModel = customEggs:FindFirstChild(eggUID)
             if not eggModel then
-                return false -- Yumurta objesi artık yok (kırılmış veya süresi dolup silinmiş)
+                return false -- Model tamamen silinmiş
+            end
+            
+            -- Odanın kabuğu (PriceFrame vs) kalmış ama yumurtanın kendisi (MeshPart) kırılıp silinmiş olabilir!
+            local actualEgg = eggModel:FindFirstChild("Egg") or eggModel:FindFirstChild("EggLock")
+            if not actualEgg then
+                return false -- Yumurta kırılmış/alınmış!
             end
         end
     end
@@ -1748,9 +1754,9 @@ TabScanner:CreateButton({
                     label = "👹 " .. label
                 end
                 
-                label = label .. " (UID: " .. roomUID .. ")"
+                label = label .. " (UID: " .. tostring(roomUID) .. ")"
                 table.insert(scannedRoomsList, label)
-                scannedRoomsMap[roomUID] = room
+                scannedRoomsMap[tostring(roomUID)] = room
             end
         end
         
