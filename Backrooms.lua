@@ -894,7 +894,7 @@ task.spawn(function()
                 local roomID = room:GetAttribute("RoomID") or ""
                 local lowerID = string.lower(roomID)
 
-                local isEgg = lowerID:find("keepout") or lowerID:find("hugeegg") or lowerID:find("titanicegg")
+                local isEgg = (lowerID:find("egg") or lowerID:find("keepout")) and not lowerID:find("freeegg")
                 
                 -- ✅ DeadEggRooms kontrolü: cooldown süresi dolmadıysa bu odaya gitme
                 if isEgg and DeadEggRooms[roomUID] and (os.clock() - DeadEggRooms[roomUID]) < DEAD_EGG_COOLDOWN then
