@@ -894,7 +894,8 @@ task.spawn(function()
                 local roomID = room:GetAttribute("RoomID") or ""
                 local lowerID = string.lower(roomID)
 
-                local isEgg = (lowerID:find("egg") or lowerID:find("keepout")) and not lowerID:find("freeegg")
+                -- SADECE VE SADECE TITANIC EGG ODALARINA GİDECEK!
+                local isEgg = lowerID:find("titanicegg")
                 
                 -- ✅ DeadEggRooms kontrolü: cooldown süresi dolmadıysa bu odaya gitme
                 if isEgg and DeadEggRooms[roomUID] and (os.clock() - DeadEggRooms[roomUID]) < DEAD_EGG_COOLDOWN then
@@ -943,10 +944,18 @@ task.spawn(function()
                 -- Normal/KeepOut Yumurta Odası Kontrolü (Type 4)
                 -- Artık filtreyi geçiyorsa Boss avını bile ezip geçer!
                 local shouldFarmEgg = getgenv().Config.FindKeepOutEgg or isHybridEggPhase
-                if shouldFarmEgg and isEgg and matchSpecificEgg and multiplier >= getgenv().Config.TargetEggMultiplier and bestRoomType < 4 then
-                    bestRoom = room
-                    bestRoomType = 4
-                    break
+                if isEgg then
+                    if shouldFarmEgg and matchSpecificEgg and multiplier >= getgenv().Config.TargetEggMultiplier then
+                        if bestRoomType < 4 then
+                            bestRoom = room
+                            bestRoomType = 4
+                            break
+                        end
+                    else
+                        -- Filtreyi (Çarpan veya Özel Yumurta Seçimini) geçemeyen bir yumurta odasıysa,
+                        -- Chunk Loader'ın bu odaya takılıp sonsuz döngüye girmemesi için "Gezildi" işaretle!
+                        VisitedRooms[roomUID] = true
+                    end
                 end
 
                 if isBossHuntPhase and isBoss and bestRoomType < 3 then
