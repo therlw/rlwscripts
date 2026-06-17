@@ -4,7 +4,6 @@ local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
--- Renk Teması (RLW Özel)
 local Theme = {
     MainBG = Color3.fromRGB(20, 20, 26),
     SidebarBG = Color3.fromRGB(15, 15, 20),
@@ -215,6 +214,19 @@ function RLW_Library:CreateWindow(options)
         tween(MainScale, {Scale = 1}, 0.4)
     end)
 
+    local NotifyContainer = Instance.new("Frame", RLWGui)
+    NotifyContainer.Name = "NotifyContainer"
+    NotifyContainer.BackgroundTransparency = 1
+    NotifyContainer.Size = UDim2.new(0, 300, 1, -60) -- Alttan 60px boşluk bıraktık (aşağıya yapışmasın)
+    NotifyContainer.Position = UDim2.new(1, -310, 0, 30) -- Sağ duvardan 10px boşluk (duvara yapışmasın)
+    NotifyContainer.ZIndex = 100
+    
+    local NotifyLayout = Instance.new("UIListLayout", NotifyContainer)
+    NotifyLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    NotifyLayout.Padding = UDim.new(0, 0)
+    NotifyLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+    NotifyLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+
     local Window = {
         CurrentTab = nil,
         Tabs = {},
@@ -260,6 +272,91 @@ function RLW_Library:CreateWindow(options)
                 end
             end
         end
+    end
+
+    function Window:Notify(opts)
+        opts = opts or {}
+        local duration = opts.Duration or 3
+        
+        -- Görünmez Taşıyıcı (Alan açmak için)
+        local WrapperFrame = Instance.new("Frame", NotifyContainer)
+        WrapperFrame.BackgroundTransparency = 1
+        WrapperFrame.Size = UDim2.new(1, 0, 0, 0)
+        WrapperFrame.ClipsDescendants = false
+
+        -- Asıl Bildirim Kutusu
+        local NotifFrame = Instance.new("Frame", WrapperFrame)
+        NotifFrame.Size = UDim2.new(0, 280, 0, 75)
+        NotifFrame.Position = UDim2.new(1, 50, 0, 5) -- Başlangıçta ekranın sağında gizli
+        NotifFrame.BackgroundColor3 = Theme.ElementBG
+        NotifFrame.ClipsDescendants = false -- Gölge kesilmesin diye false
+        Instance.new("UICorner", NotifFrame).CornerRadius = UDim.new(0, 6)
+        
+        local Shadow = Instance.new("ImageLabel", NotifFrame)
+        Shadow.BackgroundTransparency = 1
+        Shadow.Position = UDim2.new(0, -15, 0, -15)
+        Shadow.Size = UDim2.new(1, 30, 1, 30)
+        Shadow.ZIndex = -5
+        Shadow.Image = "rbxassetid://6015897733"
+        Shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+        Shadow.ImageTransparency = 0.5
+        Shadow.ScaleType = Enum.ScaleType.Slice
+        Shadow.SliceCenter = Rect.new(31, 31, 225, 225)
+
+        local NTitle = Instance.new("TextLabel", NotifFrame)
+        NTitle.BackgroundTransparency = 1
+        NTitle.Position = UDim2.new(0, 15, 0, 10)
+        NTitle.Size = UDim2.new(1, -30, 0, 20)
+        NTitle.Font = Enum.Font.Ubuntu
+        NTitle.Text = opts.Title or "Notification"
+        NTitle.TextColor3 = Theme.Accent
+        NTitle.TextSize = 16
+        NTitle.TextXAlignment = Enum.TextXAlignment.Left
+        
+        local NContent = Instance.new("TextLabel", NotifFrame)
+        NContent.BackgroundTransparency = 1
+        NContent.Position = UDim2.new(0, 15, 0, 30)
+        NContent.Size = UDim2.new(1, -30, 0, 35)
+        NContent.Font = Enum.Font.Ubuntu
+        NContent.Text = opts.Content or "..."
+        NContent.TextColor3 = Theme.Text
+        NContent.TextSize = 14
+        NContent.TextWrapped = true
+        NContent.TextXAlignment = Enum.TextXAlignment.Left
+        NContent.TextYAlignment = Enum.TextYAlignment.Top
+        
+        local BarBG = Instance.new("Frame", NotifFrame)
+        BarBG.Size = UDim2.new(1, -30, 0, 4)
+        BarBG.Position = UDim2.new(0, 15, 1, -12)
+        BarBG.BackgroundColor3 = Theme.SidebarBG
+        BarBG.BorderSizePixel = 0
+        Instance.new("UICorner", BarBG).CornerRadius = UDim.new(1, 0)
+        
+        local Bar = Instance.new("Frame", BarBG)
+        Bar.Size = UDim2.new(1, 0, 1, 0)
+        Bar.BackgroundColor3 = Theme.Accent
+        Bar.BorderSizePixel = 0
+        Instance.new("UICorner", Bar).CornerRadius = UDim.new(1, 0)
+        
+        -- 1. Animasyon: Önce listede yer açılır
+        tween(WrapperFrame, {Size = UDim2.new(1, 0, 0, 85)}, 0.25)
+        task.wait(0.1)
+        
+        -- 2. Animasyon: Bildirim sağdan sola doğru kayarak gelir
+        tween(NotifFrame, {Position = UDim2.new(0, 20, 0, 5)}, 0.4)
+        
+        -- Süre barı akar
+        tween(Bar, {Size = UDim2.new(0, 0, 1, 0)}, duration)
+        
+        task.delay(duration, function()
+            -- 3. Animasyon: Sağa doğru kayarak ekrandan çıkar
+            tween(NotifFrame, {Position = UDim2.new(1, 50, 0, 5)}, 0.4)
+            task.wait(0.3)
+            -- 4. Animasyon: Listede açılan yer kapanır
+            tween(WrapperFrame, {Size = UDim2.new(1, 0, 0, 0)}, 0.25)
+            task.wait(0.25)
+            pcall(function() WrapperFrame:Destroy() end)
+        end)
     end
 
     function Window:CreateTab(tabName)
