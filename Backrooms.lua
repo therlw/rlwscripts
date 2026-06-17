@@ -677,20 +677,47 @@ local function isEggAlive(room)
         return false
     end
     
-    -- 2. Fiziksel model kontrolü (Workspace.__THINGS.CustomEggs)
-    local eggUID = room:GetAttribute("EggUID")
-    if type(eggUID) == "string" then
-        local customEggs = workspace:FindFirstChild("__THINGS") and workspace.__THINGS:FindFirstChild("CustomEggs")
-        if customEggs then
-            local eggModel = customEggs:FindFirstChild(eggUID)
-            if not eggModel then
-                return false -- Model tamamen silinmiş
+    -- Streaming Check: Eğer oyuncu odaya çok uzaksa, Roblox modeli bellekten silmiş (unload) olabilir.
+    -- Bu yüzden uzaktayken model yok diye yumurtayı "kırıldı" sanmamalıyız.
+    local isNear = false
+    pcall(function()
+        local char = game.Players.LocalPlayer.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if root and (room:IsA("Model") or room:IsA("BasePart")) then
+            local dist = (root.Position - room:GetPivot().Position).Magnitude
+            if dist < 250 then
+                isNear = true
             end
-            
-            -- Odanın kabuğu (PriceFrame vs) kalmış ama yumurtanın kendisi (MeshPart) kırılıp silinmiş olabilir!
-            local actualEgg = eggModel:FindFirstChild("Egg") or eggModel:FindFirstChild("EggLock")
-            if not actualEgg then
-                return false -- Yumurta kırılmış/alınmış!
+        end
+    end)
+    
+    -- 2. Fiziksel model kontrolü (Workspace.__THINGS.CustomEggs)
+    -- YALNIZCA yakındaysak fiziksel modele güvenebiliriz.
+    if isNear then
+        local eggUID = room:GetAttribute("EggUID")
+        if type(eggUID) == "string" then
+            local customEggs = workspace:FindFirstChild("__THINGS") and workspace.__THINGS:FindFirstChild("CustomEggs")
+            if customEggs then
+                local eggModel = customEggs:FindFirstChild(eggUID)
+                if not eggModel then
+                    return false -- Yakınız ama model yok = Kırılmış/Silinmiş!
+                end
+                
+                -- Odanın kabuğu (PriceFrame vs) kalmış ama yumurtanın kendisi (MeshPart) kırılıp silinmiş olabilir!
+                local actualEgg = eggModel:FindFirstChild("Egg") or eggModel:FindFirstChild("EggLock")
+                if not actualEgg then
+                    -- Belki farklı bir isme sahiptir (TitanicEgg vs). İçinde herhangi bir part var mı diye bak.
+                    local hasPart = false
+                    for _, v in ipairs(eggModel:GetChildren()) do
+                        if v:IsA("BasePart") then
+                            hasPart = true
+                            break
+                        end
+                    end
+                    if not hasPart then
+                        return false -- Yumurta kırılmış/alınmış!
+                    end
+                end
             end
         end
     end
@@ -1120,9 +1147,15 @@ task.spawn(function()
                     if isHybridEggPhase then
                         local bossTimer = getgenv().SmartFarmState.BossRespawningUntil or 0
                         local remaining = bossTimer - timeNow
-                        -- ✅ remaining <= 8: boss doğmak üzere VEYA zaten doğdu (remaining < 0)
-                        -- bossTimer > 0 kontrolü: timer hiç set edilmemişse (-timeNow) yanlışlıkla çıkmasın
-                        if bossTimer > 0 and remaining <= 8 then
+                        
+                        -- Eğer bulduğumuz yumurta filtremize uyan nadir bir yumurtaysa, Boss dahi doğsa onu bırakma!
+                        local mult = tonumber(bestRoom:GetAttribute("EggMultiplier")) or 0
+                        local isPriorityEgg = mult >= getgenv().Config.TargetEggMultiplier
+                        
+                        if bossTimer > 0 and remaining <= 8 and not isPriorityEgg then
+                            if getgenv().RLW_Window then
+                                getgenv().RLW_Window:Notify({Title = "⚔️ Boss Time!", Content = "Leaving normal egg for Boss spawn!", Duration = 3})
+                            end
                             break
                         end
                     end
