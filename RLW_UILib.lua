@@ -778,6 +778,11 @@ function RLW_Library:CreateWindow(options)
                     DropdownFrame.Size = UDim2.new(1, -10, 0, 48 + listHeight)
                 end
                 refreshList()
+                if #options > 0 then
+                    current = tostring(options[1])
+                    SelectedText.Text = current
+                    if opts.Flag then Window.Flags[opts.Flag] = current end
+                end
             end
 
             local function refreshList()
