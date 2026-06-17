@@ -657,6 +657,28 @@ local function IsInBackroomsInstance()
     return false
 end
 
+local function isEggAlive(room)
+    -- 1. Süre kontrolü
+    local expireTime = room:GetAttribute("EggExpireTimestamp")
+    if type(expireTime) == "number" and workspace:GetServerTimeNow() > expireTime then
+        return false
+    end
+    
+    -- 2. Fiziksel model kontrolü (Workspace.__THINGS.CustomEggs)
+    local eggUID = room:GetAttribute("EggUID")
+    if type(eggUID) == "string" then
+        local customEggs = workspace:FindFirstChild("__THINGS") and workspace.__THINGS:FindFirstChild("CustomEggs")
+        if customEggs then
+            local eggModel = customEggs:FindFirstChild(eggUID)
+            if not eggModel then
+                return false -- Yumurta objesi artık yok (kırılmış veya süresi dolup silinmiş)
+            end
+        end
+    end
+    
+    return true
+end
+
 local function HandleInstanceEntry()
     if IsInBackroomsInstance() then return end
     if os.clock() - LastInstanceJoinAttempt < 60 then return end
@@ -774,8 +796,12 @@ task.spawn(function()
         if checkEggCache and getgenv().SmartFarmState.EggRoomUID then
             for _, room in ipairs(rooms) do
                 if room:GetAttribute("RoomUID") == getgenv().SmartFarmState.EggRoomUID then
-                    bestRoom = room
-                    bestRoomType = 4
+                    if isEggAlive(room) then
+                        bestRoom = room
+                        bestRoomType = 4
+                    else
+                        getgenv().SmartFarmState.EggRoomUID = nil -- Yumurta yok olmuş, cache'i temizle
+                    end
                     break
                 end
             end
@@ -789,6 +815,7 @@ task.spawn(function()
                 local lowerID = string.lower(roomID)
 
                 local isEgg = lowerID:find("keepout") or lowerID:find("hugeegg") or lowerID:find("titanicegg")
+                if isEgg and not isEggAlive(room) then isEgg = false end
                 
                 -- ARKA PLANDA YUMURTA ODASI KAYDET (Kullanıcı sonradan açarsa diye)
                 if isEgg and not getgenv().SmartFarmState.EggRoomUID then
@@ -796,6 +823,7 @@ task.spawn(function()
                 end
 
                 local isFreeEgg = lowerID:find("freeegg")
+                if isFreeEgg and not isEggAlive(room) then isFreeEgg = false end
                 local multiplier = isFreeEgg and tonumber(room:GetAttribute("EggMultiplier")) or 0
                 
                 local matchSpecificEgg = true
@@ -1460,7 +1488,7 @@ local RLW_Library = loadstring(game:HttpGet('https://raw.githubusercontent.com/t
 
 local Window = RLW_Library:CreateWindow({
     Title = "RLW",
-    Subtitle = "</> BACKROOMS EVENT",
+    Subtitle = "</> SCRIPTS",
     ConfigurationSaving = {
         Enabled = true,
         FolderName = "RLWSCRIPTS",
@@ -1471,6 +1499,7 @@ getgenv().RLW_Window = Window
 
 local TabAutoFarm = Window:CreateTab("⚔️ Auto Farm")
 local TabEggs = Window:CreateTab("🥚 Egg Hunter")
+local TabScanner = Window:CreateTab("📡 Scanner")
 local TabSettings = Window:CreateTab("⚙️ Settings")
 local TabUpgrades = Window:CreateTab("🆙 Upgrades")
 local TabWebhook = Window:CreateTab("🔔 Webhook")
@@ -1647,6 +1676,93 @@ TabWebhook:CreateButton({
         SendWebhook("✅ Webhook Test Successful!", "Your Webhook is working perfectly.\nYou will receive Huge and Titanic notifications here.", 0x00ff00)
         if getgenv().RLW_Window then
             getgenv().RLW_Window:Notify({Title = "Success", Content = "Test message sent to your Discord!", Duration = 3})
+        end
+    end
+})
+
+-- 📡 SCANNER TAB --
+TabScanner:CreateSection("Room Radar")
+
+local scannedRoomsList = {}
+local scannedRoomsMap = {}
+
+local ScannerDropdown = TabScanner:CreateDropdown({
+    Name = "Scanned Rooms (Click to TP)",
+    Options = {"[Waiting for scan...]"},
+    CurrentOption = {"[Waiting for scan...]"},
+    Flag = "Drp_ScannerList",
+    Callback = function(Option)
+        local optStr = Option[1]
+        if optStr == "[Waiting for scan...]" or optStr == "[No rooms found!]" then return end
+        
+        -- Extract UID
+        local uid = string.match(optStr, "UID: ([%w%-]+)")
+        if uid and scannedRoomsMap[uid] then
+            local targetRoom = scannedRoomsMap[uid]
+            if targetRoom and targetRoom.Parent then
+                safeTeleport(targetRoom, true)
+                if getgenv().RLW_Window then
+                    getgenv().RLW_Window:Notify({Title = "Teleported", Content = "Teleported to the selected room!", Duration = 3})
+                end
+            else
+                if getgenv().RLW_Window then
+                    getgenv().RLW_Window:Notify({Title = "Error", Content = "Room no longer exists (despawned)!", Duration = 3})
+                end
+            end
+        end
+    end,
+})
+
+TabScanner:CreateButton({
+    Name = "🔍 Scan All Rooms",
+    Callback = function()
+        scannedRoomsList = {}
+        scannedRoomsMap = {}
+        
+        local rooms = CollectionService:GetTagged("Backrooms")
+        for _, room in ipairs(rooms) do
+            local roomUID = room:GetAttribute("RoomUID")
+            local roomID = room:GetAttribute("RoomID") or "Unknown"
+            local lowerID = string.lower(roomID)
+            
+            if not roomUID then continue end
+            
+            -- Sadece Boss ve Yumurta odalarını göster (Breakable ve Vault'lar çok kalabalık yapar)
+            local isEgg = lowerID:find("keepout") or lowerID:find("hugeegg") or lowerID:find("titanicegg") or lowerID:find("freeegg")
+            local isBoss = lowerID:find("boss") or lowerID:find("minichest")
+            
+            if isEgg or isBoss then
+                local label = roomID
+                
+                if isEgg then
+                    if not isEggAlive(room) then
+                        label = "💀 [DEAD] " .. label
+                    else
+                        local eggType = room:GetAttribute("EggType") or room:GetAttribute("EggName")
+                        if eggType then label = label .. " (" .. tostring(eggType) .. ")" end
+                        
+                        local multiplier = room:GetAttribute("EggMultiplier")
+                        if multiplier then label = "[" .. tostring(multiplier) .. "x] " .. label end
+                    end
+                elseif isBoss then
+                    label = "👹 " .. label
+                end
+                
+                label = label .. " (UID: " .. roomUID .. ")"
+                table.insert(scannedRoomsList, label)
+                scannedRoomsMap[roomUID] = room
+            end
+        end
+        
+        if #scannedRoomsList == 0 then
+            table.insert(scannedRoomsList, "[No rooms found!]")
+        end
+        
+        if Window.Elements["Drp_ScannerList"] and Window.Elements["Drp_ScannerList"].RefreshOptions then
+            Window.Elements["Drp_ScannerList"]:RefreshOptions(scannedRoomsList)
+            if getgenv().RLW_Window then
+                getgenv().RLW_Window:Notify({Title = "Scan Complete", Content = "Found " .. tostring(#scannedRoomsList) .. " interesting rooms!", Duration = 3})
+            end
         end
     end
 })
