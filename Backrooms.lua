@@ -694,11 +694,7 @@ local function isEggAlive(room)
     -- 2. Fiziksel model kontrolü (Workspace.__THINGS.CustomEggs)
     -- YALNIZCA yakındaysak fiziksel modele güvenebiliriz.
     if isNear then
-        -- Eğer kapı hala kilitliyse, sunucu yumurtayı fiziksel olarak spawnlamamış demektir.
-        -- Bu durumda yumurta kesinlikle içeride yaşıyor kabul edilmeli!
-        if room:FindFirstChild("LockedDoors") then
-            return true
-        end
+        getgenv()._EggSpawnWaitTime = getgenv()._EggSpawnWaitTime or {}
         
         local eggUID = room:GetAttribute("EggUID")
         if type(eggUID) == "string" then
@@ -706,8 +702,17 @@ local function isEggAlive(room)
             if customEggs then
                 local eggModel = customEggs:FindFirstChild(eggUID)
                 if not eggModel then
-                    return false -- Yakınız ama model yok = Kırılmış/Silinmiş!
+                    if not getgenv()._EggSpawnWaitTime[eggUID] then
+                        getgenv()._EggSpawnWaitTime[eggUID] = os.clock()
+                        return true
+                    end
+                    if os.clock() - getgenv()._EggSpawnWaitTime[eggUID] < 10 then
+                        return true -- 10 saniye boyunca yüklenmesi için zaman tanı
+                    end
+                    return false -- Yakınız ama model 10 saniye boyunca yok = Kırılmış/Silinmiş!
                 end
+                
+                getgenv()._EggSpawnWaitTime[eggUID] = nil -- Model var, sayacı sıfırla
                 
                 -- Odanın kabuğu (PriceFrame vs) kalmış ama yumurtanın kendisi (MeshPart) kırılıp silinmiş olabilir!
                 local actualEgg = eggModel:FindFirstChild("Egg") or eggModel:FindFirstChild("EggLock")
@@ -1758,7 +1763,7 @@ TabEggs:CreateToggle({
 TabEggs:CreateSection("Phase 2: Hybrid Egg (Optional)")
 
 TabEggs:CreateToggle({
-    Name = "🥚 Auto Keep Out Egg (Hybrid Mode)",
+    Name = "🥚 Auto Titanic Egg (Keep Out)",
     CurrentValue = false,
     Flag = "Tgl_KeepOutEgg",
     Callback = function(Value)
