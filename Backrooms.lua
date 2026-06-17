@@ -16,6 +16,8 @@ getgenv().Config = {
     FindFreeEggRoom = false,
     TargetEggType = "Any",
     TargetEggMultiplier = 50,
+    TargetKeepOutMultiplier = 50,
+    AutoHatchNearest = false,
     AutoLoot = false,
     GodMode = false,
     TeleportDelay = 0.8,
@@ -664,8 +666,8 @@ local function HandleInstanceEntry()
     getgenv().SmartFarmState.BossRoomUID = nil
     getgenv().SmartFarmState.BossRespawningUntil = 0
     
-    if Rayfield then
-        Rayfield:Notify({Title = "🚀 Backrooms", Content = "Backrooms'a otomatik giriş yapılıyor...", Duration = 5})
+    if getgenv().RLW_Window then
+        getgenv().RLW_Window:Notify({Title = "🚀 Backrooms", Content = "Auto-joining Backrooms...", Duration = 5})
     end
 
     pcall(function()
@@ -717,8 +719,8 @@ task.spawn(function()
                 end
                 
                 if foundBossRoom then
-                    if Rayfield then
-                        Rayfield:Notify({Title = "⚡ Geri Dönüş!", Content = "Boss doğmak üzere, savaşa dönülüyor!", Duration = 3})
+                    if getgenv().RLW_Window then
+                        getgenv().RLW_Window:Notify({Title = "⚡ Returning!", Content = "Boss is about to spawn, returning to battle!", Duration = 3})
                     end
                     safeTeleport(foundBossRoom, true)
                     task.wait(2)
@@ -866,8 +868,8 @@ task.spawn(function()
 
             elseif bestRoomType == 5 then
                 local mult = bestRoom:GetAttribute("EggMultiplier") or "Bilinmeyen"
-                if Rayfield then
-                    Rayfield:Notify({Title = "🎁 Free Egg Room!", Content = mult .. "x Huge Chance odası bulundu! Kırılıyor...", Duration = 10, Image = 4483362458})
+                if getgenv().RLW_Window then
+                    getgenv().RLW_Window:Notify({Title = "🎁 Free Egg Room!", Content = mult .. "x Huge Chance room found! Hatching...", Duration = 10, Image = 4483362458})
                 end
 
                 -- Yumurta açılış animasyonunu kapat
@@ -973,11 +975,11 @@ task.spawn(function()
                 end
                 
                 local Network3 = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
-                if Rayfield then
+                if getgenv().RLW_Window then
                     if isHybridEggPhase then
-                        Rayfield:Notify({Title = "🥚 Hibrit Egg Farm!", Content = "Boss doğana kadar yumurta açılıyor...", Duration = 4})
+                        getgenv().RLW_Window:Notify({Title = "🥚 Hybrid Egg Farm!", Content = "Hatching eggs until Boss spawns...", Duration = 4})
                     else
-                        Rayfield:Notify({Title = "🥚 Gizli Yumurta!", Content = roomID .. " bulundu! Kırılıyor...", Duration = 4})
+                        getgenv().RLW_Window:Notify({Title = "🥚 Secret Egg!", Content = roomID .. " found! Hatching...", Duration = 4})
                     end
                 end
                 
@@ -1098,16 +1100,16 @@ task.spawn(function()
                 local hasBoss = bestRoom:GetAttribute("BossChestUID") or bestRoom:GetAttribute("ActiveMinichests")
 
                 if isAlreadyOpen and hasBoss then
-                    -- Kapı zaten açık! Anahtar harcamadan kamp kur.
-                    if Rayfield then
-                        Rayfield:Notify({
-                            Title = "🎯 Açık Boss Odası!",
-                            Content = "Kapı zaten açık, anahtar harcanmadı! Kamp kuruluyor...",
+                    -- Door is already open! Camping without spending a key.
+                    if getgenv().RLW_Window then
+                        getgenv().RLW_Window:Notify({
+                            Title = "🎯 Open Boss Room!",
+                            Content = "Door is already open, no keys spent! Camping...",
                             Duration = 6
                         })
                     end
                 elseif bestRoom:FindFirstChild("LockedDoors") then
-                    -- Kapı kapalı, anahtar harca.
+                    -- Door closed, spend key.
                     local Network2 = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
                     local fireCustom2 = Network2 and Network2:FindFirstChild("Instancing_FireCustomFromClient")
                     if fireCustom2 then
@@ -1130,8 +1132,8 @@ task.spawn(function()
                         
                         -- HİBRİT KONTROL: Eğer doğmasına 15 saniyeden fazla varsa odadan ayrıl ve yumurta ara!
                         if remaining > 15 and getgenv().Config.FindKeepOutEgg then
-                            if Rayfield then
-                                Rayfield:Notify({Title = "🚀 Hibrit Mod Aktif!", Content = "Boss beklenirken yumurta farmına geçiliyor...", Duration = 5})
+                            if getgenv().RLW_Window then
+                                getgenv().RLW_Window:Notify({Title = "🚀 Hybrid Mode Active!", Content = "Farming eggs while waiting for Boss...", Duration = 5})
                             end
                             getgenv().SmartFarmState.BossRespawningUntil = respawnTs
                             getgenv().SmartFarmState.BossRoomUID = roomUID
@@ -1142,8 +1144,8 @@ task.spawn(function()
                         if not isWaitingRespawn then
                             isWaitingRespawn = true
                             notifiedRespawn = false
-                            if Rayfield then
-                                Rayfield:Notify({Title = "⏳ Boss Öldü!", Content = "Yeniden doğma: " .. remaining .. " saniye. Bekliyoruz...", Duration = 5})
+                            if getgenv().RLW_Window then
+                                getgenv().RLW_Window:Notify({Title = "⏳ Boss Dead!", Content = "Respawning in " .. remaining .. " seconds. Waiting...", Duration = 5})
                             end
                         end
                         local waitTime = math.max(respawnTs - workspace:GetServerTimeNow() - 1, 0)
@@ -1152,8 +1154,8 @@ task.spawn(function()
                         if isWaitingRespawn and not notifiedRespawn then
                             notifiedRespawn = true
                             isWaitingRespawn = false
-                            if Rayfield then
-                                Rayfield:Notify({Title = "⚔️ Boss Geri Döndü!", Content = "Saldırı başlıyor...", Duration = 3})
+                            if getgenv().RLW_Window then
+                                getgenv().RLW_Window:Notify({Title = "⚔️ Boss Respawned!", Content = "Attacking...", Duration = 3})
                             end
                         end
                     end
@@ -1402,47 +1404,123 @@ task.spawn(function()
 end)
 
 -- ==========================
--- 🎨 RAYFIELD UI
+-- 🥚 AUTO HATCH NEAREST LOOP
 -- ==========================
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+task.spawn(function()
+    local CustomEggsCmds = nil
+    pcall(function() CustomEggsCmds = require(game:GetService("ReplicatedStorage").Library.Client.CustomEggsCmds) end)
+    
+    local Network = game:GetService("ReplicatedStorage"):WaitForChild("Network")
+    local customHatchRemote = Network:WaitForChild("CustomEggs_Hatch", 5)
 
-local Window = Rayfield:CreateWindow({
-    Name = "RLWSCRIPTS Event Script (Backrooms!)",
-    LoadingTitle = "RLWSCRIPTS Event Script (Backrooms!)",
-    LoadingSubtitle = "by RLW",
+    while task.wait(1) do
+        if getgenv().Config.AutoHatchNearest and customHatchRemote and CustomEggsCmds then
+            local root = getRootPart()
+            if not root then continue end
+            
+            local customUid = nil
+            local closestDist = 99999
+            
+            for uid, eggObj in pairs(CustomEggsCmds.All()) do
+                if eggObj._position then
+                    local dist = (root.Position - eggObj._position).Magnitude
+                    if dist < closestDist then
+                        closestDist = dist
+                        customUid = uid
+                    end
+                end
+            end
+            
+            if customUid then
+                -- Yumurta animasyonunu kapat
+                pcall(function()
+                    local fe = getsenv(LocalPlayer.PlayerScripts.Scripts.Game["Egg Opening Frontend"])
+                    if fe and fe.PlayEggAnimation then fe.PlayEggAnimation = function() end end
+                end)
+
+                local maxHatch = 1
+                pcall(function() maxHatch = require(game:GetService("ReplicatedStorage").Library.Client.EggCmds).GetMaxHatch() or 1 end)
+                
+                task.spawn(function()
+                    if customHatchRemote:IsA("RemoteEvent") then
+                        customHatchRemote:FireServer(customUid, maxHatch)
+                    else
+                        pcall(function() customHatchRemote:InvokeServer(customUid, maxHatch) end)
+                    end
+                end)
+            end
+        end
+    end
+end)
+
+-- ==========================
+-- 🎨 RLW UI
+-- ==========================
+local RLW_Library = loadstring(game:HttpGet('https://raw.githubusercontent.com/therlw/rlwscripts/refs/heads/main/RLW_UILib.lua'))()
+
+local Window = RLW_Library:CreateWindow({
+    Title = "RLW",
+    Subtitle = "</> BACKROOMS EVENT",
     ConfigurationSaving = {
         Enabled = true,
         FolderName = "RLWSCRIPTS",
         FileName = "BackroomsConfig"
     }
 })
+getgenv().RLW_Window = Window
 
-local TabMain = Window:CreateTab("🔥 Meta Farm", 4483362458)
+local TabAutoFarm = Window:CreateTab("⚔️ Auto Farm")
+local TabEggs = Window:CreateTab("🥚 Egg Hunter")
+local TabSettings = Window:CreateTab("⚙️ Settings")
+local TabUpgrades = Window:CreateTab("🆙 Upgrades")
+local TabWebhook = Window:CreateTab("🔔 Webhook")
 
-TabMain:CreateSection("Phase 1: Smart Loop (Meta)")
+-- ⚔️ AUTO FARM TAB --
+TabAutoFarm:CreateSection("Phase 1: Smart Loop (Meta)")
 
-Toggle_MetaFarm = TabMain:CreateToggle({
+TabAutoFarm:CreateToggle({
     Name = "Start Boss Farming",
     CurrentValue = false,
     Flag = "Tgl_MetaFarm",
     Callback = function(Value)
         getgenv().Config.MetaFarmActive = Value
-        if Value then
-            Rayfield:Notify({Title = "Boss Farming", Content = "Farming keys, then hunting Boss!", Duration = 5})
+        if Value and getgenv().RLW_Window then
+            getgenv().RLW_Window:Notify({Title = "Boss Farming", Content = "Farming keys, then hunting Boss!", Duration = 5})
         end
     end
 })
 
-TabMain:CreateSlider({
+TabAutoFarm:CreateSlider({
     Name = "Target Key Count (For Boss)",
-    Range = {1, 100}, Increment = 1, Suffix = " Keys", CurrentValue = 5,
+    Range = {1, 100}, 
+    CurrentValue = 5,
     Flag = "Sld_TargetKeys",
     Callback = function(Value) getgenv().Config.TargetKeyCount = Value end
 })
 
-TabMain:CreateSection("Phase 2: Hybrid Egg (Optional)")
+TabAutoFarm:CreateToggle({
+    Name = "Auto Loot Chests/Rewards",
+    CurrentValue = false,
+    Flag = "Tgl_AutoLoot",
+    Callback = function(Value) getgenv().Config.AutoLoot = Value end
+})
 
-Toggle_KeepOutEgg = TabMain:CreateToggle({
+
+-- 🥚 EGG HUNTER TAB --
+TabEggs:CreateSection("Auto Hatch (No Teleport)")
+
+TabEggs:CreateToggle({
+    Name = "🥚 Auto Hatch Nearest Egg",
+    CurrentValue = false,
+    Flag = "Tgl_AutoHatchNearest",
+    Callback = function(Value)
+        getgenv().Config.AutoHatchNearest = Value
+    end
+})
+
+TabEggs:CreateSection("Phase 2: Hybrid Egg (Optional)")
+
+TabEggs:CreateToggle({
     Name = "🥚 Auto Keep Out Egg (Hybrid Mode)",
     CurrentValue = false,
     Flag = "Tgl_KeepOutEgg",
@@ -1451,7 +1529,7 @@ Toggle_KeepOutEgg = TabMain:CreateToggle({
     end
 })
 
-Toggle_FreeEgg = TabMain:CreateToggle({
+TabEggs:CreateToggle({
     Name = "🎁 Find Free Egg Room",
     CurrentValue = false,
     Flag = "Tgl_FreeEgg",
@@ -1460,22 +1538,20 @@ Toggle_FreeEgg = TabMain:CreateToggle({
     end
 })
 
-TabMain:CreateDropdown({
+TabEggs:CreateDropdown({
     Name = "🥚 Target Specific Egg",
     Options = {"Any", "Nightmare", "Smile", "Flower", "Gooey", "Scribble", "Tentacles", "Keep Out", "Night Terror", "Fear", "Swirl", "Overgrown", "Ender", "Corrupt", "Titanic", "Huge"},
     CurrentOption = {"Any"},
-    MultipleOptions = false,
     Flag = "Drp_SpecificEgg",
     Callback = function(Option)
         getgenv().Config.TargetEggType = Option[1]
     end,
 })
 
-TabMain:CreateDropdown({
+TabEggs:CreateDropdown({
     Name = "🎯 Target Egg Multiplier",
     Options = {"2x", "3x", "5x", "10x", "15x", "20x", "50x", "100x"},
     CurrentOption = {"50x"},
-    MultipleOptions = false,
     Flag = "Drp_Multiplier",
     Callback = function(Option)
         local val = string.gsub(Option[1], "x", "")
@@ -1483,36 +1559,25 @@ TabMain:CreateDropdown({
     end,
 })
 
-TabMain:CreateSection("Phase 3: Speed & Safety Settings")
+-- ⚙️ SETTINGS TAB --
+TabSettings:CreateSection("Speed & Safety Settings")
 
-TabMain:CreateToggle({
-    Name = "Auto Loot Chests/Rewards",
-    CurrentValue = false,
-    Flag = "Tgl_AutoLoot",
-    Callback = function(Value) getgenv().Config.AutoLoot = Value end
-})
-
-TabMain:CreateSlider({
+TabSettings:CreateSlider({
     Name = "Teleport Delay (Speed)",
-    Range = {0.1, 3}, Increment = 0.1, Suffix = "s", CurrentValue = 0.8,
+    Range = {0, 3},
+    CurrentValue = 0,
     Flag = "Sld_Teleport",
     Callback = function(Value) getgenv().Config.TeleportDelay = Value end
 })
 
-TabMain:CreateToggle({
+TabSettings:CreateToggle({
     Name = "God Mode (Invincibility)",
     CurrentValue = false,
     Flag = "Tgl_GodMode",
     Callback = function(Value) getgenv().Config.GodMode = Value end
 })
 
-TabMain:CreateButton({
-    Name = "Close Interface",
-    Callback = function() Rayfield:Destroy() end
-})
-
-local TabUpgrades = Window:CreateTab("⚙️ Auto Upgrades", 4483362458)
-
+-- 🆙 UPGRADES TAB --
 TabUpgrades:CreateSection("Backrooms Upgrades (Tokens)")
 
 TabUpgrades:CreateToggle({
@@ -1541,8 +1606,8 @@ TabUpgrades:CreateToggle({
         getgenv().Config.AutoUpgrades.BackroomsTokenFind = Value
     end
 })
-local TabWebhook = Window:CreateTab("🔔 Webhook", 4483362458)
 
+-- 🔔 WEBHOOK TAB --
 TabWebhook:CreateSection("Discord Notifications (Huge/Titanic)")
 
 TabWebhook:CreateToggle({
@@ -1568,16 +1633,22 @@ TabWebhook:CreateButton({
     Name = "Test Webhook",
     Callback = function()
         if not getgenv().Config.WebhookEnabled then
-            Rayfield:Notify({Title = "Error", Content = "Please enable the Webhook toggle first!", Duration = 3})
+            if getgenv().RLW_Window then
+                getgenv().RLW_Window:Notify({Title = "Error", Content = "Please enable the Webhook toggle first!", Duration = 3})
+            end
             return
         end
         if getgenv().Config.WebhookURL == "" then
-            Rayfield:Notify({Title = "Error", Content = "Please enter a valid Webhook URL!", Duration = 3})
+            if getgenv().RLW_Window then
+                getgenv().RLW_Window:Notify({Title = "Error", Content = "Please enter a valid Webhook URL!", Duration = 3})
+            end
             return
         end
         SendWebhook("✅ Webhook Test Successful!", "Your Webhook is working perfectly.\nYou will receive Huge and Titanic notifications here.", 0x00ff00)
-        Rayfield:Notify({Title = "Success", Content = "Test message sent to your Discord!", Duration = 3})
+        if getgenv().RLW_Window then
+            getgenv().RLW_Window:Notify({Title = "Success", Content = "Test message sent to your Discord!", Duration = 3})
+        end
     end
 })
 
-Rayfield:LoadConfiguration()
+Window:LoadConfiguration()
