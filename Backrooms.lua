@@ -1345,22 +1345,58 @@ task.spawn(function()
         local roomData = sortedRooms[1]
         local room = roomData.Room
         local roomUID = roomData.UID
+        -- PARADOX FİX 2: Odanın merkezine zıplamak, devasa odalarda sunucunun (server) yeni odaları yüklemesi için
+        -- gereken yakınlık (proximity) şartını sağlamayabilir. Bu yüzden karakteri odanın tüm sınır hatlarına sürtüyoruz.
+        local edgeParts = {}
+        local namesToFind = {"door", "exit", "entrance", "portal", "hallway", "corridor"}
+        for _, part in ipairs(room:GetDescendants()) do
+            if part:IsA("BasePart") then
+                local pName = string.lower(part.Name)
+                for _, n in ipairs(namesToFind) do
+                    if pName:find(n) then
+                        table.insert(edgeParts, part)
+                        break
+                    end
+                end
+            end
+        end
+        
+        if #edgeParts > 0 then
+            -- Bulunan çıkış noktalarına mikro ışınlanma yap (Max 5 nokta)
+            for i = 1, math.min(5, #edgeParts) do
+                safeTeleport(edgeParts[i], true)
+                task.wait(0.15)
+            end
+        elseif room:IsA("Model") then
+            -- Eğer belirgin bir çıkış noktası yoksa odanın 4 köşesine (sınırlarına) zıpla
+            local pivot = room:GetPivot()
+            local size = room:GetExtentsSize()
+            local halfX, halfZ = size.X / 2, size.Z / 2
+            
+            local offsets = {
+                Vector3.new(halfX, 0, 0),
+                Vector3.new(-halfX, 0, 0),
+                Vector3.new(0, 0, halfZ),
+                Vector3.new(0, 0, -halfZ)
+            }
+            
+            for _, offset in ipairs(offsets) do
+                local root = getRootPart()
+                if root then
+                    root.CFrame = pivot * CFrame.new(offset)
+                    task.wait(0.15)
+                end
+            end
+        end
+        
+        -- Oda taramasına devam etmek için merkeze geri dön
+        safeTeleport(room, isSearchingOnly)
+
         local roomID = room:GetAttribute("RoomID") or ""
         local lowerID = string.lower(roomID)
 
         -- print(string.format("[ARAMA] Harita Genişletiliyor -> Oda: %s | Mesafe: %d", roomID, math.floor(roomData.Dist)))
 
-        safeTeleport(room, isSearchingOnly)
-        task.wait(isSearchingOnly and 0.15 or getgenv().Config.TeleportDelay)
-
-        -- PARADOX FİX 2: Odanın merkezine zıplamak, devasa odalarda sunucunun (server) yeni odaları yüklemesi için
-        -- gereken yakınlık (proximity) şartını sağlamayabilir. Bu yüzden karakteri odanın tüm kapılarına (uç noktalara)
-        -- sürtüyoruz ki oyun yeni odaları Stream etsin!
-        if room:FindFirstChild("LockedDoors") then
-            for _, door in ipairs(room.LockedDoors:GetChildren()) do
-                if door:IsA("Model") or door:IsA("BasePart") then
-                    safeTeleport(door, true)
-                    task.wait(0.2) -- Odanın yüklenmesi için süreyi uzattık
                 end
             end
         end
