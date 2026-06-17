@@ -1460,7 +1460,7 @@ local RLW_Library = loadstring(game:HttpGet('https://raw.githubusercontent.com/t
 
 local Window = RLW_Library:CreateWindow({
     Title = "RLW",
-    Subtitle = "</> SCRIPTS",
+    Subtitle = "</> BACKROOMS EVENT",
     ConfigurationSaving = {
         Enabled = true,
         FolderName = "RLWSCRIPTS",
