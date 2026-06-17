@@ -1395,11 +1395,6 @@ task.spawn(function()
         local roomID = room:GetAttribute("RoomID") or ""
         local lowerID = string.lower(roomID)
 
-        -- print(string.format("[ARAMA] Harita Genişletiliyor -> Oda: %s | Mesafe: %d", roomID, math.floor(roomData.Dist)))
-
-                end
-            end
-        end
 
         local Network = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
         local fireCustom = Network and Network:FindFirstChild("Instancing_FireCustomFromClient")
