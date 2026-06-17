@@ -204,32 +204,40 @@ function RLW_Library:CreateWindow(options)
 
     -- Open/Close Animation Logic
     local uiVisible = true
+    local isAnimating = false -- Prevents double-click race conditions
 
     CloseBtn.MouseEnter:Connect(function() tween(CloseBtn, {TextColor3 = Color3.fromRGB(255, 75, 75)}, 0.2) end)
     CloseBtn.MouseLeave:Connect(function() tween(CloseBtn, {TextColor3 = Theme.TextDark}, 0.2) end)
 
     CloseBtn.MouseButton1Click:Connect(function()
-        if not uiVisible then return end
+        if not uiVisible or isAnimating then return end
+        isAnimating = true
         uiVisible = false
-        tween(MainScale, {Scale = 0}, 0.35)
-        task.wait(0.35)
+        tween(MainScale, {Scale = 0}, 0.3)
+        task.wait(0.3)
         MainFrame.Visible = false
         OpenBtn.Visible = true
         OpenBtn.Position = UDim2.new(0.5, -60, 0, openBtnHideY)
-        tween(OpenBtn, {Position = UDim2.new(0.5, -60, 0, openBtnY)}, 0.4)
+        tween(OpenBtn, {Position = UDim2.new(0.5, -60, 0, openBtnY)}, 0.35)
+        task.wait(0.35)
+        isAnimating = false
     end)
 
     OpenBtn.MouseEnter:Connect(function() tween(OpenBtn, {Size = UDim2.new(0, 126, 0, 38), Position = UDim2.new(0.5, -63, 0, openBtnY - 2)}, 0.2) end)
     OpenBtn.MouseLeave:Connect(function() tween(OpenBtn, {Size = UDim2.new(0, 120, 0, 35), Position = UDim2.new(0.5, -60, 0, openBtnY)}, 0.2) end)
 
     OpenBtn.MouseButton1Click:Connect(function()
-        if uiVisible then return end
+        if uiVisible or isAnimating then return end
+        isAnimating = true
         uiVisible = true
-        tween(OpenBtn, {Position = UDim2.new(0.5, -60, 0, openBtnHideY)}, 0.3)
-        task.wait(0.3)
+        tween(OpenBtn, {Position = UDim2.new(0.5, -60, 0, openBtnHideY)}, 0.25)
+        task.wait(0.25)
         OpenBtn.Visible = false
         MainFrame.Visible = true
-        tween(MainScale, {Scale = currentScale}, 0.4)
+        MainScale.Scale = 0 -- Start from zero so the open animation is always smooth
+        tween(MainScale, {Scale = currentScale}, 0.35)
+        task.wait(0.35)
+        isAnimating = false
     end)
 
     local NotifyContainer = Instance.new("Frame", RLWGui)
@@ -413,8 +421,8 @@ function RLW_Library:CreateWindow(options)
             
             TabPage.Visible = true
             -- Yumuşak sayfa geçişi için basit bir "pop" efekti (opsiyonel ama şık durur)
-            TabPage.Position = UDim2.new(0, 10, 0, 0)
-            tween(TabPage, {Position = UDim2.new(0, 0, 0, 0)}, 0.4)
+            TabPage.GroupTransparency = 1
+            tween(TabPage, {GroupTransparency = 0}, 0.3)
 
             tween(TabBtn, {BackgroundColor3 = Theme.Accent, TextColor3 = Theme.Text}, 0.35)
             Window.CurrentTab = tabName
@@ -440,6 +448,9 @@ function RLW_Library:CreateWindow(options)
             ToggleFrame.Text = ""
             ToggleFrame.AutoButtonColor = false
             Instance.new("UICorner", ToggleFrame).CornerRadius = UDim.new(0, 6)
+
+            ToggleFrame.MouseEnter:Connect(function() tween(ToggleFrame, {BackgroundColor3 = Theme.ElementHover}, 0.2) end)
+            ToggleFrame.MouseLeave:Connect(function() tween(ToggleFrame, {BackgroundColor3 = Theme.ElementBG}, 0.2) end)
 
             local Title = Instance.new("TextLabel", ToggleFrame)
             Title.BackgroundTransparency = 1
@@ -569,9 +580,19 @@ function RLW_Library:CreateWindow(options)
             end
 
             local dragging = false
+            
+            local function updateSliderFromInput(input)
+                local p = math.clamp((input.Position.X - Track.AbsolutePosition.X) / Track.AbsoluteSize.X, 0, 1)
+                local scaled = math.floor(min + (max - min) * p)
+                if val ~= scaled then
+                    Element:Set(scaled)
+                end
+            end
+            
             Track.InputBegan:Connect(function(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                     dragging = true
+                    updateSliderFromInput(input) -- Instantly set value on first click/tap
                 end
             end)
             UserInputService.InputEnded:Connect(function(input)
@@ -581,11 +602,7 @@ function RLW_Library:CreateWindow(options)
             end)
             UserInputService.InputChanged:Connect(function(input)
                 if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-                    local p = math.clamp((input.Position.X - Track.AbsolutePosition.X) / Track.AbsoluteSize.X, 0, 1)
-                    local scaled = math.floor(min + (max - min) * p)
-                    if val ~= scaled then
-                        Element:Set(scaled)
-                    end
+                    updateSliderFromInput(input)
                 end
             end)
             
