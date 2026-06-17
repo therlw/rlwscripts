@@ -799,7 +799,8 @@ function RLW_Library:CreateWindow(options)
                         DropdownFrame.Size = UDim2.new(1, -10, 0, 40)
                     end)
                 end
-                ListContainer.CanvasSize = UDim2.new(0, 0, 0, ListLayout.AbsoluteContentSize.Y + 5)
+                -- Manual CanvasSize since AbsoluteContentSize is 0 when invisible
+                ListContainer.CanvasSize = UDim2.new(0, 0, 0, #options * 32)
             end
             refreshList()
             
@@ -810,6 +811,7 @@ function RLW_Library:CreateWindow(options)
                     ArrowLabel.Text = "▲"
                     Sep.Visible = true
                     ListContainer.Visible = true
+                    ListContainer.CanvasSize = UDim2.new(0, 0, 0, #options * 32)
                     DropdownFrame.Size = UDim2.new(1, -10, 0, totalHeight)
                 else
                     ArrowLabel.Text = "▼"
