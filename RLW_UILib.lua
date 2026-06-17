@@ -412,14 +412,14 @@ function RLW_Library:CreateWindow(options)
         TabPage.ScrollBarImageColor3 = Theme.Accent
         TabPage.BorderSizePixel = 0
         TabPage.Visible = false
+        TabPage.AutomaticCanvasSize = Enum.AutomaticSize.Y
 
         local PageLayout = Instance.new("UIListLayout", TabPage)
         PageLayout.SortOrder = Enum.SortOrder.LayoutOrder
         PageLayout.Padding = UDim.new(0, 8)
-
-        PageLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-            TabPage.CanvasSize = UDim2.new(0, 0, 0, PageLayout.AbsoluteContentSize.Y + 10)
-        end)
+        
+        local PagePadding = Instance.new("UIPadding", TabPage)
+        PagePadding.PaddingBottom = UDim.new(0, 15)
 
         TabBtn.MouseButton1Click:Connect(function()
             if Window.CurrentTab == tabName then return end
