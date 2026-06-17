@@ -667,7 +667,7 @@ local function HandleInstanceEntry()
     getgenv().SmartFarmState.BossRespawningUntil = 0
     
     if getgenv().RLW_Window then
-        getgenv().RLW_Window:Notify({Title = "🚀 Backrooms", Content = "Backrooms'a otomatik giriş yapılıyor...", Duration = 5})
+        getgenv().RLW_Window:Notify({Title = "🚀 Backrooms", Content = "Auto-joining Backrooms...", Duration = 5})
     end
 
     pcall(function()
@@ -720,7 +720,7 @@ task.spawn(function()
                 
                 if foundBossRoom then
                     if getgenv().RLW_Window then
-                        getgenv().RLW_Window:Notify({Title = "⚡ Geri Dönüş!", Content = "Boss doğmak üzere, savaşa dönülüyor!", Duration = 3})
+                        getgenv().RLW_Window:Notify({Title = "⚡ Returning!", Content = "Boss is about to spawn, returning to battle!", Duration = 3})
                     end
                     safeTeleport(foundBossRoom, true)
                     task.wait(2)
@@ -869,7 +869,7 @@ task.spawn(function()
             elseif bestRoomType == 5 then
                 local mult = bestRoom:GetAttribute("EggMultiplier") or "Bilinmeyen"
                 if getgenv().RLW_Window then
-                    getgenv().RLW_Window:Notify({Title = "🎁 Free Egg Room!", Content = mult .. "x Huge Chance odası bulundu! Kırılıyor...", Duration = 10, Image = 4483362458})
+                    getgenv().RLW_Window:Notify({Title = "🎁 Free Egg Room!", Content = mult .. "x Huge Chance room found! Hatching...", Duration = 10, Image = 4483362458})
                 end
 
                 -- Yumurta açılış animasyonunu kapat
@@ -977,9 +977,9 @@ task.spawn(function()
                 local Network3 = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
                 if getgenv().RLW_Window then
                     if isHybridEggPhase then
-                        getgenv().RLW_Window:Notify({Title = "🥚 Hibrit Egg Farm!", Content = "Boss doğana kadar yumurta açılıyor...", Duration = 4})
+                        getgenv().RLW_Window:Notify({Title = "🥚 Hybrid Egg Farm!", Content = "Hatching eggs until Boss spawns...", Duration = 4})
                     else
-                        getgenv().RLW_Window:Notify({Title = "🥚 Gizli Yumurta!", Content = roomID .. " bulundu! Kırılıyor...", Duration = 4})
+                        getgenv().RLW_Window:Notify({Title = "🥚 Secret Egg!", Content = roomID .. " found! Hatching...", Duration = 4})
                     end
                 end
                 
@@ -1100,16 +1100,16 @@ task.spawn(function()
                 local hasBoss = bestRoom:GetAttribute("BossChestUID") or bestRoom:GetAttribute("ActiveMinichests")
 
                 if isAlreadyOpen and hasBoss then
-                    -- Kapı zaten açık! Anahtar harcamadan kamp kur.
+                    -- Door is already open! Camping without spending a key.
                     if getgenv().RLW_Window then
                         getgenv().RLW_Window:Notify({
-                            Title = "🎯 Açık Boss Odası!",
-                            Content = "Kapı zaten açık, anahtar harcanmadı! Kamp kuruluyor...",
+                            Title = "🎯 Open Boss Room!",
+                            Content = "Door is already open, no keys spent! Camping...",
                             Duration = 6
                         })
                     end
                 elseif bestRoom:FindFirstChild("LockedDoors") then
-                    -- Kapı kapalı, anahtar harca.
+                    -- Door closed, spend key.
                     local Network2 = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
                     local fireCustom2 = Network2 and Network2:FindFirstChild("Instancing_FireCustomFromClient")
                     if fireCustom2 then
@@ -1133,7 +1133,7 @@ task.spawn(function()
                         -- HİBRİT KONTROL: Eğer doğmasına 15 saniyeden fazla varsa odadan ayrıl ve yumurta ara!
                         if remaining > 15 and getgenv().Config.FindKeepOutEgg then
                             if getgenv().RLW_Window then
-                                getgenv().RLW_Window:Notify({Title = "🚀 Hibrit Mod Aktif!", Content = "Boss beklenirken yumurta farmına geçiliyor...", Duration = 5})
+                                getgenv().RLW_Window:Notify({Title = "🚀 Hybrid Mode Active!", Content = "Farming eggs while waiting for Boss...", Duration = 5})
                             end
                             getgenv().SmartFarmState.BossRespawningUntil = respawnTs
                             getgenv().SmartFarmState.BossRoomUID = roomUID
@@ -1145,7 +1145,7 @@ task.spawn(function()
                             isWaitingRespawn = true
                             notifiedRespawn = false
                             if getgenv().RLW_Window then
-                                getgenv().RLW_Window:Notify({Title = "⏳ Boss Öldü!", Content = "Yeniden doğma: " .. remaining .. " saniye. Bekliyoruz...", Duration = 5})
+                                getgenv().RLW_Window:Notify({Title = "⏳ Boss Dead!", Content = "Respawning in " .. remaining .. " seconds. Waiting...", Duration = 5})
                             end
                         end
                         local waitTime = math.max(respawnTs - workspace:GetServerTimeNow() - 1, 0)
@@ -1155,7 +1155,7 @@ task.spawn(function()
                             notifiedRespawn = true
                             isWaitingRespawn = false
                             if getgenv().RLW_Window then
-                                getgenv().RLW_Window:Notify({Title = "⚔️ Boss Geri Döndü!", Content = "Saldırı başlıyor...", Duration = 3})
+                                getgenv().RLW_Window:Notify({Title = "⚔️ Boss Respawned!", Content = "Attacking...", Duration = 3})
                             end
                         end
                     end
