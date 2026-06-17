@@ -702,7 +702,7 @@ function RLW_Library:CreateWindow(options)
             local Title = Instance.new("TextLabel", DropdownFrame)
             Title.BackgroundTransparency = 1
             Title.Position = UDim2.new(0, 15, 0, 0)
-            Title.Size = UDim2.new(1, -60, 0, 40)
+            Title.Size = UDim2.new(1, -100, 0, 40)
             Title.Font = Enum.Font.Ubuntu
             Title.Text = opts.Name or "Dropdown"
             Title.TextColor3 = Theme.Text
@@ -711,8 +711,8 @@ function RLW_Library:CreateWindow(options)
             
             local SelectedText = Instance.new("TextLabel", DropdownFrame)
             SelectedText.BackgroundTransparency = 1
-            SelectedText.Position = UDim2.new(0.5, -45, 0, 0)
-            SelectedText.Size = UDim2.new(0.5, 0, 0, 40)
+            SelectedText.Position = UDim2.new(1, -90, 0, 0)
+            SelectedText.Size = UDim2.new(0, 60, 0, 40)
             SelectedText.Font = Enum.Font.Ubuntu
             SelectedText.Text = current
             SelectedText.TextColor3 = Theme.Accent
@@ -724,22 +724,33 @@ function RLW_Library:CreateWindow(options)
             ArrowLabel.Position = UDim2.new(1, -30, 0, 0)
             ArrowLabel.Size = UDim2.new(0, 20, 0, 40)
             ArrowLabel.Font = Enum.Font.Ubuntu
-            ArrowLabel.Text = "v"
+            ArrowLabel.Text = "▼"
             ArrowLabel.TextColor3 = Theme.TextDark
-            ArrowLabel.TextSize = 16
+            ArrowLabel.TextSize = 12
             
             local ToggleBtn = Instance.new("TextButton", DropdownFrame)
             ToggleBtn.Size = UDim2.new(1, 0, 0, 40)
             ToggleBtn.BackgroundTransparency = 1
             ToggleBtn.Text = ""
             
+            -- Separator line between header and list
+            local Sep = Instance.new("Frame", DropdownFrame)
+            Sep.Size = UDim2.new(1, -30, 0, 1)
+            Sep.Position = UDim2.new(0, 15, 0, 39)
+            Sep.BackgroundColor3 = Theme.Border
+            Sep.BorderSizePixel = 0
+            Sep.Visible = false
+            
+            local listHeight = math.min(#options * 32, 150)
+            
             local ListContainer = Instance.new("ScrollingFrame", DropdownFrame)
-            ListContainer.Size = UDim2.new(1, -10, 1, -45)
-            ListContainer.Position = UDim2.new(0, 5, 0, 40)
+            ListContainer.Size = UDim2.new(1, -10, 0, listHeight)
+            ListContainer.Position = UDim2.new(0, 5, 0, 44)
             ListContainer.BackgroundTransparency = 1
             ListContainer.ScrollBarThickness = 2
             ListContainer.ScrollBarImageColor3 = Theme.Accent
             ListContainer.BorderSizePixel = 0
+            ListContainer.Visible = false
             
             local ListLayout = Instance.new("UIListLayout", ListContainer)
             ListLayout.Padding = UDim.new(0, 4)
@@ -780,9 +791,12 @@ function RLW_Library:CreateWindow(options)
                     
                     optBtn.MouseButton1Click:Connect(function()
                         Element:Set(opt)
+                        -- Close dropdown
                         isOpen = false
-                        tween(ArrowLabel, {Rotation = 0}, 0.3)
-                        tween(DropdownFrame, {Size = UDim2.new(1, -10, 0, 40)}, 0.3)
+                        Sep.Visible = false
+                        ListContainer.Visible = false
+                        ArrowLabel.Text = "▼"
+                        DropdownFrame.Size = UDim2.new(1, -10, 0, 40)
                     end)
                 end
                 ListContainer.CanvasSize = UDim2.new(0, 0, 0, ListLayout.AbsoluteContentSize.Y + 5)
@@ -792,12 +806,16 @@ function RLW_Library:CreateWindow(options)
             ToggleBtn.MouseButton1Click:Connect(function()
                 isOpen = not isOpen
                 if isOpen then
-                    local totalHeight = 45 + math.min(#options * 32, 130)
-                    tween(ArrowLabel, {Rotation = 180}, 0.3)
-                    tween(DropdownFrame, {Size = UDim2.new(1, -10, 0, totalHeight)}, 0.3)
+                    local totalHeight = 48 + listHeight
+                    ArrowLabel.Text = "▲"
+                    Sep.Visible = true
+                    ListContainer.Visible = true
+                    DropdownFrame.Size = UDim2.new(1, -10, 0, totalHeight)
                 else
-                    tween(ArrowLabel, {Rotation = 0}, 0.3)
-                    tween(DropdownFrame, {Size = UDim2.new(1, -10, 0, 40)}, 0.3)
+                    ArrowLabel.Text = "▼"
+                    Sep.Visible = false
+                    ListContainer.Visible = false
+                    DropdownFrame.Size = UDim2.new(1, -10, 0, 40)
                 end
             end)
             
