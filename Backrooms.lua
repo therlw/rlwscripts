@@ -27,7 +27,8 @@ getgenv().Config = {
         BackroomsTokenFind = false
     },
     WebhookEnabled = false,
-    WebhookURL = ""
+    WebhookURL = "",
+    AutoMailbox = false
 }
 
 local TargetEggRooms = {}
@@ -1528,6 +1529,7 @@ local TabAutoFarm = Window:CreateTab("⚔️ Auto Farm")
 local TabEggs = Window:CreateTab("🥚 Egg Hunter")
 local TabStats = Window:CreateTab("📊 Live Stats")
 local TabScanner = Window:CreateTab("📡 Scanner")
+local TabMailbox = Window:CreateTab("📬 Mailbox")
 local TabUpgrades = Window:CreateTab("🆙 Upgrades")
 local TabWebhook = Window:CreateTab("🔔 Webhook")
 local TabSettings = Window:CreateTab("⚙️ Settings")
@@ -1831,6 +1833,31 @@ TabScanner:CreateButton({
         end
     end
 })
+
+-- 📬 MAILBOX TAB --
+TabMailbox:CreateSection("Mailbox Automation")
+TabMailbox:CreateToggle({
+    Name = "Auto Claim Mailbox",
+    CurrentValue = false,
+    Flag = "Tgl_AutoMailbox",
+    Callback = function(Value)
+        getgenv().Config.AutoMailbox = Value
+    end
+})
+
+task.spawn(function()
+    while task.wait(30) do
+        if not getgenv().Config.AutoMailbox then continue end
+        pcall(function()
+            local NetworkFolder = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
+            local remote = NetworkFolder and NetworkFolder:FindFirstChild("Mailbox: Claim All")
+            if remote then
+                if remote:IsA("RemoteFunction") then remote:InvokeServer()
+                else remote:FireServer() end
+            end
+        end)
+    end
+end)
 
 Window:LoadConfiguration()
 
