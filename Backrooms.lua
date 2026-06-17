@@ -657,6 +657,28 @@ local function IsInBackroomsInstance()
     return false
 end
 
+local function isEggAlive(room)
+    -- 1. Süre kontrolü
+    local expireTime = room:GetAttribute("EggExpireTimestamp")
+    if type(expireTime) == "number" and workspace:GetServerTimeNow() > expireTime then
+        return false
+    end
+    
+    -- 2. Fiziksel model kontrolü (Workspace.__THINGS.CustomEggs)
+    local eggUID = room:GetAttribute("EggUID")
+    if type(eggUID) == "string" then
+        local customEggs = workspace:FindFirstChild("__THINGS") and workspace.__THINGS:FindFirstChild("CustomEggs")
+        if customEggs then
+            local eggModel = customEggs:FindFirstChild(eggUID)
+            if not eggModel then
+                return false -- Yumurta objesi artık yok (kırılmış veya süresi dolup silinmiş)
+            end
+        end
+    end
+    
+    return true
+end
+
 local function HandleInstanceEntry()
     if IsInBackroomsInstance() then return end
     if os.clock() - LastInstanceJoinAttempt < 60 then return end
@@ -774,8 +796,12 @@ task.spawn(function()
         if checkEggCache and getgenv().SmartFarmState.EggRoomUID then
             for _, room in ipairs(rooms) do
                 if room:GetAttribute("RoomUID") == getgenv().SmartFarmState.EggRoomUID then
-                    bestRoom = room
-                    bestRoomType = 4
+                    if isEggAlive(room) then
+                        bestRoom = room
+                        bestRoomType = 4
+                    else
+                        getgenv().SmartFarmState.EggRoomUID = nil -- Yumurta yok olmuş, cache'i temizle
+                    end
                     break
                 end
             end
@@ -789,6 +815,7 @@ task.spawn(function()
                 local lowerID = string.lower(roomID)
 
                 local isEgg = lowerID:find("keepout") or lowerID:find("hugeegg") or lowerID:find("titanicegg")
+                if isEgg and not isEggAlive(room) then isEgg = false end
                 
                 -- ARKA PLANDA YUMURTA ODASI KAYDET (Kullanıcı sonradan açarsa diye)
                 if isEgg and not getgenv().SmartFarmState.EggRoomUID then
@@ -796,6 +823,7 @@ task.spawn(function()
                 end
 
                 local isFreeEgg = lowerID:find("freeegg")
+                if isFreeEgg and not isEggAlive(room) then isFreeEgg = false end
                 local multiplier = isFreeEgg and tonumber(room:GetAttribute("EggMultiplier")) or 0
                 
                 local matchSpecificEgg = true
@@ -1460,7 +1488,7 @@ local RLW_Library = loadstring(game:HttpGet('https://raw.githubusercontent.com/t
 
 local Window = RLW_Library:CreateWindow({
     Title = "RLW",
-    Subtitle = "</> BACKROOMS EVENT",
+    Subtitle = "</> SCRIPTS",
     ConfigurationSaving = {
         Enabled = true,
         FolderName = "RLWSCRIPTS",
