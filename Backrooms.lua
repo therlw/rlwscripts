@@ -32,6 +32,14 @@ getgenv().Config = {
 
 local TargetEggRooms = {}
 
+getgenv().LiveStats = {
+    StartTime = os.time(),
+    BossesKilled = 0,
+    HighestMultiplier = 0,
+    RoomsExplored = 0,
+    _seenRooms = {}
+}
+
 -- ==========================
 -- 🔗 WEBHOOK & INVENTORY SİSTEMİ
 -- ==========================
@@ -817,6 +825,18 @@ task.spawn(function()
         if not bestRoom then
             for _, room in ipairs(rooms) do
                 local roomUID = room:GetAttribute("RoomUID")
+                
+                -- Live Stats: Track Unique Rooms and Highest Multiplier
+                if getgenv().LiveStats and roomUID and not getgenv().LiveStats._seenRooms[roomUID] then
+                    getgenv().LiveStats._seenRooms[roomUID] = true
+                    getgenv().LiveStats.RoomsExplored = getgenv().LiveStats.RoomsExplored + 1
+                    
+                    local mult = room:GetAttribute("EggMultiplier")
+                    if mult and type(mult) == "number" and mult > getgenv().LiveStats.HighestMultiplier then
+                        getgenv().LiveStats.HighestMultiplier = mult
+                    end
+                end
+                
                 local roomID = room:GetAttribute("RoomID") or ""
                 local lowerID = string.lower(roomID)
 
@@ -1181,6 +1201,7 @@ task.spawn(function()
                             if getgenv().RLW_Window then
                                 getgenv().RLW_Window:Notify({Title = "⏳ Boss Dead!", Content = "Respawning in " .. remaining .. " seconds. Waiting...", Duration = 5})
                             end
+                            if getgenv().LiveStats then getgenv().LiveStats.BossesKilled = getgenv().LiveStats.BossesKilled + 1 end
                         end
                         local waitTime = math.max(respawnTs - workspace:GetServerTimeNow() - 1, 0)
                         if waitTime > 2 then task.wait(waitTime) end
@@ -1505,10 +1526,37 @@ getgenv().RLW_Window = Window
 
 local TabAutoFarm = Window:CreateTab("⚔️ Auto Farm")
 local TabEggs = Window:CreateTab("🥚 Egg Hunter")
+local TabStats = Window:CreateTab("📊 Live Stats")
 local TabScanner = Window:CreateTab("📡 Scanner")
-local TabSettings = Window:CreateTab("⚙️ Settings")
 local TabUpgrades = Window:CreateTab("🆙 Upgrades")
 local TabWebhook = Window:CreateTab("🔔 Webhook")
+local TabSettings = Window:CreateTab("⚙️ Settings")
+
+-- 📊 LIVE STATS TAB --
+TabStats:CreateSection("Session Information")
+
+local lblTime = TabStats:CreateLabel({Name = "⏱️ Session Time", CurrentValue = "00:00:00"})
+local lblRooms = TabStats:CreateLabel({Name = "🚪 Rooms Explored", CurrentValue = "0", Color = Color3.fromRGB(150, 150, 255)})
+local lblHighest = TabStats:CreateLabel({Name = "🔥 Highest Multiplier", CurrentValue = "0x", Color = Color3.fromRGB(255, 215, 0)})
+local lblBosses = TabStats:CreateLabel({Name = "👹 Bosses Defeated", CurrentValue = "0", Color = Color3.fromRGB(255, 100, 100)})
+
+task.spawn(function()
+    while task.wait(1) do
+        if not getgenv().LiveStats then continue end
+        local elapsed = os.time() - getgenv().LiveStats.StartTime
+        local hours = math.floor(elapsed / 3600)
+        local mins = math.floor((elapsed % 3600) / 60)
+        local secs = elapsed % 60
+        local timeStr = string.format("%02d:%02d:%02d", hours, mins, secs)
+        
+        pcall(function()
+            if lblTime and lblTime.SetText then lblTime:SetText(timeStr) end
+            if lblRooms and lblRooms.SetText then lblRooms:SetText(tostring(getgenv().LiveStats.RoomsExplored)) end
+            if lblHighest and lblHighest.SetText then lblHighest:SetText(tostring(getgenv().LiveStats.HighestMultiplier) .. "x") end
+            if lblBosses and lblBosses.SetText then lblBosses:SetText(tostring(getgenv().LiveStats.BossesKilled)) end
+        end)
+    end
+end)
 
 -- ⚔️ AUTO FARM TAB --
 TabAutoFarm:CreateSection("Standalone Farm")
@@ -1785,3 +1833,44 @@ TabScanner:CreateButton({
 })
 
 Window:LoadConfiguration()
+
+-- ⚙️ SETTINGS TAB --
+TabSettings:CreateSection("Server Management")
+
+TabSettings:CreateButton({
+    Name = "🔄 Rejoin Server",
+    Callback = function()
+        if getgenv().RLW_Window then
+            getgenv().RLW_Window:Notify({Title = "Rejoining...", Content = "Please wait...", Duration = 3})
+        end
+        local ts = game:GetService("TeleportService")
+        local p = game:GetService("Players").LocalPlayer
+        ts:TeleportToPlaceInstance(game.PlaceId, game.JobId, p)
+    end
+})
+
+TabSettings:CreateButton({
+    Name = "🚀 Server Hop",
+    Callback = function()
+        if getgenv().RLW_Window then
+            getgenv().RLW_Window:Notify({Title = "Server Hopping...", Content = "Finding a new server...", Duration = 3})
+        end
+        local HttpService = game:GetService("HttpService")
+        local TeleportService = game:GetService("TeleportService")
+        local req = request or http_request or (syn and syn.request)
+        if req then
+            pcall(function()
+                local servers = req({Url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Desc&limit=100"}).Body
+                local decoded = HttpService:JSONDecode(servers)
+                if decoded and decoded.data then
+                    for _, v in pairs(decoded.data) do
+                        if type(v) == "table" and v.playing and v.playing < v.maxPlayers and v.id ~= game.JobId then
+                            TeleportService:TeleportToPlaceInstance(game.PlaceId, v.id, game.Players.LocalPlayer)
+                            break
+                        end
+                    end
+                end
+            end)
+        end
+    end
+})
