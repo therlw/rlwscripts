@@ -32,6 +32,15 @@ getgenv().Config = {
 
 local TargetEggRooms = {}
 
+getgenv().LiveStats = {
+    StartTime = os.time(),
+    BossesKilled = 0,
+    EggsHatched = 0,
+    HighestMultiplier = 0,
+    RoomsExplored = 0,
+    _seenRooms = {}
+}
+
 -- ==========================
 -- 🔗 WEBHOOK & INVENTORY SİSTEMİ
 -- ==========================
@@ -817,6 +826,18 @@ task.spawn(function()
         if not bestRoom then
             for _, room in ipairs(rooms) do
                 local roomUID = room:GetAttribute("RoomUID")
+                
+                -- Live Stats: Track Unique Rooms and Highest Multiplier
+                if getgenv().LiveStats and roomUID and not getgenv().LiveStats._seenRooms[roomUID] then
+                    getgenv().LiveStats._seenRooms[roomUID] = true
+                    getgenv().LiveStats.RoomsExplored = getgenv().LiveStats.RoomsExplored + 1
+                    
+                    local mult = room:GetAttribute("EggMultiplier")
+                    if mult and type(mult) == "number" and mult > getgenv().LiveStats.HighestMultiplier then
+                        getgenv().LiveStats.HighestMultiplier = mult
+                    end
+                end
+                
                 local roomID = room:GetAttribute("RoomID") or ""
                 local lowerID = string.lower(roomID)
 
@@ -1181,6 +1202,7 @@ task.spawn(function()
                             if getgenv().RLW_Window then
                                 getgenv().RLW_Window:Notify({Title = "⏳ Boss Dead!", Content = "Respawning in " .. remaining .. " seconds. Waiting...", Duration = 5})
                             end
+                            if getgenv().LiveStats then getgenv().LiveStats.BossesKilled = getgenv().LiveStats.BossesKilled + 1 end
                         end
                         local waitTime = math.max(respawnTs - workspace:GetServerTimeNow() - 1, 0)
                         if waitTime > 2 then task.wait(waitTime) end
@@ -1481,6 +1503,7 @@ task.spawn(function()
                     else
                         pcall(function() customHatchRemote:InvokeServer(customUid, maxHatch) end)
                     end
+                    if getgenv().LiveStats then getgenv().LiveStats.EggsHatched = getgenv().LiveStats.EggsHatched + maxHatch end
                 end)
             end
         end
@@ -1505,10 +1528,39 @@ getgenv().RLW_Window = Window
 
 local TabAutoFarm = Window:CreateTab("⚔️ Auto Farm")
 local TabEggs = Window:CreateTab("🥚 Egg Hunter")
+local TabStats = Window:CreateTab("📊 Live Stats")
 local TabScanner = Window:CreateTab("📡 Scanner")
 local TabSettings = Window:CreateTab("⚙️ Settings")
 local TabUpgrades = Window:CreateTab("🆙 Upgrades")
 local TabWebhook = Window:CreateTab("🔔 Webhook")
+
+-- 📊 LIVE STATS TAB --
+TabStats:CreateSection("Session Information")
+
+local lblTime = TabStats:CreateLabel({Name = "⏱️ Session Time", CurrentValue = "00:00:00"})
+local lblRooms = TabStats:CreateLabel({Name = "🚪 Rooms Explored", CurrentValue = "0", Color = Color3.fromRGB(150, 150, 255)})
+local lblHighest = TabStats:CreateLabel({Name = "🔥 Highest Multiplier", CurrentValue = "0x", Color = Color3.fromRGB(255, 215, 0)})
+local lblBosses = TabStats:CreateLabel({Name = "👹 Bosses Defeated", CurrentValue = "0", Color = Color3.fromRGB(255, 100, 100)})
+local lblEggs = TabStats:CreateLabel({Name = "🥚 Eggs Hatched", CurrentValue = "0", Color = Color3.fromRGB(100, 255, 100)})
+
+task.spawn(function()
+    while task.wait(1) do
+        if not getgenv().LiveStats then continue end
+        local elapsed = os.time() - getgenv().LiveStats.StartTime
+        local hours = math.floor(elapsed / 3600)
+        local mins = math.floor((elapsed % 3600) / 60)
+        local secs = elapsed % 60
+        local timeStr = string.format("%02d:%02d:%02d", hours, mins, secs)
+        
+        pcall(function()
+            if lblTime and lblTime.SetText then lblTime:SetText(timeStr) end
+            if lblRooms and lblRooms.SetText then lblRooms:SetText(tostring(getgenv().LiveStats.RoomsExplored)) end
+            if lblHighest and lblHighest.SetText then lblHighest:SetText(tostring(getgenv().LiveStats.HighestMultiplier) .. "x") end
+            if lblBosses and lblBosses.SetText then lblBosses:SetText(tostring(getgenv().LiveStats.BossesKilled)) end
+            if lblEggs and lblEggs.SetText then lblEggs:SetText(tostring(getgenv().LiveStats.EggsHatched)) end
+        end)
+    end
+end)
 
 -- ⚔️ AUTO FARM TAB --
 TabAutoFarm:CreateSection("Standalone Farm")
