@@ -278,6 +278,10 @@ end
 local VisitedRooms = {}
 local visitedCount = 0
 
+-- ✅ YENİ: Ölü yumurta odaları (VisitedRooms reset'ten etkilenmesin diye ayrı tutuyoruz)
+local DeadEggRooms = {}        -- { [roomUID] = deadTimestamp }
+local DEAD_EGG_COOLDOWN = 300  -- 5 dakika sonra tekrar dene (saniye)
+
 local Toggle_MetaFarm = nil
 local Toggle_KeepOutEgg = nil
 local Toggle_FreeEgg = nil
@@ -815,7 +819,9 @@ task.spawn(function()
                         bestRoom = room
                         bestRoomType = 4
                     else
+                        local deadUID = getgenv().SmartFarmState.EggRoomUID
                         getgenv().SmartFarmState.EggRoomUID = nil -- Yumurta yok olmuş, cache'i temizle
+                        DeadEggRooms[deadUID] = os.clock()  -- ✅ cache'i temizlerken de kaydet
                     end
                     break
                 end
@@ -842,7 +848,16 @@ task.spawn(function()
                 local lowerID = string.lower(roomID)
 
                 local isEgg = lowerID:find("keepout") or lowerID:find("hugeegg") or lowerID:find("titanicegg")
-                if isEgg and not isEggAlive(room) then isEgg = false end
+                
+                -- ✅ DeadEggRooms kontrolü: cooldown süresi dolmadıysa bu odaya gitme
+                if isEgg and DeadEggRooms[roomUID] and (os.clock() - DeadEggRooms[roomUID]) < DEAD_EGG_COOLDOWN then
+                    isEgg = false
+                end
+                
+                if isEgg and not isEggAlive(room) then
+                    isEgg = false
+                    DeadEggRooms[roomUID] = os.clock()  -- ✅ Canlı kontrol başarısız, dead olarak işaretle
+                end
                 
                 -- ARKA PLANDA YUMURTA ODASI KAYDET (Kullanıcı sonradan açarsa diye)
                 if isEgg and not getgenv().SmartFarmState.EggRoomUID then
@@ -1084,9 +1099,12 @@ task.spawn(function()
                     local timeNow = workspace:GetServerTimeNow()
                     
                     if isHybridEggPhase then
-                        local remaining = (getgenv().SmartFarmState.BossRespawningUntil or 0) - timeNow
-                        if remaining > 0 and remaining <= 8 then
-                            break -- Boss doğmak üzere, döngüden çık
+                        local bossTimer = getgenv().SmartFarmState.BossRespawningUntil or 0
+                        local remaining = bossTimer - timeNow
+                        -- ✅ remaining <= 8: boss doğmak üzere VEYA zaten doğdu (remaining < 0)
+                        -- bossTimer > 0 kontrolü: timer hiç set edilmemişse (-timeNow) yanlışlıkla çıkmasın
+                        if bossTimer > 0 and remaining <= 8 then
+                            break
                         end
                     end
                     
@@ -1294,9 +1312,14 @@ task.spawn(function()
 
         -- Öncelikli oda bulunamadı → haritayı genişlet (en uzak odaya zıpla)
         local sortedRooms = {}
+        local isEggSearchMode = isHybridEggPhase or getgenv().Config.FindKeepOutEgg or getgenv().Config.FindFreeEggRoom
         for _, room in ipairs(rooms) do
             local uid = room:GetAttribute("RoomUID")
             if not VisitedRooms[uid] then
+                -- ✅ Egg arama modundayken ölü egg odalarını sortedRooms'a ekleme (paradoks önleme)
+                if isEggSearchMode and DeadEggRooms[uid] and (os.clock() - DeadEggRooms[uid]) < DEAD_EGG_COOLDOWN then
+                    continue
+                end
                 local pos = room:IsA("Model") and room:GetPivot().Position or Vector3.new(0,0,0)
                 table.insert(sortedRooms, {Room = room, Dist = pos.Magnitude, UID = uid})
             end
@@ -1307,7 +1330,12 @@ task.spawn(function()
         if #sortedRooms == 0 then
             VisitedRooms = {}
             visitedCount = 0
-            task.wait(1)
+            -- ✅ Egg/hybrid modunda yeni oda veya egg spawn olmasını bekle, aynı ölü odalara hemen dönme
+            if isHybridEggPhase or getgenv().Config.FindKeepOutEgg or getgenv().Config.FindFreeEggRoom then
+                task.wait(5)
+            else
+                task.wait(1)
+            end
             continue
         end
 
