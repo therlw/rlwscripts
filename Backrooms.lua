@@ -1423,7 +1423,7 @@ task.spawn(function()
             -- Bulunan çıkış noktalarına mikro ışınlanma yap (Max 5 nokta)
             for i = 1, math.min(5, #edgeParts) do
                 safeTeleport(edgeParts[i], true)
-                task.wait(0.15)
+                task.wait(0.65)
             end
         elseif room:IsA("Model") then
             -- Eğer belirgin bir çıkış noktası yoksa odanın 4 köşesine (sınırlarına) zıpla
