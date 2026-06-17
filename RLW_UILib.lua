@@ -88,14 +88,16 @@ function RLW_Library:CreateWindow(options)
     local MainScale = Instance.new("UIScale", MainFrame)
     MainScale.Scale = 1
     
-    -- Mobile auto-scale: detect small screens and shrink UI
+    local isMobile = game:GetService("UserInputService").TouchEnabled
     local Camera = workspace.CurrentCamera
+    local currentScale = 1
     local function updateScale()
         local viewportSize = Camera.ViewportSize
-        local scaleX = viewportSize.X / 700  -- 600 + some padding
-        local scaleY = viewportSize.Y / 500  -- 400 + some padding
-        local finalScale = math.min(scaleX, scaleY, 1) -- Never go above 1
-        finalScale = math.max(finalScale, 0.45) -- Never go below 0.45
+        local scaleX = viewportSize.X / 700
+        local scaleY = viewportSize.Y / 500
+        local finalScale = math.min(scaleX, scaleY, 1)
+        finalScale = math.max(finalScale, 0.45)
+        currentScale = finalScale
         MainScale.Scale = finalScale
     end
     updateScale()
@@ -183,9 +185,12 @@ function RLW_Library:CreateWindow(options)
     CloseBtn.Font = Enum.Font.Ubuntu
 
     -- Açma (Show UI) Butonu (Mobil Uyumlu)
+    local openBtnY = isMobile and 55 or 15 -- Mobile: below Roblox top bar
+    local openBtnHideY = -50
+    
     local OpenBtn = Instance.new("TextButton", RLWGui)
     OpenBtn.Size = UDim2.new(0, 120, 0, 35)
-    OpenBtn.Position = UDim2.new(0.5, -60, 0, -50) -- Ekranın üstünde gizli başlar
+    OpenBtn.Position = UDim2.new(0.5, -60, 0, openBtnHideY)
     OpenBtn.BackgroundColor3 = Theme.MainBG
     OpenBtn.Text = "Show UI"
     OpenBtn.TextColor3 = Theme.Accent
@@ -197,7 +202,7 @@ function RLW_Library:CreateWindow(options)
     OpenStroke.Color = Theme.Border
     OpenStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 
-    -- Aç/Kapat Animasyon Mantığı
+    -- Open/Close Animation Logic
     local uiVisible = true
 
     CloseBtn.MouseEnter:Connect(function() tween(CloseBtn, {TextColor3 = Color3.fromRGB(255, 75, 75)}, 0.2) end)
@@ -210,21 +215,21 @@ function RLW_Library:CreateWindow(options)
         task.wait(0.35)
         MainFrame.Visible = false
         OpenBtn.Visible = true
-        OpenBtn.Position = UDim2.new(0.5, -60, 0, -50)
-        tween(OpenBtn, {Position = UDim2.new(0.5, -60, 0, 15)}, 0.4)
+        OpenBtn.Position = UDim2.new(0.5, -60, 0, openBtnHideY)
+        tween(OpenBtn, {Position = UDim2.new(0.5, -60, 0, openBtnY)}, 0.4)
     end)
 
-    OpenBtn.MouseEnter:Connect(function() tween(OpenBtn, {Size = UDim2.new(0, 126, 0, 38), Position = UDim2.new(0.5, -63, 0, 13)}, 0.2) end)
-    OpenBtn.MouseLeave:Connect(function() tween(OpenBtn, {Size = UDim2.new(0, 120, 0, 35), Position = UDim2.new(0.5, -60, 0, 15)}, 0.2) end)
+    OpenBtn.MouseEnter:Connect(function() tween(OpenBtn, {Size = UDim2.new(0, 126, 0, 38), Position = UDim2.new(0.5, -63, 0, openBtnY - 2)}, 0.2) end)
+    OpenBtn.MouseLeave:Connect(function() tween(OpenBtn, {Size = UDim2.new(0, 120, 0, 35), Position = UDim2.new(0.5, -60, 0, openBtnY)}, 0.2) end)
 
     OpenBtn.MouseButton1Click:Connect(function()
         if uiVisible then return end
         uiVisible = true
-        tween(OpenBtn, {Position = UDim2.new(0.5, -60, 0, -50)}, 0.3)
+        tween(OpenBtn, {Position = UDim2.new(0.5, -60, 0, openBtnHideY)}, 0.3)
         task.wait(0.3)
         OpenBtn.Visible = false
         MainFrame.Visible = true
-        tween(MainScale, {Scale = 1}, 0.4)
+        tween(MainScale, {Scale = currentScale}, 0.4)
     end)
 
     local NotifyContainer = Instance.new("Frame", RLWGui)
