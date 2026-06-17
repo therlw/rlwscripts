@@ -88,6 +88,19 @@ function RLW_Library:CreateWindow(options)
     local MainScale = Instance.new("UIScale", MainFrame)
     MainScale.Scale = 1
     
+    -- Mobile auto-scale: detect small screens and shrink UI
+    local Camera = workspace.CurrentCamera
+    local function updateScale()
+        local viewportSize = Camera.ViewportSize
+        local scaleX = viewportSize.X / 700  -- 600 + some padding
+        local scaleY = viewportSize.Y / 500  -- 400 + some padding
+        local finalScale = math.min(scaleX, scaleY, 1) -- Never go above 1
+        finalScale = math.max(finalScale, 0.45) -- Never go below 0.45
+        MainScale.Scale = finalScale
+    end
+    updateScale()
+    Camera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
+    
     local UIStroke = Instance.new("UIStroke", MainFrame)
     UIStroke.Color = Theme.Border
     UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
