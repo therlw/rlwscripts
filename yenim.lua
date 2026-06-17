@@ -1442,7 +1442,7 @@ local RLW_Library = loadstring(game:HttpGet('https://raw.githubusercontent.com/t
 
 local Window = RLW_Library:CreateWindow({
     Title = "RLW",
-    Subtitle = "</> EVENT SCRIPT",
+    Subtitle = "</> SCRIPTS",
     ConfigurationSaving = {
         Enabled = true,
         FolderName = "RLWSCRIPTS",
