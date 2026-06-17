@@ -93,12 +93,22 @@ function RLW_Library:CreateWindow(options)
     local currentScale = 1
     local function updateScale()
         local viewportSize = Camera.ViewportSize
-        local scaleX = viewportSize.X / 700
-        local scaleY = viewportSize.Y / 500
-        local finalScale = math.min(scaleX, scaleY, 1)
-        finalScale = math.max(finalScale, 0.45)
-        currentScale = finalScale
-        MainScale.Scale = finalScale
+        if isMobile then
+            -- Mobile: scale aggressively so UI doesn't fill the screen
+            local scaleX = viewportSize.X / 900
+            local scaleY = viewportSize.Y / 600
+            local finalScale = math.min(scaleX, scaleY, 0.75) -- Max 0.75 on mobile
+            finalScale = math.max(finalScale, 0.45)
+            currentScale = finalScale
+        else
+            -- PC: only scale down if screen is very small
+            local scaleX = viewportSize.X / 700
+            local scaleY = viewportSize.Y / 500
+            local finalScale = math.min(scaleX, scaleY, 1)
+            finalScale = math.max(finalScale, 0.45)
+            currentScale = finalScale
+        end
+        MainScale.Scale = currentScale
     end
     updateScale()
     Camera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
@@ -185,7 +195,7 @@ function RLW_Library:CreateWindow(options)
     CloseBtn.Font = Enum.Font.Ubuntu
 
     -- Açma (Show UI) Butonu (Mobil Uyumlu)
-    local openBtnY = isMobile and 55 or 15 -- Mobile: below Roblox top bar
+    local openBtnY = 10 -- Always near the very top
     local openBtnHideY = -50
     
     local OpenBtn = Instance.new("TextButton", RLWGui)
@@ -416,15 +426,13 @@ function RLW_Library:CreateWindow(options)
             
             for _, t in pairs(Window.Tabs) do
                 t.Page.Visible = false
-                tween(t.Button, {BackgroundColor3 = Theme.ElementBG, TextColor3 = Theme.TextDark}, 0.35)
+                t.Button.BackgroundColor3 = Theme.ElementBG
+                t.Button.TextColor3 = Theme.TextDark
             end
             
             TabPage.Visible = true
-            -- Yumuşak sayfa geçişi için basit bir "pop" efekti (opsiyonel ama şık durur)
-            TabPage.GroupTransparency = 1
-            tween(TabPage, {GroupTransparency = 0}, 0.3)
-
-            tween(TabBtn, {BackgroundColor3 = Theme.Accent, TextColor3 = Theme.Text}, 0.35)
+            TabBtn.BackgroundColor3 = Theme.Accent
+            TabBtn.TextColor3 = Theme.Text
             Window.CurrentTab = tabName
         end)
 
