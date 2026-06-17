@@ -839,8 +839,22 @@ task.spawn(function()
                     getgenv().LiveStats.RoomsExplored = getgenv().LiveStats.RoomsExplored + 1
                     
                     local mult = room:GetAttribute("EggMultiplier")
-                    if mult and type(mult) == "number" and mult > getgenv().LiveStats.HighestMultiplier then
+                    local roomID = room:GetAttribute("RoomID") or ""
+                    local isFreeEggStats = string.lower(roomID):find("freeegg")
+                    
+                    if not isFreeEggStats and mult and type(mult) == "number" and mult > getgenv().LiveStats.HighestMultiplier then
                         getgenv().LiveStats.HighestMultiplier = mult
+                        
+                        local eggName = "Egg"
+                        local lowerID = string.lower(roomID)
+                        if lowerID:find("keepout") then eggName = "Keep Out"
+                        elseif lowerID:find("titanicegg") then eggName = "Titanic"
+                        elseif lowerID:find("hugeegg") then eggName = "Huge"
+                        else
+                            local attr = room:GetAttribute("EggType") or room:GetAttribute("EggName") or room:GetAttribute("Egg")
+                            if attr then eggName = tostring(attr) end
+                        end
+                        getgenv().LiveStats.HighestMultiplierName = eggName
                     end
                 end
                 
@@ -866,7 +880,9 @@ task.spawn(function()
 
                 local isFreeEgg = lowerID:find("freeegg")
                 if isFreeEgg and not isEggAlive(room) then isFreeEgg = false end
-                local multiplier = isFreeEgg and tonumber(room:GetAttribute("EggMultiplier")) or 0
+                
+                -- Multiplier'ı hem FreeEgg hem de Normal (KeepOut vb.) yumurtalar için oku
+                local multiplier = tonumber(room:GetAttribute("EggMultiplier")) or 0
                 
                 local matchSpecificEgg = true
                 if getgenv().Config.TargetEggType ~= "Any" then
@@ -884,22 +900,25 @@ task.spawn(function()
                 local isVault = lowerID:find("vault") or lowerID:find("chest")
                 local isBreakable = lowerID:find("breakable")
 
+                -- Free Egg Odası Kontrolü (Type 5)
                 if getgenv().Config.FindFreeEggRoom and isFreeEgg and matchSpecificEgg and multiplier >= getgenv().Config.TargetEggMultiplier and bestRoomType < 5 then
                     bestRoom = room
                     bestRoomType = 5
                     break
                 end
 
-                if isBossHuntPhase and isBoss and bestRoomType < 3 then
+                -- Normal/KeepOut Yumurta Odası Kontrolü (Type 4)
+                -- Artık filtreyi geçiyorsa Boss avını bile ezip geçer!
+                local shouldFarmEgg = getgenv().Config.FindKeepOutEgg or isHybridEggPhase
+                if shouldFarmEgg and isEgg and matchSpecificEgg and multiplier >= getgenv().Config.TargetEggMultiplier and bestRoomType < 4 then
                     bestRoom = room
-                    bestRoomType = 3
+                    bestRoomType = 4
                     break
                 end
 
-                local shouldFarmEgg = (getgenv().Config.FindKeepOutEgg and not getgenv().Config.MetaFarmActive) or isHybridEggPhase
-                if shouldFarmEgg and isEgg and bestRoomType < 4 then
+                if isBossHuntPhase and isBoss and bestRoomType < 3 then
                     bestRoom = room
-                    bestRoomType = 4
+                    bestRoomType = 3
                     break
                 end
 
@@ -1622,7 +1641,13 @@ task.spawn(function()
         pcall(function()
             if lblTime and lblTime.SetText then lblTime:SetText(timeStr) end
             if lblRooms and lblRooms.SetText then lblRooms:SetText(tostring(getgenv().LiveStats.RoomsExplored)) end
-            if lblHighest and lblHighest.SetText then lblHighest:SetText(tostring(getgenv().LiveStats.HighestMultiplier) .. "x") end
+            if lblHighest and lblHighest.SetText then 
+                local multStr = tostring(getgenv().LiveStats.HighestMultiplier) .. "x"
+                if getgenv().LiveStats.HighestMultiplierName then
+                    multStr = multStr .. " (" .. getgenv().LiveStats.HighestMultiplierName .. ")"
+                end
+                lblHighest:SetText(multStr) 
+            end
             if lblBosses and lblBosses.SetText then lblBosses:SetText(tostring(getgenv().LiveStats.BossesKilled)) end
         end)
     end
