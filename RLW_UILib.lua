@@ -741,15 +741,12 @@ function RLW_Library:CreateWindow(options)
             Sep.BorderSizePixel = 0
             Sep.Visible = false
             
-            local listHeight = math.min(#options * 32, 150)
+            local listHeight = #options * 32
             
-            local ListContainer = Instance.new("ScrollingFrame", DropdownFrame)
+            local ListContainer = Instance.new("Frame", DropdownFrame)
             ListContainer.Size = UDim2.new(1, -10, 0, listHeight)
             ListContainer.Position = UDim2.new(0, 5, 0, 44)
             ListContainer.BackgroundTransparency = 1
-            ListContainer.ScrollBarThickness = 2
-            ListContainer.ScrollBarImageColor3 = Theme.Accent
-            ListContainer.BorderSizePixel = 0
             ListContainer.Visible = false
             
             local ListLayout = Instance.new("UIListLayout", ListContainer)
@@ -799,8 +796,6 @@ function RLW_Library:CreateWindow(options)
                         DropdownFrame.Size = UDim2.new(1, -10, 0, 40)
                     end)
                 end
-                -- Manual CanvasSize since AbsoluteContentSize is 0 when invisible
-                ListContainer.CanvasSize = UDim2.new(0, 0, 0, #options * 32)
             end
             refreshList()
             
@@ -811,7 +806,6 @@ function RLW_Library:CreateWindow(options)
                     ArrowLabel.Text = "▲"
                     Sep.Visible = true
                     ListContainer.Visible = true
-                    ListContainer.CanvasSize = UDim2.new(0, 0, 0, #options * 32)
                     DropdownFrame.Size = UDim2.new(1, -10, 0, totalHeight)
                 else
                     ArrowLabel.Text = "▼"
