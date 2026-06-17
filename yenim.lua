@@ -1438,6 +1438,24 @@ task.spawn(function()
                     if fe and fe.PlayEggAnimation then fe.PlayEggAnimation = function() end end
                 end)
 
+                local maxHatch = 1
+                pcall(function() maxHatch = require(game:GetService("ReplicatedStorage").Library.Client.EggCmds).GetMaxHatch() or 1 end)
+                
+                task.spawn(function()
+                    if customHatchRemote:IsA("RemoteEvent") then
+                        customHatchRemote:FireServer(customUid, maxHatch)
+                    else
+                        pcall(function() customHatchRemote:InvokeServer(customUid, maxHatch) end)
+                    end
+                end)
+            end
+        end
+    end
+end)
+
+-- ==========================
+-- 🎨 RLW UI
+-- ==========================
 local RLW_Library = loadstring(game:HttpGet('https://raw.githubusercontent.com/therlw/rlwscripts/refs/heads/main/RLW_UILib.lua'))()
 
 local Window = RLW_Library:CreateWindow({
