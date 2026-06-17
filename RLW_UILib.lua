@@ -137,7 +137,7 @@ function RLW_Library:CreateWindow(options)
     local LogoTitle = Instance.new("TextLabel", LogoArea)
     LogoTitle.BackgroundTransparency = 1
     LogoTitle.Position = UDim2.new(0, 15, 0, 15)
-    LogoTitle.Size = UDim2.new(1, -30, 0, 20)
+    LogoTitle.Size = UDim2.new(1, -15, 0, 20)
     LogoTitle.Font = Enum.Font.Ubuntu
     LogoTitle.Text = TitleText
     LogoTitle.TextColor3 = Theme.Accent
@@ -147,11 +147,11 @@ function RLW_Library:CreateWindow(options)
     local LogoSub = Instance.new("TextLabel", LogoArea)
     LogoSub.BackgroundTransparency = 1
     LogoSub.Position = UDim2.new(0, 15, 0, 35)
-    LogoSub.Size = UDim2.new(1, -30, 0, 15)
+    LogoSub.Size = UDim2.new(1, -15, 0, 15)
     LogoSub.Font = Enum.Font.Ubuntu
     LogoSub.Text = SubtitleText
     LogoSub.TextColor3 = Theme.Text
-    LogoSub.TextSize = 14
+    LogoSub.TextSize = 13
     LogoSub.TextXAlignment = Enum.TextXAlignment.Left
 
     local Line = Instance.new("Frame", Sidebar)
@@ -195,12 +195,12 @@ function RLW_Library:CreateWindow(options)
     CloseBtn.Font = Enum.Font.Ubuntu
 
     -- Açma (Show UI) Butonu (Mobil Uyumlu)
-    local openBtnX = -80 -- 80px from the right edge
-    local openBtnY = 35 -- 35px from top
-    local openBtnHideX = 100 -- Off-screen to the right
+    local openBtnX = -15 -- 15px from the right edge
+    local openBtnY = 15 -- 15px from top
+    local openBtnHideX = 150 -- Off-screen to the right
     
     local OpenBtn = Instance.new("TextButton", RLWGui)
-    OpenBtn.AnchorPoint = Vector2.new(0.5, 0.5)
+    OpenBtn.AnchorPoint = Vector2.new(1, 0)
     OpenBtn.Size = UDim2.new(0, 120, 0, 35)
     OpenBtn.Position = UDim2.new(1, openBtnHideX, 0, openBtnY)
     OpenBtn.BackgroundColor3 = Theme.MainBG
