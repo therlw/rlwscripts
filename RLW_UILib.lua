@@ -630,6 +630,46 @@ function RLW_Library:CreateWindow(options)
             SectionLabel.TextXAlignment = Enum.TextXAlignment.Left
         end
 
+        function Tab:CreateLabel(opts)
+            opts = opts or {}
+            local LabelFrame = Instance.new("Frame", TabPage)
+            LabelFrame.Size = UDim2.new(1, -10, 0, 35)
+            LabelFrame.BackgroundColor3 = Theme.ElementBG
+            Instance.new("UICorner", LabelFrame).CornerRadius = UDim.new(0, 6)
+            
+            local Title = Instance.new("TextLabel", LabelFrame)
+            Title.BackgroundTransparency = 1
+            Title.Position = UDim2.new(0, 15, 0, 0)
+            Title.Size = UDim2.new(0.5, 0, 1, 0)
+            Title.Font = Enum.Font.Ubuntu
+            Title.Text = opts.Name or "Label"
+            Title.TextColor3 = Theme.Text
+            Title.TextSize = 14
+            Title.TextXAlignment = Enum.TextXAlignment.Left
+            
+            local ValueText = Instance.new("TextLabel", LabelFrame)
+            ValueText.BackgroundTransparency = 1
+            ValueText.Position = UDim2.new(0.5, -15, 0, 0)
+            ValueText.Size = UDim2.new(0.5, 0, 1, 0)
+            ValueText.Font = Enum.Font.Ubuntu
+            ValueText.Text = opts.CurrentValue or ""
+            ValueText.TextColor3 = opts.Color or Theme.Accent
+            ValueText.TextSize = 14
+            ValueText.TextXAlignment = Enum.TextXAlignment.Right
+            
+            local Element = {}
+            
+            function Element:SetText(txt)
+                ValueText.Text = tostring(txt)
+            end
+            
+            function Element:SetColor(col)
+                ValueText.TextColor3 = col
+            end
+            
+            return Element
+        end
+
         function Tab:CreateInput(opts)
             opts = opts or {}
             local InputFrame = Instance.new("Frame", TabPage)
