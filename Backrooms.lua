@@ -694,6 +694,12 @@ local function isEggAlive(room)
     -- 2. Fiziksel model kontrolü (Workspace.__THINGS.CustomEggs)
     -- YALNIZCA yakındaysak fiziksel modele güvenebiliriz.
     if isNear then
+        -- Eğer kapı hala kilitliyse, sunucu yumurtayı fiziksel olarak spawnlamamış demektir.
+        -- Bu durumda yumurta kesinlikle içeride yaşıyor kabul edilmeli!
+        if room:FindFirstChild("LockedDoors") then
+            return true
+        end
+        
         local eggUID = room:GetAttribute("EggUID")
         if type(eggUID) == "string" then
             local customEggs = workspace:FindFirstChild("__THINGS") and workspace.__THINGS:FindFirstChild("CustomEggs")
