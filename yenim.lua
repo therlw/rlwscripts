@@ -1758,8 +1758,8 @@ TabScanner:CreateButton({
             table.insert(scannedRoomsList, "[No rooms found!]")
         end
         
-        if Window.Elements["Drp_ScannerList"] and Window.Elements["Drp_ScannerList"].RefreshOptions then
-            Window.Elements["Drp_ScannerList"]:RefreshOptions(scannedRoomsList)
+        if ScannerDropdown and ScannerDropdown.RefreshOptions then
+            ScannerDropdown:RefreshOptions(scannedRoomsList)
             if getgenv().RLW_Window then
                 getgenv().RLW_Window:Notify({Title = "Scan Complete", Content = "Found " .. tostring(#scannedRoomsList) .. " interesting rooms!", Duration = 3})
             end
