@@ -1090,6 +1090,15 @@ task.spawn(function()
                         end
                     end
                     
+                    if not isEggAlive(bestRoom) then
+                        getgenv().SmartFarmState.EggRoomUID = nil
+                        VisitedRooms[roomUID] = true
+                        if getgenv().RLW_Window then
+                            getgenv().RLW_Window:Notify({Title = "👻 Egg Vanished!", Content = "The egg has hatched or expired. Finding a new room!", Duration = 3})
+                        end
+                        break
+                    end
+                    
                     local customUid = nil
                     local eggModel = nil
                     local closestDist = 99999
