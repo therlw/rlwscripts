@@ -1402,9 +1402,12 @@ task.spawn(function()
         if #sortedRooms == 0 then
             VisitedRooms = {}
             visitedCount = 0
-            -- ✅ Egg/hybrid modunda yeni oda veya egg spawn olmasını bekle, aynı ölü odalara hemen dönme
+            -- ✅ DeadEggRooms'u da temizle! Yeni oda gelmediyse, eski "ölü" odaları da tekrar dene.
+            -- Aksi halde script 5 dakika boyunca boşta döngüye girer!
             if isHybridEggPhase or getgenv().Config.FindKeepOutEgg or getgenv().Config.FindFreeEggRoom then
-                task.wait(5)
+                DeadEggRooms = {}
+                getgenv()._EggSpawnWaitTime = {}
+                task.wait(3)
             else
                 task.wait(1)
             end
