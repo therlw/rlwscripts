@@ -24,6 +24,7 @@ getgenv().Config = {
     HopOnBossCooldown = false,
     DeepBackroomsMode = false,
     RadarTeleport = false,
+    FarmDeepChests = false,
     AutoUpgrades = {
         BackroomsBossDamage = false,
         BackroomsExtraLootRoll = false,
@@ -248,6 +249,7 @@ end)
 -- ==========================
 pcall(function()
     local Message = require(game:GetService("ReplicatedStorage").Library.Client.Message)
+    Message.Error = function() end
     local oldNew = Message.New
     Message.New = function(msg, ...)
         if msg and type(msg) == "string" and msg:lower():find("mini%-boss") then
@@ -255,6 +257,24 @@ pcall(function()
         end
         return oldNew(msg, ...)
     end
+end)
+
+-- ==========================
+-- 👻 NOCLIP SİSTEMİ (BOSS UÇMASINI ENGELLER)
+-- ==========================
+task.spawn(function()
+    game:GetService("RunService").Stepped:Connect(function()
+        if getgenv().Config and getgenv().Config.MetaFarmActive then
+            local char = LocalPlayer.Character
+            if char then
+                for _, part in ipairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") and part.CanCollide then
+                        part.CanCollide = false
+                    end
+                end
+            end
+        end
+    end)
 end)
 
 -- ==========================
@@ -344,6 +364,8 @@ local function safeTeleport(targetObj, fastMode)
     if typeof(targetObj) == "Instance" and targetObj:IsA("Model") then
         local boundingCFrame, size = targetObj:GetBoundingBox()
         safePosition = boundingCFrame.Position - Vector3.new(0, size.Y / 2, 0) + Vector3.new(0, 5, 0)
+        -- BOSS UÇMA FİXİ: Boss ile tam ortada çarpışmamak için hafif çaprazına ışınlanalım
+        safePosition = safePosition + Vector3.new(15, 0, 15)
     end
 
     root.Anchored = true
@@ -880,6 +902,21 @@ task.spawn(function()
         end
 
         local rooms_raw = CollectionService:GetTagged("Backrooms")
+        
+        -- Eğer oyuncu halihazırda "AÇIK" bir Boss Odasının içindeyse, boşuna anahtar aramaya gitmesin!
+        local charPos = getRootPart() and getRootPart().Position or Vector3.zero
+        for _, r in ipairs(rooms_raw) do
+            local pos = r:IsA("Model") and r:GetPivot().Position or (r:IsA("BasePart") and r.Position or Vector3.zero)
+            if (pos - charPos).Magnitude < 500 then
+                local roomID = string.lower(r:GetAttribute("RoomID") or "")
+                local isBoss = roomID:find("bosschest") or roomID:find("minichest") or roomID:find("miniboss") or roomID:find("boss") or roomID:find("gamemaster") or r:GetAttribute("BossChestUID") or r:GetAttribute("ActiveMinichests")
+                if isBoss and not r:FindFirstChild("LockedDoors") then
+                    isKeyFarmPhase = false
+                    isBossHuntPhase = true
+                    break
+                end
+            end
+        end
         if #rooms_raw == 0 then
             VisitedRooms = {}
             task.wait(1)
@@ -971,33 +1008,40 @@ task.spawn(function()
 
         -- RADAR TELEPORT (GOD MODE) ARAMASI
         if getgenv().Config.RadarTeleport then
-            local targetClass = nil
-            local altClass = nil
-            if isBossHuntPhase then
-                targetClass = "boss"
-                altClass = "gamemaster"
-            elseif isKeyFarmPhase then
-                targetClass = "vault"
-                altClass = "chest"
-            elseif isHybridEggPhase or getgenv().Config.FindKeepOutEgg then
-                targetClass = "keepout"
-                altClass = "egg"
+            local radarTargets = {}
+            if isBossHuntPhase then table.insert(radarTargets, {"boss", "gamemaster"}) end
+            
+            -- KULLANICI ARAYÜZDEN ÖZEL OLARAK AÇARSA KÜÇÜK SANDIKLARA UÇAR
+            if isKeyFarmPhase or getgenv().Config.FarmDeepChests then 
+                table.insert(radarTargets, {"vault", "chest"}) 
             end
             
-            if targetClass then
+            if isHybridEggPhase or getgenv().Config.FindKeepOutEgg then 
+                table.insert(radarTargets, {"keepout", "egg"}) 
+            end
+            
+            local teleportedByRadar = false
+            for _, tData in ipairs(radarTargets) do
+                local targetClass = tData[1]
+                local altClass = tData[2]
                 local targetVec = getTargetRoomVector(targetClass, altClass)
+                
                 if targetVec then
                     if getgenv().RLW_Window then
                         getgenv().RLW_Window:Notify({Title = "📡 Radar Locked!", Content = "Teleporting to " .. targetClass .. "!", Duration = 2})
                     end
                     local currentRoot = getRootPart()
                     if currentRoot then
-                        -- Harita daha yüklenmemiş olsa bile fiziksel koordinata uç
                         currentRoot.CFrame = CFrame.new(targetVec)
                         task.wait(1)
-                        continue -- Hedefe ışınlandık, normal oda taramasını atla
+                        teleportedByRadar = true
+                        break -- Döngüden çık
                     end
                 end
+            end
+            
+            if teleportedByRadar then
+                continue -- Ana loopu başa sar, fiziksel taramayı atla
             end
         end
 
@@ -1122,8 +1166,11 @@ task.spawn(function()
                     break
                 end
 
-                if isKeyFarmPhase then
-                    if isBreakable and bestRoomType < 1 then
+                if isKeyFarmPhase or getgenv().Config.FarmDeepChests then
+                    if isVault and bestRoomType < 2 then
+                        bestRoom = room
+                        bestRoomType = 2
+                    elseif isBreakable and bestRoomType < 1 then
                         bestRoom = room
                         bestRoomType = 1
                     end
@@ -1579,6 +1626,30 @@ task.spawn(function()
         table.sort(sortedRooms, function(a, b) return a.Dist > b.Dist end)
 
         if #sortedRooms == 0 then
+            if visitedCount > 100 and getgenv().Config.HopOnBossCooldown then
+                if getgenv().RLW_Window then
+                    getgenv().RLW_Window:Notify({Title = "🚀 Dead Server!", Content = "Map fully explored. Hopping servers...", Duration = 5})
+                end
+                pcall(function()
+                    local HttpService = game:GetService("HttpService")
+                    local TeleportService = game:GetService("TeleportService")
+                    local req = request or http_request or (syn and syn.request)
+                    if req then
+                        local servers = req({Url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Desc&limit=100"}).Body
+                        local decoded = HttpService:JSONDecode(servers)
+                        if decoded and decoded.data then
+                            for _, v in pairs(decoded.data) do
+                                if type(v) == "table" and v.playing and v.playing < v.maxPlayers and v.id ~= game.JobId then
+                                    TeleportService:TeleportToPlaceInstance(game.PlaceId, v.id, game.Players.LocalPlayer)
+                                    break
+                                end
+                            end
+                        end
+                    end
+                end)
+                task.wait(5)
+            end
+            
             VisitedRooms = {}
             visitedCount = 0
             -- ✅ DeadEggRooms'u da temizle! Yeni oda gelmediyse, eski "ölü" odaları da tekrar dene.
@@ -1953,6 +2024,15 @@ TabAutoFarm:CreateSlider({
     CurrentValue = 5,
     Flag = "Sld_TargetKeys",
     Callback = function(Value) getgenv().Config.TargetKeyCount = Value end
+})
+
+TabAutoFarm:CreateToggle({
+    Name = "💰 Always Farm Chest/Vault Rooms",
+    CurrentValue = false,
+    Flag = "Tgl_FarmDeepChests",
+    Callback = function(Value)
+        getgenv().Config.FarmDeepChests = Value
+    end
 })
 
 TabAutoFarm:CreateToggle({
