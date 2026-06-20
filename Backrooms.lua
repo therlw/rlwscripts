@@ -1114,8 +1114,19 @@ task.spawn(function()
                             if getgenv().RLW_Window then
                                 getgenv().RLW_Window:Notify({Title = "📡 Radar Locked!", Content = "Teleporting to " .. targetClass .. "!", Duration = 2})
                             end
-                            currentRoot.CFrame = CFrame.new(targetVec)
-                            task.wait(1)
+                            
+                            -- Haritanın yüklenmesi (Streaming) için karakteri havada dondur!
+                            currentRoot.Anchored = true
+                            currentRoot.CFrame = CFrame.new(targetVec + Vector3.new(0, 5, 0))
+                            
+                            local Network = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
+                            if Network and Network:FindFirstChild("RequestStreaming") then
+                                pcall(function() Network.RequestStreaming:FireServer(targetVec) end)
+                            end
+                            
+                            task.wait(1) -- Odanın fiziksel olarak yüklenmesini bekle
+                            currentRoot.Anchored = false
+                            
                             teleportedByRadar = true
                             break -- Döngüden çık
                         end
