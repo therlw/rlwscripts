@@ -1038,7 +1038,9 @@ task.spawn(function()
         local rooms = {}
         for _, r in ipairs(rooms_raw) do
             local pos = r:IsA("Model") and r:GetPivot().Position or (r:IsA("BasePart") and r.Position or Vector3.zero)
-            if (pos - charPos).Magnitude < 20000 then
+            local yDiff = math.abs(pos.Y - charPos.Y)
+            -- Sıkı Y-ekseni filtresi: Deep ve Klasik Backrooms'un dikeyde birbirine karışmasını tamamen engeller
+            if yDiff < 500 and (pos - charPos).Magnitude < 20000 then
                 table.insert(rooms, r)
             end
         end
