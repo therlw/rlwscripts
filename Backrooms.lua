@@ -1640,7 +1640,8 @@ task.spawn(function()
                     continue
                 end
                 local pos = room:IsA("Model") and room:GetPivot().Position or Vector3.new(0,0,0)
-                table.insert(sortedRooms, {Room = room, Dist = pos.Magnitude, UID = uid})
+                local charPos = getRootPart() and getRootPart().Position or Vector3.zero
+                table.insert(sortedRooms, {Room = room, Dist = (pos - charPos).Magnitude, UID = uid})
             end
         end
 
