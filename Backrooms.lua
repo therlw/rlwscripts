@@ -765,7 +765,7 @@ local function isEggAlive(room)
     return true
 end
 
-local function getTargetRoomVector(roomTypeStr, altTypeStr)
+local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_raw)
     local Network = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
     local invokeCustom = Network and Network:FindFirstChild("Instancing_InvokeCustomFromClient")
     if not invokeCustom then return nil end
@@ -777,10 +777,9 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr)
     if success and descriptor and type(descriptor) == "table" and descriptor.rooms then
         local t1 = roomTypeStr and string.lower(roomTypeStr)
         local t2 = altTypeStr and string.lower(altTypeStr)
-        -- print("[RADAR DEBUG] descriptor.rooms sayısı: " .. tostring(#descriptor.rooms))
+        
         for _, roomInfo in ipairs(descriptor.rooms) do
             local c = string.lower(roomInfo.class or "")
-            -- print("[RADAR DEBUG] Oda Sınıfı: " .. c)
             if (t1 and c:find(t1)) or (t2 and c:find(t2)) then
                 local res = descriptor.res or 45
                 local x0 = descriptor.x0 or 1
@@ -792,8 +791,26 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr)
                 
                 local worldX = (centerGridX + (x0 - 1)) * res + rootVec.X
                 local worldZ = (centerGridY + (y0 - 1)) * res + rootVec.Z
+                local targetVec = Vector3.new(worldX, rootVec.Y + 15, worldZ)
                 
-                return Vector3.new(worldX, rootVec.Y + 15, worldZ)
+                -- Kontrol: Bu koordinattaki fiziksel oda VisitedRooms'ta var mı?
+                local isVisited = false
+                if rooms_raw and VisitedRooms then
+                    for _, r in ipairs(rooms_raw) do
+                        local pos = r:IsA("Model") and r:GetPivot().Position or (r:IsA("BasePart") and r.Position or Vector3.zero)
+                        if (pos - targetVec).Magnitude < 300 then
+                            local uid = r:GetAttribute("RoomUID")
+                            if uid and VisitedRooms[uid] then
+                                isVisited = true
+                                break
+                            end
+                        end
+                    end
+                end
+
+                if not isVisited then
+                    return targetVec
+                end
             end
         end
     end
@@ -1024,18 +1041,22 @@ task.spawn(function()
             for _, tData in ipairs(radarTargets) do
                 local targetClass = tData[1]
                 local altClass = tData[2]
-                local targetVec = getTargetRoomVector(targetClass, altClass)
+                local targetVec = getTargetRoomVector(targetClass, altClass, VisitedRooms, rooms_raw)
                 
                 if targetVec then
-                    if getgenv().RLW_Window then
-                        getgenv().RLW_Window:Notify({Title = "📡 Radar Locked!", Content = "Teleporting to " .. targetClass .. "!", Duration = 2})
-                    end
                     local currentRoot = getRootPart()
                     if currentRoot then
-                        currentRoot.CFrame = CFrame.new(targetVec)
-                        task.wait(1)
-                        teleportedByRadar = true
-                        break -- Döngüden çık
+                        local dist = (currentRoot.Position - targetVec).Magnitude
+                        -- Sadece hedeften 300 stud uzaktaysak ışınlan (Sonsuz döngüyü engeller)
+                        if dist > 300 then
+                            if getgenv().RLW_Window then
+                                getgenv().RLW_Window:Notify({Title = "📡 Radar Locked!", Content = "Teleporting to " .. targetClass .. "!", Duration = 2})
+                            end
+                            currentRoot.CFrame = CFrame.new(targetVec)
+                            task.wait(1)
+                            teleportedByRadar = true
+                            break -- Döngüden çık
+                        end
                     end
                 end
             end
@@ -1626,7 +1647,7 @@ task.spawn(function()
         table.sort(sortedRooms, function(a, b) return a.Dist > b.Dist end)
 
         if #sortedRooms == 0 then
-            if visitedCount > 100 and getgenv().Config.HopOnBossCooldown then
+            if visitedCount > 300 and getgenv().Config.HopOnBossCooldown then
                 if getgenv().RLW_Window then
                     getgenv().RLW_Window:Notify({Title = "🚀 Dead Server!", Content = "Map fully explored. Hopping servers...", Duration = 5})
                 end
