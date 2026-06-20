@@ -823,7 +823,20 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
                 
                 local worldX = (centerGridX + (x0 - 1)) * res + rootVec.X
                 local worldZ = (centerGridY + (y0 - 1)) * res + rootVec.Z
-                local targetVec = Vector3.new(worldX, rootVec.Y + 15, worldZ)
+                
+                -- Y Eksenini Dinamik Hesapla (Deep Backrooms farklı bir yükseklikte)
+                local targetY = rootVec.Y
+                if targetY == 0 and rooms_raw and #rooms_raw > 0 then
+                    for _, r in ipairs(rooms_raw) do
+                        local pos = r:IsA("Model") and r:GetPivot().Position or (r:IsA("BasePart") and r.Position or nil)
+                        if pos then
+                            targetY = pos.Y
+                            break
+                        end
+                    end
+                end
+                
+                local targetVec = Vector3.new(worldX, targetY + 15, worldZ)
                 
                 getgenv().DeadCoords = getgenv().DeadCoords or {}
                 local coordKey = string.format("%d_%d", math.floor(targetVec.X), math.floor(targetVec.Z))
