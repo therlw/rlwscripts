@@ -781,9 +781,22 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
     local invokeCustom = Network and Network:FindFirstChild("Instancing_InvokeCustomFromClient")
     if not invokeCustom then return nil end
 
-    local success, descriptor = pcall(function()
-        return invokeCustom:InvokeServer("Backrooms", "Backrooms_GetMapDescriptor", getgenv().Config.DeepBackroomsMode)
-    end)
+    local modeKey = getgenv().Config.DeepBackroomsMode and "Deep" or "Normal"
+    if not getgenv().MapDescriptors then getgenv().MapDescriptors = {} end
+    
+    local descriptor = getgenv().MapDescriptors[modeKey]
+    local success = true
+    if not descriptor then
+        local s, desc = pcall(function()
+            return invokeCustom:InvokeServer("Backrooms", "Backrooms_GetMapDescriptor", getgenv().Config.DeepBackroomsMode)
+        end)
+        if s and desc then
+            descriptor = desc
+            getgenv().MapDescriptors[modeKey] = desc
+        else
+            success = false
+        end
+    end
 
     if success and descriptor and type(descriptor) == "table" and descriptor.rooms then
         local t1 = roomTypeStr and string.lower(roomTypeStr)
