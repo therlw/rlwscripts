@@ -22,10 +22,16 @@ getgenv().Config = {
     GodMode = false,
     TeleportDelay = 0.8,
     HopOnBossCooldown = false,
+    DeepBackroomsMode = false,
+    RadarTeleport = false,
     AutoUpgrades = {
         BackroomsBossDamage = false,
         BackroomsExtraLootRoll = false,
-        BackroomsTokenFind = false
+        BackroomsTokenFind = false,
+        BackroomsDeepBossDamage = false,
+        BackroomsCoinMultiplier = false,
+        BackroomsEggLuck = false,
+        BackroomsKeyFind = false
     },
     WebhookEnabled = false,
     WebhookURL = "",
@@ -737,6 +743,41 @@ local function isEggAlive(room)
     return true
 end
 
+local function getTargetRoomVector(roomTypeStr, altTypeStr)
+    local Network = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
+    local invokeCustom = Network and Network:FindFirstChild("Instancing_InvokeCustomFromClient")
+    if not invokeCustom then return nil end
+
+    local success, descriptor = pcall(function()
+        return invokeCustom:InvokeServer("Backrooms", "Backrooms_GetMapDescriptor", getgenv().Config.DeepBackroomsMode)
+    end)
+
+    if success and descriptor and type(descriptor) == "table" and descriptor.rooms then
+        local t1 = roomTypeStr and string.lower(roomTypeStr)
+        local t2 = altTypeStr and string.lower(altTypeStr)
+        -- print("[RADAR DEBUG] descriptor.rooms sayısı: " .. tostring(#descriptor.rooms))
+        for _, roomInfo in ipairs(descriptor.rooms) do
+            local c = string.lower(roomInfo.class or "")
+            -- print("[RADAR DEBUG] Oda Sınıfı: " .. c)
+            if (t1 and c:find(t1)) or (t2 and c:find(t2)) then
+                local res = descriptor.res or 45
+                local x0 = descriptor.x0 or 1
+                local y0 = descriptor.y0 or 1
+                local rootVec = descriptor.root or Vector3.new(0,0,0)
+                
+                local centerGridX = roomInfo.x + (roomInfo.w / 2)
+                local centerGridY = roomInfo.y + (roomInfo.h / 2)
+                
+                local worldX = (centerGridX + (x0 - 1)) * res + rootVec.X
+                local worldZ = (centerGridY + (y0 - 1)) * res + rootVec.Z
+                
+                return Vector3.new(worldX, rootVec.Y + 15, worldZ)
+            end
+        end
+    end
+    return nil
+end
+
 local function HandleInstanceEntry()
     if IsInBackroomsInstance() then return end
     if os.clock() - LastInstanceJoinAttempt < 60 then return end
@@ -838,9 +879,88 @@ task.spawn(function()
             end
         end
 
-        local rooms = CollectionService:GetTagged("Backrooms")
-        if #rooms == 0 then
+        local rooms_raw = CollectionService:GetTagged("Backrooms")
+        if #rooms_raw == 0 then
             VisitedRooms = {}
+            task.wait(1)
+            continue
+        end
+
+        local root = getRootPart()
+        local charPos = root and root.Position or Vector3.zero
+
+        -- DEEP BACKROOMS GİRİŞ KONTROLÜ
+        if getgenv().Config.DeepBackroomsMode then
+            local inDeep = false
+            pcall(function()
+                inDeep = require(game:GetService("ReplicatedStorage").Library.Signal).Invoke("Backrooms_IsInDeep")
+            end)
+            
+            if not inDeep then
+                local curtain = CollectionService:GetTagged("DeepCurtainTarget")[1]
+                if curtain then
+                    local distToCurtain = (charPos - curtain.Position).Magnitude
+                    if distToCurtain < 10000 then -- Eğer perdeye nispeten yakınsak (aynı boyuttaysak)
+                    local Network = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
+                    local invokeCustom = Network and Network:FindFirstChild("Instancing_InvokeCustomFromClient")
+                    if invokeCustom then
+                        pcall(function()
+                            invokeCustom:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", 1, "UnlockDeep")
+                            task.wait(1)
+                            invokeCustom:InvokeServer("Backrooms", "Backrooms_GetMapDescriptor", true)
+                        end)
+                    end
+                    
+                    if getgenv().RLW_Window then
+                        getgenv().RLW_Window:Notify({Title = "🌌 Deep Entry!", Content = "Entering Deep Backrooms...", Duration = 3})
+                    end
+                    
+                    -- Perdeye ışınlanmadan önce ForceField ekle
+                    local char = LocalPlayer.Character
+                    if char then
+                        local ff = Instance.new("ForceField")
+                        ff.Visible = false
+                        ff.Parent = char
+                        task.delay(5, function() if ff then ff:Destroy() end end)
+                    end
+                    
+                    safeTeleport(curtain, true)
+                    task.wait(0.5)
+                    
+                    local currentRoot = getRootPart()
+                    if currentRoot then
+                        if firetouchinterest then
+                            firetouchinterest(currentRoot, curtain, 0)
+                            task.wait(0.1)
+                            firetouchinterest(currentRoot, curtain, 1)
+                        end
+                        
+                        -- Fırlatma ve içine sokma
+                        pcall(function()
+                            currentRoot.CFrame = curtain.CFrame * CFrame.new(0, 0, 5)
+                            task.wait(0.2)
+                            currentRoot.AssemblyLinearVelocity = curtain.CFrame.LookVector * -100
+                        end)
+                    end
+                    
+                    task.wait(3)
+                    continue -- Yeni boyuta geçtik, döngüyü başa sar
+                end
+            end
+            end -- Missing end for if not inDeep then
+        end
+
+        -- MESAFE FİLTRESİ: Deep ile Normal odaların birbirine karışmasını engeller
+        -- Karakterden çok uzak olan odaları listeye almayız.
+        local rooms = {}
+        for _, r in ipairs(rooms_raw) do
+            local pos = r:IsA("Model") and r:GetPivot().Position or (r:IsA("BasePart") and r.Position or Vector3.zero)
+            if (pos - charPos).Magnitude < 20000 then
+                table.insert(rooms, r)
+            end
+        end
+
+        if #rooms == 0 then
             task.wait(1)
             continue
         end
@@ -848,6 +968,38 @@ task.spawn(function()
         -- Öncelikli hedef arama (Egg, Boss, Vault, Breakable)
         local bestRoom = nil
         local bestRoomType = 0
+
+        -- RADAR TELEPORT (GOD MODE) ARAMASI
+        if getgenv().Config.RadarTeleport then
+            local targetClass = nil
+            local altClass = nil
+            if isBossHuntPhase then
+                targetClass = "boss"
+                altClass = "gamemaster"
+            elseif isKeyFarmPhase then
+                targetClass = "vault"
+                altClass = "chest"
+            elseif isHybridEggPhase or getgenv().Config.FindKeepOutEgg then
+                targetClass = "keepout"
+                altClass = "egg"
+            end
+            
+            if targetClass then
+                local targetVec = getTargetRoomVector(targetClass, altClass)
+                if targetVec then
+                    if getgenv().RLW_Window then
+                        getgenv().RLW_Window:Notify({Title = "📡 Radar Locked!", Content = "Teleporting to " .. targetClass .. "!", Duration = 2})
+                    end
+                    local currentRoot = getRootPart()
+                    if currentRoot then
+                        -- Harita daha yüklenmemiş olsa bile fiziksel koordinata uç
+                        currentRoot.CFrame = CFrame.new(targetVec)
+                        task.wait(1)
+                        continue -- Hedefe ışınlandık, normal oda taramasını atla
+                    end
+                end
+            end
+        end
 
         -- 1. ADIM: KAYITLI YUMURTA ODASI KONTROLÜ
         local checkEggCache = isHybridEggPhase or (getgenv().Config.FindKeepOutEgg and not getgenv().Config.MetaFarmActive)
@@ -935,7 +1087,7 @@ task.spawn(function()
                 end
                 
                 local isBoss = lowerID:find("bosschest") or lowerID:find("minichest")
-                    or lowerID:find("miniboss") or lowerID:find("boss")
+                    or lowerID:find("miniboss") or lowerID:find("boss") or lowerID:find("gamemaster")
                     or room:GetAttribute("BossChestUID") or room:GetAttribute("ActiveMinichests")
                 local isVault = lowerID:find("vault") or lowerID:find("chest")
                 local isBreakable = lowerID:find("breakable")
@@ -1740,6 +1892,30 @@ end)
 TabAutoFarm:CreateSection("Standalone Farm")
 
 TabAutoFarm:CreateToggle({
+    Name = "🌌 Deep Backrooms Mode",
+    CurrentValue = getgenv().Config.DeepBackroomsMode,
+    Flag = "Tgl_DeepBackroomsMode",
+    Callback = function(Value)
+        getgenv().Config.DeepBackroomsMode = Value
+        if Value and getgenv().RLW_Window then
+            getgenv().RLW_Window:Notify({Title = "🌌 Deep Mode", Content = "Script will auto-pay 1.25M to enter Deep Backrooms!", Duration = 5})
+        end
+    end
+})
+
+TabAutoFarm:CreateToggle({
+    Name = "🚀 BETA: Map Radar Teleport (God Mode)",
+    CurrentValue = getgenv().Config.RadarTeleport,
+    Flag = "Tgl_RadarTeleport",
+    Callback = function(Value)
+        getgenv().Config.RadarTeleport = Value
+        if Value and getgenv().RLW_Window then
+            getgenv().RLW_Window:Notify({Title = "⚠️ WARNING", Content = "Radar Teleport bypasses physics! It will teleport you instantly.", Duration = 5})
+        end
+    end
+})
+
+TabAutoFarm:CreateToggle({
     Name = "⚡ Fast Farm Breakables",
     CurrentValue = false,
     Flag = "Tgl_FastFarm",
@@ -1889,6 +2065,44 @@ TabUpgrades:CreateToggle({
 })
 
 -- 🔔 WEBHOOK TAB --
+
+TabUpgrades:CreateSection("Deep Chest Upgrades")
+
+TabUpgrades:CreateToggle({
+    Name = "Auto Deep Boss Damage",
+    CurrentValue = false,
+    Flag = "Tgl_UpgDeepBossDmg",
+    Callback = function(Value)
+        getgenv().Config.AutoUpgrades.BackroomsDeepBossDamage = Value
+    end
+})
+
+TabUpgrades:CreateToggle({
+    Name = "Auto Coin Multiplier",
+    CurrentValue = false,
+    Flag = "Tgl_UpgDeepCoinMult",
+    Callback = function(Value)
+        getgenv().Config.AutoUpgrades.BackroomsCoinMultiplier = Value
+    end
+})
+
+TabUpgrades:CreateToggle({
+    Name = "Auto Egg Luck",
+    CurrentValue = false,
+    Flag = "Tgl_UpgDeepEggLuck",
+    Callback = function(Value)
+        getgenv().Config.AutoUpgrades.BackroomsEggLuck = Value
+    end
+})
+
+TabUpgrades:CreateToggle({
+    Name = "Auto Key Find",
+    CurrentValue = false,
+    Flag = "Tgl_UpgDeepKeyFind",
+    Callback = function(Value)
+        getgenv().Config.AutoUpgrades.BackroomsKeyFind = Value
+    end
+})
 TabWebhook:CreateSection("Discord Notifications (Huge/Titanic)")
 
 TabWebhook:CreateToggle({
