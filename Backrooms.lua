@@ -792,6 +792,14 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
         for _, roomInfo in ipairs(descriptor.rooms) do
             local c = string.lower(roomInfo.class or "")
             if (t1 and c:find(t1)) or (t2 and c:find(t2)) then
+                -- Event odası olan ChestChooseRoom'ların Kasa (Chest) arayışına karışmasını ENGELLE!
+                local isChoosingRoom = c:find("choose")
+                local targetIsChoosing = (t1 and t1:find("choose")) or (t2 and t2:find("choose"))
+                
+                if isChoosingRoom and not targetIsChoosing then
+                    continue
+                end
+                
                 local res = descriptor.res or 45
                 local x0 = descriptor.x0 or 1
                 local y0 = descriptor.y0 or 1
