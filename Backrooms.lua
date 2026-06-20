@@ -1052,8 +1052,8 @@ task.spawn(function()
                 local roomID = room:GetAttribute("RoomID") or ""
                 local lowerID = string.lower(roomID)
 
-                -- SADECE VE SADECE TITANIC EGG ODALARINA GİDECEK!
-                local isEgg = lowerID:find("titanicegg")
+                -- TITANIC, KEEPOUT VE DEEP LOCKED EGGLERİ KABUL EDER
+                local isEgg = lowerID:find("titanicegg") or lowerID:find("deeplockedegg") or lowerID:find("keepout")
                 
                 -- ✅ DeadEggRooms kontrolü: cooldown süresi dolmadıysa bu odaya gitme
                 if isEgg and DeadEggRooms[roomUID] and (os.clock() - DeadEggRooms[roomUID]) < DEAD_EGG_COOLDOWN then
@@ -1997,7 +1997,7 @@ TabEggs:CreateToggle({
 
 TabEggs:CreateDropdown({
     Name = "🥚 Target Specific Egg",
-    Options = {"Any", "Nightmare", "Smile", "Flower", "Gooey", "Scribble", "Tentacles", "Keep Out", "Night Terror", "Fear", "Swirl", "Overgrown", "Ender", "Corrupt", "Titanic", "Huge"},
+    Options = {"Any", "Nightmare", "Smile", "Flower", "Gooey", "Scribble", "Tentacles", "Keep Out", "Night Terror", "Fear", "Swirl", "Overgrown", "Ender", "Corrupt", "Titanic", "Huge", "Heart", "Balloon", "Rain", "Eyes", "Danger"},
     CurrentOption = {"Any"},
     Flag = "Drp_SpecificEgg",
     Callback = function(Option)
@@ -2007,7 +2007,7 @@ TabEggs:CreateDropdown({
 
 TabEggs:CreateDropdown({
     Name = "🎯 Target Egg Multiplier",
-    Options = {"2x", "3x", "5x", "10x", "15x", "20x", "50x", "100x"},
+    Options = {"2x", "3x", "5x", "10x", "15x", "20x", "25x", "30x", "35x", "40x", "45x", "50x", "75x", "100x", "250x"},
     CurrentOption = {"50x"},
     Flag = "Drp_Multiplier",
     Callback = function(Option)
