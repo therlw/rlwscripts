@@ -47,7 +47,8 @@ getgenv().LiveStats = {
     BossesKilled = 0,
     HighestMultiplier = 0,
     RoomsExplored = 0,
-    _seenRooms = {}
+    _seenRooms = {},
+    BossStatus = "Searching..."
 }
 
 -- ==========================
@@ -766,7 +767,7 @@ local function isEggAlive(room)
     return true
 end
 
-local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_raw)
+local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_raw, DeadChestRooms)
     local Network = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
     local invokeCustom = Network and Network:FindFirstChild("Instancing_InvokeCustomFromClient")
     if not invokeCustom then return nil end
@@ -802,8 +803,11 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
                         if (pos - targetVec).Magnitude < 300 then
                             local uid = r:GetAttribute("RoomUID")
                             if uid and VisitedRooms[uid] then
-                                isVisited = true
-                                break
+                                -- Eger Boss veya Vault odasiysa ve yeniden dogmadiysa visited say!
+                                if not DeadChestRooms or not DeadChestRooms[uid] or DeadChestRooms[uid] > workspace:GetServerTimeNow() then
+                                    isVisited = true
+                                    break
+                                end
                             end
                         end
                     end
@@ -1050,9 +1054,12 @@ task.spawn(function()
             for _, tData in ipairs(radarTargets) do
                 local targetClass = tData[1]
                 local altClass = tData[2]
-                local targetVec = getTargetRoomVector(targetClass, altClass, VisitedRooms, rooms_raw)
+                local targetVec = getTargetRoomVector(targetClass, altClass, VisitedRooms, rooms_raw, DeadChestRooms)
                 
                 if targetVec then
+                    if targetClass == "boss" then
+                        getgenv().LiveStats.BossStatus = "Found: " .. targetClass
+                    end
                     local currentRoot = getRootPart()
                     if currentRoot then
                         local dist = (currentRoot.Position - targetVec).Magnitude
@@ -1073,6 +1080,8 @@ task.spawn(function()
             if teleportedByRadar then
                 continue -- Ana loopu başa sar, fiziksel taramayı atla
             end
+            
+            getgenv().LiveStats.BossStatus = "Not Found / Dead"
         end
 
         -- 1. ADIM: KAYITLI YUMURTA ODASI KONTROLÜ
@@ -2052,9 +2061,11 @@ TabStats:CreateSection("Session Information")
 
 local lblTime = TabStats:CreateLabel({Name = "⏱️ Session Time", CurrentValue = "00:00:00"})
 local lblRooms = TabStats:CreateLabel({Name = "🚪 Rooms Explored", CurrentValue = "0", Color = Color3.fromRGB(150, 150, 255)})
-local lblHighest = TabStats:CreateLabel({Name = "🔥 Highest Multiplier", CurrentValue = "0x", Color = Color3.fromRGB(255, 215, 0)})
-local lblBosses = TabStats:CreateLabel({Name = "👹 Bosses Defeated", CurrentValue = "0", Color = Color3.fromRGB(255, 100, 100)})
+local lblHighest = TabStats:CreateLabel({Name = "🚀 Highest Multiplier", CurrentValue = "0x", Color = Color3.fromRGB(255, 215, 0)})
+local lblBosses = TabStats:CreateLabel({Name = "⚔️ Bosses Defeated", CurrentValue = "0", Color = Color3.fromRGB(255, 100, 100)})
+local lblBossStatus = TabStats:CreateLabel({Name = "👁️ Boss Radar", CurrentValue = "Searching...", Color = Color3.fromRGB(200, 200, 200)})
 
+-- Sayaç Loop
 task.spawn(function()
     while task.wait(1) do
         if not getgenv().LiveStats then continue end
@@ -2075,6 +2086,7 @@ task.spawn(function()
                 lblHighest:SetText(multStr) 
             end
             if lblBosses and lblBosses.SetText then lblBosses:SetText(tostring(getgenv().LiveStats.BossesKilled)) end
+            if lblBossStatus and lblBossStatus.SetText then lblBossStatus:SetText(getgenv().LiveStats.BossStatus) end
         end)
     end
 end)
