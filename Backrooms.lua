@@ -1083,7 +1083,14 @@ task.spawn(function()
         -- RADAR TELEPORT (GOD MODE) ARAMASI
         if getgenv().Config.RadarTeleport then
             local radarTargets = {}
-            if isBossHuntPhase then table.insert(radarTargets, {"boss", "gamemaster"}) end
+            if isBossHuntPhase then
+                if getgenv().Config.DeepBackroomsMode then
+                    -- Deep modunda SADECE Deep Boss (GameMaster) hedeflenir! Klasik minibossroom'lar GÖRMEZDEN GELİNİR!
+                    table.insert(radarTargets, {"gamemaster"})
+                else
+                    table.insert(radarTargets, {"boss", "miniboss"})
+                end
+            end
             
             -- KULLANICI ARAYÜZDEN ÖZEL OLARAK AÇARSA KÜÇÜK SANDIKLARA UÇAR
             if isKeyFarmPhase or getgenv().Config.FarmDeepChests then 
