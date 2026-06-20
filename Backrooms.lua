@@ -332,10 +332,18 @@ local function getDaydreamKeyCount()
                 for _, item in pairs(categoryData) do
                     if type(item) == "table" and type(item.id) == "string" then
                         local idLower = string.lower(item.id)
-                        if idLower:find("backroom") and idLower:find("crayon") and idLower:find("key") then
-                            count = count + (item._am or 1)
-                        elseif idLower == "daydream key" or idLower == "backrooms key" or idLower == "backrooms crayon key" then
-                            count = count + (item._am or 1)
+                        local isDeepMode = getgenv().Config.DeepBackroomsMode
+                        
+                        if isDeepMode then
+                            -- Sadece Deep anahtarlarını say
+                            if idLower == "deep backrooms crayon key" or idLower == "deep daydream key" then
+                                count = count + (item._am or 1)
+                            end
+                        else
+                            -- Sadece Normal anahtarları say
+                            if idLower == "backrooms crayon key" or idLower == "daydream key" or idLower == "backrooms key" then
+                                count = count + (item._am or 1)
+                            end
                         end
                     end
                 end
