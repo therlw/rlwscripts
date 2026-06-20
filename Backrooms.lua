@@ -1205,8 +1205,17 @@ task.spawn(function()
                 local isBoss = lowerID:find("bosschest") or lowerID:find("minichest")
                     or lowerID:find("miniboss") or lowerID:find("boss") or lowerID:find("gamemaster")
                     or room:GetAttribute("BossChestUID") or room:GetAttribute("ActiveMinichests")
-                local isVault = lowerID:find("vault") or lowerID:find("chest")
-                local isBreakable = lowerID:find("breakable")
+                local isVault = false
+                local isBreakable = false
+                
+                if getgenv().Config.DeepBackroomsMode then
+                    -- Deep modundaysan normal kasaları görmezden gel, SADECE deep odalarını farmla!
+                    isVault = lowerID:find("deepchestroom") or lowerID:find("deepvault")
+                    isBreakable = lowerID:find("deepcoinroom")
+                else
+                    isVault = lowerID:find("vault") or lowerID:find("chest")
+                    isBreakable = lowerID:find("breakable")
+                end
                 
                 local isEvent = getgenv().Config.FarmDeepEvents and (
                     lowerID:find("chalkboardkeypad") or lowerID:find("code") or lowerID:find("simonfloor")
