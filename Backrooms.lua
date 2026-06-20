@@ -1044,6 +1044,9 @@ task.spawn(function()
             
             -- KULLANICI ARAYÜZDEN ÖZEL OLARAK AÇARSA KÜÇÜK SANDIKLARA UÇAR
             if isKeyFarmPhase or getgenv().Config.FarmDeepChests then 
+                if getgenv().Config.DeepBackroomsMode then
+                    table.insert(radarTargets, {"deepchest", "deepvault"})
+                end
                 table.insert(radarTargets, {"vault", "chest"}) 
             end
             
