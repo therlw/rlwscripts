@@ -812,6 +812,12 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
                 local worldZ = (centerGridY + (y0 - 1)) * res + rootVec.Z
                 local targetVec = Vector3.new(worldX, rootVec.Y + 15, worldZ)
                 
+                getgenv().DeadCoords = getgenv().DeadCoords or {}
+                local coordKey = string.format("%d_%d", math.floor(targetVec.X), math.floor(targetVec.Z))
+                if getgenv().DeadCoords[coordKey] and getgenv().DeadCoords[coordKey] > workspace:GetServerTimeNow() then
+                    continue
+                end
+                
                 -- Kontrol: Bu koordinattaki fiziksel oda VisitedRooms'ta var mı?
                 local isVisited = false
                 if rooms_raw and VisitedRooms then
@@ -831,6 +837,7 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
                 end
 
                 if not isVisited then
+                    getgenv().CurrentRadarTargetCoordKey = coordKey
                     return targetVec
                 end
             end
@@ -1742,8 +1749,16 @@ task.spawn(function()
                     
                     bigCheckTimer = bigCheckTimer + 1
                     if bigCheckTimer == 3 and not foundBig then
-                        -- print("[FARM] ❌ Bu odada sadece KÜÇÜK eşyalar var! Büyük kasa/eşya olan başka odaya geçiliyor...")
                         VisitedRooms[roomUID] = true
+                        local respawnTs = nil
+                        pcall(function() respawnTs = bestRoom:GetAttribute("RespawnTimestamp") end)
+                        if respawnTs and respawnTs > workspace:GetServerTimeNow() then
+                            getgenv().DeadCoords = getgenv().DeadCoords or {}
+                            if getgenv().CurrentRadarTargetCoordKey then
+                                getgenv().DeadCoords[getgenv().CurrentRadarTargetCoordKey] = respawnTs
+                            end
+                            DeadChestRooms[roomUID] = respawnTs
+                        end
                         break
                     end
 
