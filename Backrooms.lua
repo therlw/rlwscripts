@@ -21,6 +21,7 @@ getgenv().Config = {
     AutoLoot = false,
     GodMode = false,
     TeleportDelay = 0.8,
+    HopOnBossCooldown = false,
     AutoUpgrades = {
         BackroomsBossDamage = false,
         BackroomsExtraLootRoll = false,
@@ -1295,6 +1296,32 @@ task.spawn(function()
                             break -- Döngüden çık, main döngü Egg bulacak!
                         end
 
+                        -- HOP ON BOSS COOLDOWN KONTROL: Eğer boss ölü ise sunucu değiştir!
+                        if getgenv().Config.HopOnBossCooldown then
+                            if getgenv().RLW_Window then
+                                getgenv().RLW_Window:Notify({Title = "🚀 Server Hopping!", Content = "Boss is on cooldown. Finding a new server...", Duration = 5})
+                            end
+                            local HttpService = game:GetService("HttpService")
+                            local TeleportService = game:GetService("TeleportService")
+                            local req = request or http_request or (syn and syn.request)
+                            if req then
+                                pcall(function()
+                                    local servers = req({Url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Desc&limit=100"}).Body
+                                    local decoded = HttpService:JSONDecode(servers)
+                                    if decoded and decoded.data then
+                                        for _, v in pairs(decoded.data) do
+                                            if type(v) == "table" and v.playing and v.playing < v.maxPlayers and v.id ~= game.JobId then
+                                                TeleportService:TeleportToPlaceInstance(game.PlaceId, v.id, game.Players.LocalPlayer)
+                                                break
+                                            end
+                                        end
+                                    end
+                                end)
+                            end
+                            task.wait(5) -- Hop atana kadar bekle
+                            continue -- Alt işlemlere inmeden döngüyü yeniden başa sar (veya kır)
+                        end
+
                         if not isWaitingRespawn then
                             isWaitingRespawn = true
                             notifiedRespawn = false
@@ -1732,6 +1759,15 @@ TabAutoFarm:CreateToggle({
         if Value and getgenv().RLW_Window then
             getgenv().RLW_Window:Notify({Title = "Boss Farming", Content = "Farming keys, then hunting Boss!", Duration = 5})
         end
+    end
+})
+
+TabAutoFarm:CreateToggle({
+    Name = "🚀 Hop on Boss Cooldown",
+    CurrentValue = false,
+    Flag = "Tgl_HopOnBossCooldown",
+    Callback = function(Value)
+        getgenv().Config.HopOnBossCooldown = Value
     end
 })
 
