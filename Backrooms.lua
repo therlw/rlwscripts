@@ -1061,8 +1061,13 @@ task.spawn(function()
             if isKeyFarmPhase or getgenv().Config.FarmDeepChests then 
                 if getgenv().Config.DeepBackroomsMode then
                     table.insert(radarTargets, {"deepchest", "deepvault"})
+                    -- Eğer SADECE Deep Chest istiyorsa normal odalara gitme (Anahtar lazımsa hariç)
+                    if not getgenv().Config.FarmDeepChests then
+                        table.insert(radarTargets, {"vault", "chest"}) 
+                    end
+                else
+                    table.insert(radarTargets, {"vault", "chest"}) 
                 end
-                table.insert(radarTargets, {"vault", "chest"}) 
             end
             
             if isHybridEggPhase or getgenv().Config.FindKeepOutEgg then 
