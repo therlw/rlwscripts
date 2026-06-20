@@ -48,7 +48,8 @@ getgenv().LiveStats = {
     HighestMultiplier = 0,
     RoomsExplored = 0,
     _seenRooms = {},
-    BossStatus = "Searching..."
+    BossStatus = "Searching...",
+    CurrentKeys = 0
 }
 
 -- ==========================
@@ -1692,6 +1693,8 @@ task.spawn(function()
                 while getgenv().Config.MetaFarmActive do
                     task.wait(1)
                     local currentKeys = getDaydreamKeyCount()
+                    getgenv().LiveStats.CurrentKeys = currentKeys
+                    
                     if currentKeys >= getgenv().Config.TargetKeyCount then
                         -- print("[SİSTEM] 🎯 Hedef anahtara ulaşıldı! Boss Avına geçiliyor.")
                         break
@@ -2074,6 +2077,7 @@ TabStats:CreateSection("Session Information")
 
 local lblTime = TabStats:CreateLabel({Name = "⏱️ Session Time", CurrentValue = "00:00:00"})
 local lblRooms = TabStats:CreateLabel({Name = "🚪 Rooms Explored", CurrentValue = "0", Color = Color3.fromRGB(150, 150, 255)})
+local lblKeys = TabStats:CreateLabel({Name = "🔑 Target Keys", CurrentValue = "0 / 0", Color = Color3.fromRGB(200, 255, 100)})
 local lblHighest = TabStats:CreateLabel({Name = "🚀 Highest Multiplier", CurrentValue = "0x", Color = Color3.fromRGB(255, 215, 0)})
 local lblBosses = TabStats:CreateLabel({Name = "⚔️ Bosses Defeated", CurrentValue = "0", Color = Color3.fromRGB(255, 100, 100)})
 local lblBossStatus = TabStats:CreateLabel({Name = "👁️ Boss Radar", CurrentValue = "Searching...", Color = Color3.fromRGB(200, 200, 200)})
@@ -2091,6 +2095,7 @@ task.spawn(function()
         pcall(function()
             if lblTime and lblTime.SetText then lblTime:SetText(timeStr) end
             if lblRooms and lblRooms.SetText then lblRooms:SetText(tostring(getgenv().LiveStats.RoomsExplored)) end
+            if lblKeys and lblKeys.SetText then lblKeys:SetText(tostring(getgenv().LiveStats.CurrentKeys) .. " / " .. tostring(getgenv().Config.TargetKeyCount)) end
             if lblHighest and lblHighest.SetText then 
                 local multStr = tostring(getgenv().LiveStats.HighestMultiplier) .. "x"
                 if getgenv().LiveStats.HighestMultiplierName then
