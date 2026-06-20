@@ -1051,6 +1051,7 @@ task.spawn(function()
             end
             
             local teleportedByRadar = false
+            local radarFoundBoss = false
             for _, tData in ipairs(radarTargets) do
                 local targetClass = tData[1]
                 local altClass = tData[2]
@@ -1058,7 +1059,8 @@ task.spawn(function()
                 
                 if targetVec then
                     if targetClass == "boss" then
-                        getgenv().LiveStats.BossStatus = "Found: " .. targetClass
+                        radarFoundBoss = true
+                        getgenv().LiveStats.BossStatus = "Radar Locked 📡"
                     end
                     local currentRoot = getRootPart()
                     if currentRoot then
@@ -1081,7 +1083,9 @@ task.spawn(function()
                 continue -- Ana loopu başa sar, fiziksel taramayı atla
             end
             
-            getgenv().LiveStats.BossStatus = "Not Found / Dead"
+            if isBossHuntPhase and not radarFoundBoss then
+                getgenv().LiveStats.BossStatus = "Dead / Waiting Respawn"
+            end
         end
 
         -- 1. ADIM: KAYITLI YUMURTA ODASI KONTROLÜ
@@ -1216,6 +1220,7 @@ task.spawn(function()
                 if isBossHuntPhase and isBoss and bestRoomType < 3 then
                     bestRoom = room
                     bestRoomType = 3
+                    getgenv().LiveStats.BossStatus = "Fighting Boss ⚔️"
                     break
                 end
 
