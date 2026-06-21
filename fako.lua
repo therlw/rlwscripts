@@ -846,7 +846,7 @@ local function getRoomIndexFromPosition(pos, descriptor)
     local gridX = (relX / res) - (x0 - 1)
     local gridY = (relZ / res) - (y0 - 1)
     
-    local bestIdx = nil
+    local bestIdx = 1 -- Her zaman en azından bir başlangıç noktası olsun
     local bestDist = math.huge
     
     for i, room in ipairs(descriptor.rooms) do
@@ -865,6 +865,8 @@ local function getRoomIndexFromPosition(pos, descriptor)
 end
 
 local function findPathAStar(startIdx, targetIdx, graph, descriptor)
+    if not startIdx or not targetIdx or not descriptor.rooms[startIdx] or not descriptor.rooms[targetIdx] then return nil end
+    
     local openSet = {startIdx}
     local cameFrom = {}
     local gScore = {[startIdx] = 0}
@@ -873,7 +875,8 @@ local function findPathAStar(startIdx, targetIdx, graph, descriptor)
     local function heuristic(a, b)
         local rA = descriptor.rooms[a]
         local rB = descriptor.rooms[b]
-        return math.abs(rA.x - rB.x) + math.abs(rA.y - rB.y)
+        if not rA or not rB then return 0 end
+        return math.abs((rA.x or 0) - (rB.x or 0)) + math.abs((rA.y or 0) - (rB.y or 0))
     end
     
     fScore[startIdx] = heuristic(startIdx, targetIdx)
