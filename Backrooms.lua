@@ -1372,13 +1372,18 @@ task.spawn(function()
                 local targetVec, deadVec, deadCooldown, isPathNode, isWaitingAtBoundary = getTargetRoomVector(targetClass, altClass, VisitedRooms, rooms_raw, DeadChestRooms)
                 
                 if targetVec then
-                    if targetClass == "boss" then
+                    if targetClass == "boss" or targetClass == "miniboss" or targetClass == "gamemaster" or targetClass == "masterboss" or targetClass == "daydream" or targetClass == "deepboss" then
                         radarFoundBoss = true
                         getgenv().LiveStats.BossStatus = "Radar Locked 📡"
                     end
                     local currentRoot = getRootPart()
                     if currentRoot then
                         local dist = (currentRoot.Position - targetVec).Magnitude
+                        
+                        -- Update BossStatus with distance if it's a boss
+                        if radarFoundBoss then
+                            getgenv().LiveStats.BossStatus = string.format("Radar Locked 📡 (%d studs)", math.floor(dist))
+                        end
                         -- Sadece hedeften 300 stud uzaktaysak ışınlan (Sonsuz döngüyü engeller)
                         -- PathNode ise 50 stud uzağa kadar izin ver (yan odaya geçmesi için)
                         local minDist = isPathNode and 50 or 300
@@ -1458,8 +1463,13 @@ task.spawn(function()
             end
             
             if getgenv().Config.AutoBossHunt and not radarFoundBoss then
-                getgenv().LiveStats.BossStatus = "Dead / Waiting Respawn"
-                if getgenv().Config.HopOnBossCooldown then
+                -- Odanın hiç generate edilmediği (keşif modu) durumu
+                getgenv().LiveStats.BossStatus = "Searching Map... (" .. tostring(visitedCount) .. " rooms)"
+                
+                -- Eğer hiçbir boss odası yoksa ve HopOnBossCooldown açıksa server değiştir
+                -- NOT: Normalde boss odası fiziksel olarak kalsa da 'radarFoundBoss' true döner. 
+                -- Eğer false dönüyorsa, sunucuda hiç Boss odası oluşmamış demektir.
+                if getgenv().Config.HopOnBossCooldown and visitedCount >= 400 then
                     if getgenv().RLW_Window then
                         getgenv().RLW_Window:Notify({Title = "🚀 Server Hopping!", Content = "All bosses are dead! Finding a new server...", Duration = 5})
                     end
@@ -2138,8 +2148,11 @@ task.spawn(function()
                             end
                             if getgenv().LiveStats then getgenv().LiveStats.BossesKilled = getgenv().LiveStats.BossesKilled + 1 end
                         end
-                        local waitTime = math.max(respawnTs - workspace:GetServerTimeNow() - 1, 0)
-                        if waitTime > 2 then task.wait(waitTime) end
+                        if isWaitingRespawn then
+                            getgenv().LiveStats.BossStatus = "Respawning in " .. tostring(remaining) .. "s"
+                        end
+                        -- task.wait(waitTime) yapıp scripti 5 dk uyutmak yerine,
+                        -- döngünün her 1 saniyede bir dönüp UI'ı güncellemesini sağlıyoruz!
                     else
                         if isWaitingRespawn and not notifiedRespawn then
                             notifiedRespawn = true
