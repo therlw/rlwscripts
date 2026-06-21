@@ -999,24 +999,31 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
                         local path = findPathAStar(startIdx, targetIdx, graph, descriptor)
                         
                         if path and #path > 1 then
-                            local nextRoomIdx = path[2]
-                            local nextRoom = descriptor.rooms[nextRoomIdx]
-                            local res = descriptor.res or 45
-                            local x0 = descriptor.x0 or 1
-                            local y0 = descriptor.y0 or 1
-                            local rootVec = descriptor.root or Vector3.new(0,0,0)
+                            local Network = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
+                            local invokeCustom = Network and Network:FindFirstChild("Instancing_InvokeCustomFromClient")
                             
-                            local cx = nextRoom.x + (nextRoom.w / 2)
-                            local cy = nextRoom.y + (nextRoom.h / 2)
-                            
-                            local nextX = (cx + (x0 - 1)) * res + rootVec.X
-                            local nextZ = (cy + (y0 - 1)) * res + rootVec.Z
-                            
-                            local nextWaypointVec = Vector3.new(nextX, targetY + 15, nextZ)
+                            if invokeCustom then
+                                -- BÜYÜK OPTİMİZASYON: 300 oda tek tek yürümek yerine, saliseler içinde tüm yolu aç!
+                                task.spawn(function()
+                                    for i = 2, #path do
+                                        local rIdx = path[i]
+                                        local rData = descriptor.rooms[rIdx]
+                                        task.spawn(function()
+                                            pcall(function()
+                                                invokeCustom:InvokeServer("UnlockDeep", rData.id)
+                                            end)
+                                        end)
+                                        task.wait(0.03) -- Saniyede ~33 odayı anında aç (Sunucuyu yormadan süper hızlı)
+                                    end
+                                end)
+                            end
                             
                             -- CoordKey'i hedef oda için ayarla (Yol üzerindeki odalar DeadCoords'a girmesin diye)
                             getgenv().CurrentRadarTargetCoordKey = coordKey
-                            return nextWaypointVec, nil, nil, true -- isPathNode = true
+                            if getgenv().RLW_Window then
+                                getgenv().RLW_Window:Notify({Title = "⚡ Hyper-Skip!", Content = "Skipping " .. tostring(#path) .. " rooms instantly!", Duration = 2})
+                            end
+                            return targetVec, nil, nil, false -- isPathNode = false (Direkt ana hedefe uç)
                         end
                     end
                     continue -- Yol bulunamadıysa veya aynı odadaysa es geç
