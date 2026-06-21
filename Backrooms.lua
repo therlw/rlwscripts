@@ -1023,10 +1023,12 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
                     local targetIdx = getRoomIndexFromPosition(targetVec, descriptor)
                     
                     if startIdx and targetIdx and startIdx ~= targetIdx then
+                        print("[DEBUG-RADAR] Calculating A* Path. StartIdx: " .. tostring(startIdx) .. " | TargetIdx: " .. tostring(targetIdx))
                         local graph = buildNavGraph(descriptor)
                         local path = findPathAStar(startIdx, targetIdx, graph, descriptor)
                         
                         if path and #path > 1 then
+                            print("[DEBUG-RADAR] Path Found! Length: " .. tostring(#path) .. " | Next Node: " .. tostring(path[2]))
                             local nextRoomIdx = path[2]
                             local nextRoom = descriptor.rooms[nextRoomIdx]
                             local res = descriptor.res or 45
@@ -1367,13 +1369,19 @@ task.spawn(function()
                                 end
                                 -- Komşu odaya geçmeden önce bulunduğumuz odadaki tüm kapıları açmaya zorla!
                                 if invokeCustom and rooms_raw then
-                                    for i, r in ipairs(rooms_raw) do
-                                        local uid = r:GetAttribute("RoomUID")
-                                        if uid then
-                                            pcall(function() invokeCustom:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", uid, "UnlockDeep") end)
+                                    local currentPos = currentRoot.Position
+                                    local unlockCount = 0
+                                    for _, r in ipairs(rooms_raw) do
+                                        local rPos = r:GetPivot().Position
+                                        if (rPos - currentPos).Magnitude < 150 then
+                                            local uid = r:GetAttribute("RoomUID")
+                                            if uid then
+                                                pcall(function() invokeCustom:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", uid, "UnlockDeep") end)
+                                                unlockCount = unlockCount + 1
+                                            end
                                         end
-                                        if i % 10 == 0 then task.wait() end
                                     end
+                                    print("[DEBUG-RADAR] Sent UnlockDeep for " .. tostring(unlockCount) .. " nearby rooms.")
                                 end
                             else
                                 if getgenv().RLW_Window then
@@ -1381,16 +1389,20 @@ task.spawn(function()
                                 end
                             end
                             
+                            print("[DEBUG-RADAR] Anchoring character and teleporting to: " .. tostring(targetVec))
                             -- Haritanın yüklenmesi (Streaming) için karakteri havada dondur!
                             currentRoot.Anchored = true
                             currentRoot.CFrame = CFrame.new(targetVec + Vector3.new(0, 5, 0))
                             
                             if Network and Network:FindFirstChild("RequestStreaming") then
+                                print("[DEBUG-RADAR] Sending RequestStreaming to server...")
                                 pcall(function() Network.RequestStreaming:FireServer(targetVec) end)
                             end
                             
-                            task.wait(0.5) -- Odanın fiziksel olarak yüklenmesini bekle (Platform koruması var, hızlı geçiş yapabiliriz)
+                            print("[DEBUG-RADAR] Waiting 1.2s for physical room load...")
+                            task.wait(1.2) -- Odanın fiziksel olarak yüklenmesini bekle (Bağlantıya göre siyah ekranda kalmamak için süreyi artırdık)
                             
+                            print("[DEBUG-RADAR] Creating AntiVoid platform for safety.")
                             -- Güvenlik Ağı: Oda hala yüklenmediyse diye altına görünmez zemin koy!
                             local p = Instance.new("Part")
                             p.Name = "AntiVoidPart_Antigravity"
@@ -1401,6 +1413,7 @@ task.spawn(function()
                             p.Transparency = 1
                             game:GetService("Debris"):AddItem(p, 10) -- 10 saniye sonra silinir
                             
+                            print("[DEBUG-RADAR] Unanchoring character. Teleport sequence complete.")
                             currentRoot.Anchored = false
                             
                             teleportedByRadar = true
