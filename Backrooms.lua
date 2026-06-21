@@ -2106,8 +2106,7 @@ task.spawn(function()
                         local respawnTs = nil
                         pcall(function() respawnTs = bestRoom:GetAttribute("RespawnTimestamp") end)
                         
-                        -- Deep Backrooms sandıkları bir daha doğmaz, kalıcı olarak ölü işaretle!
-                        if getgenv().Config.DeepBackroomsMode then respawnTs = math.huge end
+                        
                         
                         if respawnTs and respawnTs > workspace:GetServerTimeNow() then
                             getgenv().DeadCoords = getgenv().DeadCoords or {}
@@ -2128,8 +2127,7 @@ task.spawn(function()
                             local respawnTs = nil
                             pcall(function() respawnTs = bestRoom:GetAttribute("RespawnTimestamp") end)
                             
-                            -- Deep Backrooms sandıkları bir daha doğmaz, kalıcı olarak ölü işaretle!
-                            if getgenv().Config.DeepBackroomsMode then respawnTs = math.huge end
+                            
                             
                             if respawnTs and respawnTs > workspace:GetServerTimeNow() then
                                 getgenv().DeadCoords = getgenv().DeadCoords or {}
