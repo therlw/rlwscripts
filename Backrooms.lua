@@ -551,8 +551,12 @@ local function GetBackroomsTargets()
 
                 if not isBoss and not isMini then
                     local bId = string.lower(tostring(obj:GetAttribute("BreakableID") or ""))
-                    if bId:find("comet") or bId:find("jar") or bId:find("pinata") or bId:find("lucky") or bId:find("mini") or bId:find("boss") or bId:find("chest") then
+                    if bId:find("gamemaster") or bId:find("grandmaster") then
+                        isBoss = true
+                    elseif bId:find("comet") or bId:find("jar") or bId:find("pinata") or bId:find("lucky") or bId:find("mini") or bId:find("chest") then
                         isPriority = true
+                    elseif bId:find("boss") then
+                        isBoss = true
                     end
                 end
 
@@ -572,12 +576,25 @@ task.spawn(function()
         local targets = GetBackroomsTargets()
         local allTargets = {}
         
-        if #targets.miniChests > 0 then
-            for _, v in ipairs(targets.miniChests) do table.insert(allTargets, v) end
-        elseif #targets.bossChest > 0 then
+        -- GRANDMASTER & MINIBOSS FİX: Boss'a vurmadan önce odadaki tüm küçük/öncelikli kasaları (Kalkan Kasaları) canlarına göre sıralayıp yok et!
+        local weakTargets = {}
+        for _, v in ipairs(targets.miniChests) do table.insert(weakTargets, v) end
+        for _, v in ipairs(targets.priority) do table.insert(weakTargets, v) end
+        
+        table.sort(weakTargets, function(a, b)
+            local hA = a:GetAttribute("MaxHealth") or a:GetAttribute("Health") or math.huge
+            local hB = b:GetAttribute("MaxHealth") or b:GetAttribute("Health") or math.huge
+            return hA < hB
+        end)
+        
+        for _, v in ipairs(weakTargets) do table.insert(allTargets, v) end
+        
+        -- Eğer küçük kalkan kasaları veya öncelikli hedef bittiyse, Ana Boss'a dal!
+        if #allTargets == 0 and #targets.bossChest > 0 then
             for _, v in ipairs(targets.bossChest) do table.insert(allTargets, v) end
-        else
-            for _, v in ipairs(targets.priority) do table.insert(allTargets, v) end
+        end
+        
+        if #allTargets == 0 then
             for _, v in ipairs(targets.normal) do table.insert(allTargets, v) end
         end
         
@@ -602,14 +619,22 @@ task.spawn(function()
                 return hitCount >= getgenv().SmartFarmState.MaxTargetsPerTick
             end
             
-            if #targets.miniChests > 0 then
-                hitGroup(targets.miniChests)
-            elseif #targets.bossChest > 0 then
+            local weakTargets = {}
+            for _, v in ipairs(targets.miniChests) do table.insert(weakTargets, v) end
+            for _, v in ipairs(targets.priority) do table.insert(weakTargets, v) end
+            
+            table.sort(weakTargets, function(a, b)
+                local hA = a:GetAttribute("MaxHealth") or a:GetAttribute("Health") or math.huge
+                local hB = b:GetAttribute("MaxHealth") or b:GetAttribute("Health") or math.huge
+                return hA < hB
+            end)
+            
+            if not hitGroup(weakTargets) and #targets.bossChest > 0 then
                 hitGroup(targets.bossChest)
-            else
-                if not hitGroup(targets.priority) then
-                    hitGroup(targets.normal)
-                end
+            end
+            
+            if hitCount < getgenv().SmartFarmState.MaxTargetsPerTick then
+                hitGroup(targets.normal)
             end
         end
     end
