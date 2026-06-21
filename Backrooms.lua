@@ -1080,7 +1080,7 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
                         
                         -- Eğer A* yol bulamadıysa veya yoldaki ileri odalar yüklenmemişse:
                         -- Eğer aradığımız hedef doğası gereği İZOLE bir oda ise (örn: GameMaster), A*'ı boşver direkt ışınlan!
-                        if targetClass == "gamemaster" or altClass == "gamemaster" then
+                        if string.lower(roomData.class):find("gamemaster") then
                             return targetVec, nil, nil, false
                         end
                         
@@ -1140,7 +1140,7 @@ task.spawn(function()
         local root = getRootPart()
         if not root then continue end
 
-        if not (getgenv().Config.MetaFarmActive or getgenv().Config.FindKeepOutEgg or getgenv().Config.FindFreeEggRoom) then
+        if not (getgenv().Config.AutoBossHunt or getgenv().Config.AutoFarmChests or getgenv().Config.AutoFarmEvents or getgenv().Config.AutoFarmEggs) then
             continue
         end
 
