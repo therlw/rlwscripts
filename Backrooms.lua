@@ -2608,7 +2608,13 @@ TabEggs:CreateDropdown({
     Options = {"Any", "KeepOut", "Huge", "Titanic", "Free"},
     CurrentOption = "Any",
     Flag = "Drp_TargetEggType",
-    Callback = function(Option) getgenv().Config.TargetEggType = Option end
+    Callback = function(Option) 
+        if type(Option) == "table" then
+            getgenv().Config.TargetEggType = Option[1]
+        else
+            getgenv().Config.TargetEggType = Option
+        end
+    end
 })
 
 TabEggs:CreateSlider({
