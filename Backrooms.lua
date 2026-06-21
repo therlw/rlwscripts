@@ -1269,7 +1269,9 @@ task.spawn(function()
             -- KULLANICI ARAYÜZDEN ÖZEL OLARAK AÇARSA KÜÇÜK SANDIKLARA UÇAR
             if isKeyFarmPhase or getgenv().Config.FarmDeepChests then 
                 if getgenv().Config.DeepBackroomsMode then
-                    -- SADECE tam isimleriyle Deep odalarına gider, normal odalara ASLA dönüp bakmaz.
+                    -- SADECE tam isimleriyle Deep odalarına gider. Anahtar için en iyi odalar (Level 3/2) önceliklidir!
+                    table.insert(radarTargets, {"deepchestroom3", "deepcoinroom3"})
+                    table.insert(radarTargets, {"deepchestroom2", "deepcoinroom2"})
                     table.insert(radarTargets, {"deepchestroom", "deepcoinroom"})
                 else
                     table.insert(radarTargets, {"vault", "chest"}) 
