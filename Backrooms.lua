@@ -1014,43 +1014,7 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
                     end
                 end
 
-                -- Deep Backrooms haritası dinamik yaratıldığı için, kapılar açılmadan sunucu odayı yaratmaz!
-                if getgenv().Config.DeepBackroomsMode and not isPhysicallyLoaded then
-                    -- Oda yüklenmemişse, direkt uçmak yerine A* ile yol bulup bir sonraki komşu odaya uçmalıyız!
-                    local root = getRootPart()
-                    local charPos = root and root.Position or Vector3.zero
-                    local startIdx = getRoomIndexFromPosition(charPos, descriptor)
-                    local targetIdx = getRoomIndexFromPosition(targetVec, descriptor)
-                    
-                    if startIdx and targetIdx and startIdx ~= targetIdx then
-                        print("[DEBUG-RADAR] Calculating A* Path. StartIdx: " .. tostring(startIdx) .. " | TargetIdx: " .. tostring(targetIdx))
-                        local graph = buildNavGraph(descriptor)
-                        local path = findPathAStar(startIdx, targetIdx, graph, descriptor)
-                        
-                        if path and #path > 1 then
-                            print("[DEBUG-RADAR] Path Found! Length: " .. tostring(#path) .. " | Next Node: " .. tostring(path[2]))
-                            local nextRoomIdx = path[2]
-                            local nextRoom = descriptor.rooms[nextRoomIdx]
-                            local res = descriptor.res or 45
-                            local x0 = descriptor.x0 or 1
-                            local y0 = descriptor.y0 or 1
-                            local rootVec = descriptor.root or Vector3.new(0,0,0)
-                            
-                            local cx = nextRoom.x + (nextRoom.w / 2)
-                            local cy = nextRoom.y + (nextRoom.h / 2)
-                            
-                            local nextX = (cx + (x0 - 1)) * res + rootVec.X
-                            local nextZ = (cy + (y0 - 1)) * res + rootVec.Z
-                            
-                            local nextWaypointVec = Vector3.new(nextX, targetY + 15, nextZ)
-                            
-                            -- CoordKey'i hedef oda için ayarla (Yol üzerindeki odalar DeadCoords'a girmesin diye)
-                            getgenv().CurrentRadarTargetCoordKey = coordKey
-                            return nextWaypointVec, nil, nil, true -- isPathNode = true
-                        end
-                    end
-                    continue -- Yol bulunamadıysa veya aynı odadaysa es geç
-                end
+
 
                 if not isVisited then
                     getgenv().CurrentRadarTargetCoordKey = coordKey
