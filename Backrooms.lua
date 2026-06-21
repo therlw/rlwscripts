@@ -776,6 +776,116 @@ local function isEggAlive(room)
     return true
 end
 
+local function areRoomsAdjacent(a, b)
+    local touchX = (a.x + a.w == b.x) or (b.x + b.w == a.x)
+    local overlapY = (a.y < b.y + b.h) and (b.y < a.y + a.h)
+    
+    local touchY = (a.y + a.h == b.y) or (b.y + b.h == a.y)
+    local overlapX = (a.x < b.x + b.w) and (b.x < a.x + a.w)
+    
+    return (touchX and overlapY) or (touchY and overlapX)
+end
+
+local function buildNavGraph(descriptor)
+    if getgenv().NavGraph and getgenv().NavGraphDesc == descriptor then
+        return getgenv().NavGraph
+    end
+    local graph = {}
+    for i, roomA in ipairs(descriptor.rooms) do
+        graph[i] = {}
+        for j, roomB in ipairs(descriptor.rooms) do
+            if i ~= j and areRoomsAdjacent(roomA, roomB) then
+                table.insert(graph[i], j)
+            end
+        end
+    end
+    getgenv().NavGraph = graph
+    getgenv().NavGraphDesc = descriptor
+    return graph
+end
+
+local function getRoomIndexFromPosition(pos, descriptor)
+    local res = descriptor.res or 45
+    local x0 = descriptor.x0 or 1
+    local y0 = descriptor.y0 or 1
+    local rootVec = descriptor.root or Vector3.new(0,0,0)
+    
+    local relX = pos.X - rootVec.X
+    local relZ = pos.Z - rootVec.Z
+    
+    local gridX = (relX / res) - (x0 - 1)
+    local gridY = (relZ / res) - (y0 - 1)
+    
+    local bestIdx = nil
+    local bestDist = math.huge
+    
+    for i, room in ipairs(descriptor.rooms) do
+        if gridX >= room.x and gridX <= room.x + room.w and gridY >= room.y and gridY <= room.y + room.h then
+            return i
+        end
+        local cx = room.x + (room.w / 2)
+        local cy = room.y + (room.h / 2)
+        local dist = math.sqrt((gridX - cx)^2 + (gridY - cy)^2)
+        if dist < bestDist then
+            bestDist = dist
+            bestIdx = i
+        end
+    end
+    return bestIdx
+end
+
+local function findPathAStar(startIdx, targetIdx, graph, descriptor)
+    local openSet = {startIdx}
+    local cameFrom = {}
+    local gScore = {[startIdx] = 0}
+    local fScore = {}
+    
+    local function heuristic(a, b)
+        local rA = descriptor.rooms[a]
+        local rB = descriptor.rooms[b]
+        return math.abs(rA.x - rB.x) + math.abs(rA.y - rB.y)
+    end
+    
+    fScore[startIdx] = heuristic(startIdx, targetIdx)
+    
+    while #openSet > 0 do
+        local lowest = math.huge
+        local current = nil
+        local currentTableIdx = nil
+        for i, node in ipairs(openSet) do
+            local f = fScore[node] or math.huge
+            if f < lowest then lowest = f; current = node; currentTableIdx = i end
+        end
+        
+        if current == targetIdx then
+            local path = {current}
+            while cameFrom[current] do
+                current = cameFrom[current]
+                table.insert(path, 1, current)
+            end
+            return path
+        end
+        
+        table.remove(openSet, currentTableIdx)
+        
+        for _, neighbor in ipairs(graph[current] or {}) do
+            local tentative_gScore = (gScore[current] or math.huge) + 1
+            if tentative_gScore < (gScore[neighbor] or math.huge) then
+                cameFrom[neighbor] = current
+                gScore[neighbor] = tentative_gScore
+                fScore[neighbor] = tentative_gScore + heuristic(neighbor, targetIdx)
+                
+                local inOpen = false
+                for _, node in ipairs(openSet) do
+                    if node == neighbor then inOpen = true break end
+                end
+                if not inOpen then table.insert(openSet, neighbor) end
+            end
+        end
+    end
+    return nil
+end
+
 local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_raw, DeadChestRooms)
     local Network = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
     local invokeCustom = Network and Network:FindFirstChild("Instancing_InvokeCustomFromClient")
@@ -854,14 +964,16 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
                 
                 -- Kontrol: Bu koordinattaki fiziksel oda VisitedRooms'ta var mı?
                 local isVisited = false
-                if rooms_raw and VisitedRooms then
+                local isPhysicallyLoaded = false
+                if rooms_raw then
                     for _, r in ipairs(rooms_raw) do
                         local pos = r:IsA("Model") and r:GetPivot().Position or (r:IsA("BasePart") and r.Position or Vector3.zero)
                         -- 300 stud ÇOK fazlaydı ve yan odaların yanlışlıkla eşleşmesine sebep olabiliyordu.
                         -- Grid boyutu genelde 45 stud olduğu için, 70 studluk bir sapma payı oldukça güvenli ve isabetlidir.
                         if (pos - targetVec).Magnitude < 70 then
+                            isPhysicallyLoaded = true
                             local uid = r:GetAttribute("RoomUID")
-                            if uid and VisitedRooms[uid] then
+                            if uid and VisitedRooms and VisitedRooms[uid] then
                                 -- Eger Boss veya Vault odasiysa ve yeniden dogmadiysa visited say!
                                 if not DeadChestRooms or not DeadChestRooms[uid] or DeadChestRooms[uid] > workspace:GetServerTimeNow() then
                                     isVisited = true
@@ -872,19 +984,55 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
                     end
                 end
 
+                -- Deep Backrooms haritası dinamik yaratıldığı için, kapılar açılmadan sunucu odayı yaratmaz!
+                if getgenv().Config.DeepBackroomsMode and not isPhysicallyLoaded then
+                    -- Oda yüklenmemişse, direkt uçmak yerine A* ile yol bulup bir sonraki komşu odaya uçmalıyız!
+                    local root = getRootPart()
+                    local charPos = root and root.Position or Vector3.zero
+                    local startIdx = getRoomIndexFromPosition(charPos, descriptor)
+                    local targetIdx = getRoomIndexFromPosition(targetVec, descriptor)
+                    
+                    if startIdx and targetIdx and startIdx ~= targetIdx then
+                        local graph = buildNavGraph(descriptor)
+                        local path = findPathAStar(startIdx, targetIdx, graph, descriptor)
+                        
+                        if path and #path > 1 then
+                            local nextRoomIdx = path[2]
+                            local nextRoom = descriptor.rooms[nextRoomIdx]
+                            local res = descriptor.res or 45
+                            local x0 = descriptor.x0 or 1
+                            local y0 = descriptor.y0 or 1
+                            local rootVec = descriptor.root or Vector3.new(0,0,0)
+                            
+                            local cx = nextRoom.x + (nextRoom.w / 2)
+                            local cy = nextRoom.y + (nextRoom.h / 2)
+                            
+                            local nextX = (cx + (x0 - 1)) * res + rootVec.X
+                            local nextZ = (cy + (y0 - 1)) * res + rootVec.Z
+                            
+                            local nextWaypointVec = Vector3.new(nextX, targetY + 15, nextZ)
+                            
+                            -- CoordKey'i hedef oda için ayarla (Yol üzerindeki odalar DeadCoords'a girmesin diye)
+                            getgenv().CurrentRadarTargetCoordKey = coordKey
+                            return nextWaypointVec, nil, nil, true -- isPathNode = true
+                        end
+                    end
+                    continue -- Yol bulunamadıysa veya aynı odadaysa es geç
+                end
+
                 if not isVisited then
                     getgenv().CurrentRadarTargetCoordKey = coordKey
-                    return targetVec, nil, nil
+                    return targetVec, nil, nil, false
                 end
             end
         end
         
         if bestDeadVec then
-            return nil, bestDeadVec, lowestCooldown
+            return nil, bestDeadVec, lowestCooldown, false
         end
     end
     
-    return nil, nil, nil
+    return nil, nil, nil, false
 end
 
 local function HandleInstanceEntry()
@@ -1145,7 +1293,7 @@ task.spawn(function()
             for _, tData in ipairs(radarTargets) do
                 local targetClass = tData[1]
                 local altClass = tData[2]
-                local targetVec, deadVec, deadCooldown = getTargetRoomVector(targetClass, altClass, VisitedRooms, rooms_raw, DeadChestRooms)
+                local targetVec, deadVec, deadCooldown, isPathNode = getTargetRoomVector(targetClass, altClass, VisitedRooms, rooms_raw, DeadChestRooms)
                 
                 if targetVec then
                     if targetClass == "boss" then
@@ -1156,16 +1304,35 @@ task.spawn(function()
                     if currentRoot then
                         local dist = (currentRoot.Position - targetVec).Magnitude
                         -- Sadece hedeften 300 stud uzaktaysak ışınlan (Sonsuz döngüyü engeller)
-                        if dist > 300 then
-                            if getgenv().RLW_Window then
-                                getgenv().RLW_Window:Notify({Title = "📡 Radar Locked!", Content = "Teleporting to " .. targetClass .. "!", Duration = 2})
+                        -- PathNode ise 50 stud uzağa kadar izin ver (yan odaya geçmesi için)
+                        local minDist = isPathNode and 50 or 300
+                        if dist > minDist then
+                            local Network = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
+                            local invokeCustom = Network and Network:FindFirstChild("Instancing_InvokeCustomFromClient")
+                            
+                            if isPathNode then
+                                if getgenv().RLW_Window then
+                                    getgenv().RLW_Window:Notify({Title = "🗺️ Pathfinding!", Content = "Jumping to next room towards " .. targetClass .. "!", Duration = 1})
+                                end
+                                -- Komşu odaya geçmeden önce bulunduğumuz odadaki tüm kapıları açmaya zorla!
+                                if invokeCustom and rooms_raw then
+                                    for _, r in ipairs(rooms_raw) do
+                                        local uid = r:GetAttribute("RoomUID")
+                                        if uid then
+                                            pcall(function() invokeCustom:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", uid, "UnlockDeep") end)
+                                        end
+                                    end
+                                end
+                            else
+                                if getgenv().RLW_Window then
+                                    getgenv().RLW_Window:Notify({Title = "📡 Radar Locked!", Content = "Teleporting to " .. targetClass .. "!", Duration = 2})
+                                end
                             end
                             
                             -- Haritanın yüklenmesi (Streaming) için karakteri havada dondur!
                             currentRoot.Anchored = true
                             currentRoot.CFrame = CFrame.new(targetVec + Vector3.new(0, 5, 0))
                             
-                            local Network = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
                             if Network and Network:FindFirstChild("RequestStreaming") then
                                 pcall(function() Network.RequestStreaming:FireServer(targetVec) end)
                             end
