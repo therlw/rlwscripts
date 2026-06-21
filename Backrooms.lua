@@ -2870,7 +2870,7 @@ task.spawn(function()
 
     while task.wait(getgenv().SmartFarmState.AutoTapInterval or 0.08) do
         if not getgenv().SmartFarmState.Running then continue end
-        if not getgenv().Config.AutoFarmCoins and not getgenv().Config.MetaFarmActive then continue end
+        if not (getgenv().Config.AutoFarmCoins or getgenv().Config.MetaFarmActive or getgenv().Config.AutoBossHunt or getgenv().Config.AutoFarmChests or getgenv().Config.AutoFarmEvents or getgenv().Config.AutoFarmEggs) then continue end
         
         local root = getRootPart()
         if not root then continue end
@@ -2885,7 +2885,7 @@ task.spawn(function()
             local part = b:FindFirstChild("Hitbox") or (b:IsA("Model") and b.PrimaryPart) or b:FindFirstChildWhichIsA("BasePart")
             if part then
                 local dist = (part.Position - charPos).Magnitude
-                if dist <= (getgenv().SmartFarmState.FarmRange or 85) then
+                if dist <= (getgenv().SmartFarmState.FarmRange or 150) then
                     table.insert(targets, {uid = b.Name, dist = dist, obj = b})
                 end
             end
@@ -2904,7 +2904,7 @@ task.spawn(function()
             local uid = targets[i].uid
             
             -- Işık Hızında Auto Tap (Hepsi için anında vurur)
-            if targets[i].dist <= (getgenv().SmartFarmState.ClickAuraRange or 75) then
+            if targets[i].dist <= (getgenv().SmartFarmState.ClickAuraRange or 150) then
                 pcall(function()
                     local ClientNetwork = require(game:GetService("ReplicatedStorage").Library.Client.Network)
                     ClientNetwork.UnreliableFire("Breakables_PlayerDealDamage", uid)
