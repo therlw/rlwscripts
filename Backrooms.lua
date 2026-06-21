@@ -1172,29 +1172,8 @@ task.spawn(function()
             end
         end
 
-        -- STATE MACHINE
-        local isKeyFarmPhase = false
-        local isBossHuntPhase = false
-        local isHybridEggPhase = false
+        -- NO MORE STATE MACHINE! Handled by independent toggles.
         local currentKeys = getDaydreamKeyCount()
-
-        if getgenv().Config.MetaFarmActive then
-            if bossWaitTime > 15 and getgenv().Config.FindKeepOutEgg then
-                isHybridEggPhase = true
-            else
-                if currentKeys < getgenv().Config.TargetKeyCount then
-                    isKeyFarmPhase = true
-                else
-                    isBossHuntPhase = true
-                end
-            end
-        else
-            -- PARADOX FIX: Sadece Yumurta açık olsa bile, ilerlemek için en az 1 anahtara ihtiyacımız var!
-            -- Yoksa kapalı kapılara kafa atıp kısır döngüye girer.
-            if getgenv().Config.FindKeepOutEgg and currentKeys == 0 then
-                isKeyFarmPhase = true
-            end
-        end
 
         local rooms_raw = CollectionService:GetTagged("Backrooms")
         
@@ -1332,38 +1311,38 @@ task.spawn(function()
 
         if getgenv().Config.RadarTeleport and not inBossArena then
             local radarTargets = {}
-            if isBossHuntPhase then
+            
+            -- ÖNCELİK 1: BOSS HUNT
+            if getgenv().Config.AutoBossHunt then
                 if getgenv().Config.DeepBackroomsMode then
-                    -- Deep modunda SADECE Deep Boss (GameMaster) hedeflenir!
-                    -- Ancak GameMaster odası izole olduğu için önce DeepPortalRoom'u bulmalıyız!
                     table.insert(radarTargets, {"gamemaster", "deepportalroom"})
                 else
                     table.insert(radarTargets, {"boss", "miniboss"})
                 end
             end
             
-            -- KULLANICI ARAYÜZDEN ÖZEL OLARAK AÇARSA KÜÇÜK SANDIKLARA UÇAR
-            if isKeyFarmPhase or getgenv().Config.FarmDeepChests then 
-                if getgenv().Config.DeepBackroomsMode then
-                    -- SADECE tam isimleriyle Deep odalarına gider. Anahtar için en iyi odalar (Level 3/2) önceliklidir!
-                    table.insert(radarTargets, {"deepchestroom3", "deepcoinroom3"})
-                    table.insert(radarTargets, {"deepchestroom2", "deepchestroom2"})
-                    table.insert(radarTargets, {"deepchestroom", "deepchestroom"})
-                else
-                    table.insert(radarTargets, {"vault", "chest"}) 
-                end
-            end
-            
-            if isHybridEggPhase or getgenv().Config.FindKeepOutEgg then 
-                table.insert(radarTargets, {"keepout", "egg"}) 
-            end
-            
-            if getgenv().Config.FarmDeepEvents then
+            -- ÖNCELİK 2: DEEP EVENTS (Çok değerli ödüller içerir)
+            if getgenv().Config.AutoFarmEvents then
                 table.insert(radarTargets, {"chalkboardkeypad", "code"})
                 table.insert(radarTargets, {"simonfloor", "deeplaserpattern"})
                 table.insert(radarTargets, {"buttons", "colorbutton"})
                 table.insert(radarTargets, {"keyforge", "chestchoose"})
                 table.insert(radarTargets, {"vending", "garden"})
+            end
+            
+            -- ÖNCELİK 3: CHEST & COINS
+            if getgenv().Config.AutoFarmChests then 
+                if getgenv().Config.DeepBackroomsMode then
+                    table.insert(radarTargets, {"deepcoinroom3", "deepcoinroom3"})
+                    table.insert(radarTargets, {"deepcoinroom2", "deepcoinroom2"})
+                else
+                    table.insert(radarTargets, {"vault", "chest"}) 
+                end
+            end
+            
+            -- ÖNCELİK 4: EGGS
+            if getgenv().Config.AutoFarmEggs then 
+                table.insert(radarTargets, {"keepout", "egg"}) 
             end
             
             local teleportedByRadar = false
@@ -1651,10 +1630,8 @@ task.spawn(function()
                 end
 
                 -- Normal/KeepOut Yumurta Odası Kontrolü (Type 4)
-                -- Artık filtreyi geçiyorsa Boss avını bile ezip geçer!
-                local shouldFarmEgg = getgenv().Config.FindKeepOutEgg or isHybridEggPhase
                 if isEgg then
-                    if shouldFarmEgg and matchSpecificEgg and multiplier >= getgenv().Config.TargetEggMultiplier then
+                    if getgenv().Config.AutoFarmEggs and matchSpecificEgg and multiplier >= getgenv().Config.TargetEggMultiplier then
                         if bestRoomType < 4 then
                             bestRoom = room
                             bestRoomType = 4
@@ -1667,14 +1644,14 @@ task.spawn(function()
                     end
                 end
 
-                if isBossHuntPhase and isBoss and bestRoomType < 3 then
+                if getgenv().Config.AutoBossHunt and isBoss and bestRoomType < 3 then
                     bestRoom = room
                     bestRoomType = 3
                     getgenv().LiveStats.BossStatus = "Fighting Boss ⚔️"
                     break
                 end
 
-                if isKeyFarmPhase or getgenv().Config.FarmDeepChests then
+                if getgenv().Config.AutoFarmChests then
                     if isVault and bestRoomType < 2 then
                         bestRoom = room
                         bestRoomType = 2
@@ -2584,10 +2561,10 @@ local TabScanner = Window:CreateTab("📡 Scanner")
 local TabSettings = Window:CreateTab("⚙️ Settings")
 
 -- 🚀 DEEP RADAR TAB (MAIN) --
-TabRadar:CreateSection("Radar Teleport (God Mode)")
+TabRadar:CreateSection("Deep Backrooms Automation")
 
 TabRadar:CreateToggle({
-    Name = "A* Pathfinding Radar",
+    Name = "Master Switch: Enable Deep Radar",
     CurrentValue = getgenv().Config.RadarTeleport,
     Flag = "Tgl_RadarTeleport",
     Callback = function(Value)
@@ -2598,12 +2575,32 @@ TabRadar:CreateToggle({
     end
 })
 
-TabRadar:CreateSlider({
-    Name = "Target Key Count (Start Radar)",
-    Range = {0, 100}, 
-    CurrentValue = 5,
-    Flag = "Sld_TargetKeys",
-    Callback = function(Value) getgenv().Config.TargetKeyCount = Value end
+TabRadar:CreateToggle({
+    Name = "⚔️ Auto Boss Hunt",
+    CurrentValue = false,
+    Flag = "Tgl_AutoBoss",
+    Callback = function(Value) getgenv().Config.AutoBossHunt = Value end
+})
+
+TabRadar:CreateToggle({
+    Name = "💰 Auto Farm Chests & Coins",
+    CurrentValue = false,
+    Flag = "Tgl_AutoChests",
+    Callback = function(Value) getgenv().Config.AutoFarmChests = Value end
+})
+
+TabRadar:CreateToggle({
+    Name = "🧩 Auto Farm Deep Events",
+    CurrentValue = false,
+    Flag = "Tgl_AutoEvents",
+    Callback = function(Value) getgenv().Config.AutoFarmEvents = Value end
+})
+
+TabRadar:CreateToggle({
+    Name = "🥚 Auto Farm Eggs",
+    CurrentValue = false,
+    Flag = "Tgl_AutoEggs",
+    Callback = function(Value) getgenv().Config.AutoFarmEggs = Value end
 })
 
 TabRadar:CreateSection("Deep Backrooms Entry")
@@ -2622,18 +2619,6 @@ TabRadar:CreateToggle({
 
 -- ⚔️ COMBAT TAB --
 TabCombat:CreateSection("Smart Farm & Breakables")
-
-TabCombat:CreateToggle({
-    Name = "Start Boss Farming (Meta)",
-    CurrentValue = false,
-    Flag = "Tgl_MetaFarm",
-    Callback = function(Value)
-        getgenv().Config.MetaFarmActive = Value
-        if Value and getgenv().RLW_Window then
-            getgenv().RLW_Window:Notify({Title = "Boss Farming", Content = "Farming keys, then hunting Boss!", Duration = 5})
-        end
-    end
-})
 
 TabCombat:CreateToggle({
     Name = "⚡ Fast Farm Breakables",
