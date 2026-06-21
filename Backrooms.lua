@@ -1017,6 +1017,27 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
     return nil, nil, nil, false
 end
 
+local function getMapDescriptor()
+    local Network = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
+    local invokeCustom = Network and Network:FindFirstChild("Instancing_InvokeCustomFromClient")
+    if not invokeCustom then return nil end
+
+    local modeKey = getgenv().Config.DeepBackroomsMode and "Deep" or "Normal"
+    if not getgenv().MapDescriptors then getgenv().MapDescriptors = {} end
+    
+    local descriptor = getgenv().MapDescriptors[modeKey]
+    if not descriptor then
+        local s, desc = pcall(function()
+            return invokeCustom:InvokeServer("Backrooms", "Backrooms_GetMapDescriptor", getgenv().Config.DeepBackroomsMode)
+        end)
+        if s and desc then
+            descriptor = desc
+            getgenv().MapDescriptors[modeKey] = desc
+        end
+    end
+    return descriptor
+end
+
 local function HandleInstanceEntry()
     if IsInBackroomsInstance() then return end
     if os.clock() - LastInstanceJoinAttempt < 60 then return end
