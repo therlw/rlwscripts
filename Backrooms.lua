@@ -2542,7 +2542,7 @@ TabAutoFarm:CreateToggle({
 
 TabAutoFarm:CreateSlider({
     Name = "Target Key Count (For Boss)",
-    Range = {1, 100}, 
+    Range = {0, 100}, 
     CurrentValue = 5,
     Flag = "Sld_TargetKeys",
     Callback = function(Value) getgenv().Config.TargetKeyCount = Value end
