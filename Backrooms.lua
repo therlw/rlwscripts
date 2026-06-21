@@ -1026,36 +1026,8 @@ task.spawn(function()
 
         HandleInstanceEntry()
 
-        -- HİBRİT GERİ DÖNÜŞ KONTROLÜ
-        local nowTime = workspace:GetServerTimeNow()
-        local bossWaitTime = (getgenv().SmartFarmState.BossRespawningUntil or 0) - nowTime
-        
-        if bossWaitTime > 0 and bossWaitTime <= 8 then
-            if getgenv().SmartFarmState.BossRoomUID then
-                local rooms = CollectionService:GetTagged("Backrooms")
-                local foundBossRoom = nil
-                for _, r in ipairs(rooms) do
-                    if r:GetAttribute("RoomUID") == getgenv().SmartFarmState.BossRoomUID then
-                        foundBossRoom = r
-                        break
-                    end
-                end
-                
-                if foundBossRoom then
-                    if getgenv().RLW_Window then
-                        getgenv().RLW_Window:Notify({Title = "⚡ Returning!", Content = "Boss is about to spawn, returning to battle!", Duration = 3})
-                    end
-                    safeTeleport(foundBossRoom, true)
-                    task.wait(2)
-                    getgenv().SmartFarmState.BossRespawningUntil = 0
-                    getgenv().SmartFarmState.BossRoomUID = nil
-                    continue
-                else
-                    getgenv().SmartFarmState.BossRespawningUntil = 0
-                    getgenv().SmartFarmState.BossRoomUID = nil
-                end
-            end
-        end
+        -- Radar Teleport sistemi çoklu boss takibini DeadCoords üzerinden kusursuzca yaptığı için,
+        -- eski tekli boss takip sistemi (Hibrit Geri Dönüş) optimize edilerek kaldırıldı.
 
         -- NO MORE STATE MACHINE! Handled by independent toggles.
         local currentKeys = getDaydreamKeyCount()
