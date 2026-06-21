@@ -2919,7 +2919,7 @@ task.spawn(function()
             end
         end
 
-        -- Petleri eşit şekilde dağıtarak saldırt (BR_SetTarget)
+        -- Petleri eşit şekilde dağıtarak saldırt (Breakables_JoinPetBulk)
         if shouldAssignPet and #validTargets > 0 then
             local pets = GetPlayerPets()
             if #pets > 0 then
@@ -2932,18 +2932,15 @@ task.spawn(function()
                     local count = petsPerBreakable + (i <= remainder and 1 or 0)
                     for j = 1, count do
                         if petIndex > #pets then break end
-                        mapping[pets[petIndex].euid] = {
-                            ["t"] = 3,
-                            ["v"] = uid
-                        }
+                        mapping[pets[petIndex].euid] = uid
                         petIndex = petIndex + 1
                     end
                 end
                 
                 if next(mapping) then
                     pcall(function()
-                        local brTarget = Network:FindFirstChild("BR_SetTarget")
-                        if brTarget then brTarget:FireServer(mapping) end
+                        local bulkJoin = Network:FindFirstChild("Breakables_JoinPetBulk")
+                        if bulkJoin then bulkJoin:FireServer(mapping) end
                     end)
                 end
             end
