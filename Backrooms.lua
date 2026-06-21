@@ -985,7 +985,8 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
                 local coordKey = string.format("%d_%d", math.floor(targetVec.X), math.floor(targetVec.Z))
                 if getgenv().DeadCoords[coordKey] and getgenv().DeadCoords[coordKey] > workspace:GetServerTimeNow() then
                     local timeLeft = getgenv().DeadCoords[coordKey] - workspace:GetServerTimeNow()
-                    if timeLeft < lowestCooldown then
+                    -- Deep Backrooms modundaysak, kalıcı ölen odaları bekleme sırasına alma!
+                    if timeLeft < lowestCooldown and not (getgenv().Config.DeepBackroomsMode and timeLeft > 9999999) then
                         lowestCooldown = timeLeft
                         bestDeadVec = targetVec
                     end
@@ -2164,6 +2165,10 @@ task.spawn(function()
                         VisitedRooms[roomUID] = true
                         local respawnTs = nil
                         pcall(function() respawnTs = bestRoom:GetAttribute("RespawnTimestamp") end)
+                        
+                        -- Deep Backrooms sandıkları bir daha doğmaz, kalıcı olarak ölü işaretle!
+                        if getgenv().Config.DeepBackroomsMode then respawnTs = math.huge end
+                        
                         if respawnTs and respawnTs > workspace:GetServerTimeNow() then
                             getgenv().DeadCoords = getgenv().DeadCoords or {}
                             if getgenv().CurrentRadarTargetCoordKey then
@@ -2179,6 +2184,20 @@ task.spawn(function()
                         if emptySeconds >= 4 then
                             -- print("[FARM] ⚠️ Oda boşaldı! Yeni odaya geçiliyor...")
                             VisitedRooms[roomUID] = true
+                            
+                            local respawnTs = nil
+                            pcall(function() respawnTs = bestRoom:GetAttribute("RespawnTimestamp") end)
+                            
+                            -- Deep Backrooms sandıkları bir daha doğmaz, kalıcı olarak ölü işaretle!
+                            if getgenv().Config.DeepBackroomsMode then respawnTs = math.huge end
+                            
+                            if respawnTs and respawnTs > workspace:GetServerTimeNow() then
+                                getgenv().DeadCoords = getgenv().DeadCoords or {}
+                                if getgenv().CurrentRadarTargetCoordKey then
+                                    getgenv().DeadCoords[getgenv().CurrentRadarTargetCoordKey] = respawnTs
+                                end
+                                DeadChestRooms[roomUID] = respawnTs
+                            end
                             break
                         end
                     else
