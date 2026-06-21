@@ -761,6 +761,9 @@ local function findPathAStar(startIdx, targetIdx, graph, descriptor)
     local gScore = {[startIdx] = 0}
     local fScore = {}
     
+    local bestNode = startIdx
+    local bestHeur = math.huge
+    
     local function heuristic(a, b)
         local rA = descriptor.rooms[a]
         local rB = descriptor.rooms[b]
@@ -769,6 +772,7 @@ local function findPathAStar(startIdx, targetIdx, graph, descriptor)
     end
     
     fScore[startIdx] = heuristic(startIdx, targetIdx)
+    bestHeur = fScore[startIdx]
     
     while #openSet > 0 do
         local lowest = math.huge
@@ -777,6 +781,12 @@ local function findPathAStar(startIdx, targetIdx, graph, descriptor)
         for i, node in ipairs(openSet) do
             local f = fScore[node] or math.huge
             if f < lowest then lowest = f; current = node; currentTableIdx = i end
+        end
+        
+        local h = heuristic(current, targetIdx)
+        if h < bestHeur then
+            bestHeur = h
+            bestNode = current
         end
         
         if current == targetIdx then
@@ -805,6 +815,17 @@ local function findPathAStar(startIdx, targetIdx, graph, descriptor)
             end
         end
     end
+    
+    if bestNode and bestNode ~= startIdx then
+        local path = {bestNode}
+        local curr = bestNode
+        while cameFrom[curr] do
+            curr = cameFrom[curr]
+            table.insert(path, 1, curr)
+        end
+        return path
+    end
+    
     return nil
 end
 
