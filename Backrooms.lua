@@ -1659,7 +1659,13 @@ task.spawn(function()
             if fireCustom then
                 if bestRoomType == 5 or bestRoomType == 4 then
                     if bestRoom:FindFirstChild("LockedDoors") then
-                        fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
+                        local Network = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
+                        local invokeCustom = Network and Network:FindFirstChild("Instancing_InvokeCustomFromClient")
+                        if getgenv().Config.DeepBackroomsMode and invokeCustom then
+                            pcall(function() invokeCustom:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", roomUID, "UnlockDeep") end)
+                        else
+                            fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
+                        end
                     end
                 end
                 -- Type 3 (Boss): teleport sonrası yükleme beklendiğinde kontrol edilecek
@@ -2009,8 +2015,13 @@ task.spawn(function()
                     -- Door closed, spend key.
                     local Network2 = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
                     local fireCustom2 = Network2 and Network2:FindFirstChild("Instancing_FireCustomFromClient")
+                    local invokeCustom2 = Network2 and Network2:FindFirstChild("Instancing_InvokeCustomFromClient")
                     if fireCustom2 then
-                        fireCustom2:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
+                        if getgenv().Config.DeepBackroomsMode and invokeCustom2 then
+                            pcall(function() invokeCustom2:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", roomUID, "UnlockDeep") end)
+                        else
+                            fireCustom2:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
+                        end
                     end
                 else
                     -- Kapı yok ama boss da yok, normal Boss Odası belki boş
@@ -2362,7 +2373,11 @@ task.spawn(function()
                     end
 
                     if shouldUnlock then
-                        fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
+                        if getgenv().Config.DeepBackroomsMode and invokeCustom then
+                            pcall(function() invokeCustom:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", roomUID, "UnlockDeep") end)
+                        else
+                            fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
+                        end
                     end
                 end
             end
