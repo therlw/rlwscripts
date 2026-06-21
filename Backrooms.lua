@@ -575,7 +575,7 @@ end
 
 task.spawn(function()
     while task.wait(getgenv().SmartFarmState.PetAssignInterval) do
-        if not (getgenv().Config.MetaFarmActive or getgenv().Config.FastFarmBreakables) then continue end
+        if not (getgenv().Config.AutoBossHunt or getgenv().Config.AutoFarmChests or getgenv().Config.AutoFarmEvents or getgenv().Config.AutoFarmEggs or getgenv().Config.FastFarmBreakables) then continue end
         local targets = GetBackroomsTargets()
         local allTargets = {}
         
@@ -607,7 +607,7 @@ end)
 
 task.spawn(function()
     while task.wait(getgenv().SmartFarmState.AutoTapInterval) do
-        if not (getgenv().Config.MetaFarmActive or getgenv().Config.FastFarmBreakables) then continue end
+        if not (getgenv().Config.AutoBossHunt or getgenv().Config.AutoFarmChests or getgenv().Config.AutoFarmEvents or getgenv().Config.AutoFarmEggs or getgenv().Config.FastFarmBreakables) then continue end
         local targets = GetBackroomsTargets()
         local hitCount = 0
         local Network = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
@@ -665,7 +665,7 @@ end
 
 task.spawn(function()
     while task.wait(0.1) do
-        if not (getgenv().Config.MetaFarmActive or getgenv().Config.FastFarmBreakables) then continue end
+        if not (getgenv().Config.AutoBossHunt or getgenv().Config.AutoFarmChests or getgenv().Config.AutoFarmEvents or getgenv().Config.AutoFarmEggs or getgenv().Config.FastFarmBreakables) then continue end
         pcall(CollectOrbs)
     end
 end)
@@ -1198,8 +1198,6 @@ task.spawn(function()
                 end
                 
                 if isBoss and not r:FindFirstChild("LockedDoors") then
-                    isKeyFarmPhase = false
-                    isBossHuntPhase = true
                     break
                 end
             end
@@ -1446,7 +1444,7 @@ task.spawn(function()
                 continue -- Ana loopu başa sar, fiziksel taramayı atla
             end
             
-            if isBossHuntPhase and not radarFoundBoss then
+            if getgenv().Config.AutoBossHunt and not radarFoundBoss then
                 getgenv().LiveStats.BossStatus = "Dead / Waiting Respawn"
                 if getgenv().Config.HopOnBossCooldown then
                     if getgenv().RLW_Window then
@@ -1474,7 +1472,7 @@ task.spawn(function()
             end
             
             -- HİÇBİR HEDEF YOKSA VE BEKLEYEN BİR ÖLÜ ODA VARSA
-            if bestWaitVec and not (isBossHuntPhase and getgenv().Config.HopOnBossCooldown) then
+            if bestWaitVec and not (getgenv().Config.AutoBossHunt and getgenv().Config.HopOnBossCooldown) then
                 local currentRoot = getRootPart()
                 if currentRoot then
                     local dist = (currentRoot.Position - bestWaitVec).Magnitude
@@ -1509,7 +1507,7 @@ task.spawn(function()
         end
 
         -- 1. ADIM: KAYITLI YUMURTA ODASI KONTROLÜ
-        local checkEggCache = isHybridEggPhase or (getgenv().Config.FindKeepOutEgg and not getgenv().Config.MetaFarmActive)
+        local checkEggCache = getgenv().Config.AutoFarmEggs
         if checkEggCache and getgenv().SmartFarmState.EggRoomUID then
             for _, room in ipairs(rooms) do
                 if room:GetAttribute("RoomUID") == getgenv().SmartFarmState.EggRoomUID then
@@ -1628,7 +1626,7 @@ task.spawn(function()
                 end
 
                 -- Free Egg Odası Kontrolü (Type 5)
-                if getgenv().Config.FindFreeEggRoom and isFreeEgg and matchSpecificEgg and multiplier >= getgenv().Config.TargetEggMultiplier and bestRoomType < 5 then
+                if getgenv().Config.AutoFarmEggs and isFreeEgg and matchSpecificEgg and multiplier >= getgenv().Config.TargetEggMultiplier and bestRoomType < 5 then
                     bestRoom = room
                     bestRoomType = 5
                     break
@@ -1822,7 +1820,7 @@ task.spawn(function()
                 end
 
                 local hasTeleportedToEgg = false
-                while getgenv().Config.FindFreeEggRoom do
+                while getgenv().Config.AutoFarmEggs do
                     local customUid = nil
                     local eggModel = nil
                     local closestDist = 99999
@@ -1877,17 +1875,13 @@ task.spawn(function()
                 end
 
             elseif bestRoomType == 4 then
-                if isHybridEggPhase and not getgenv().SmartFarmState.EggRoomUID then
+                if getgenv().Config.AutoBossHunt and not getgenv().SmartFarmState.EggRoomUID then
                     getgenv().SmartFarmState.EggRoomUID = roomUID
                 end
                 
                 local Network3 = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
                 if getgenv().RLW_Window then
-                    if isHybridEggPhase then
-                        getgenv().RLW_Window:Notify({Title = "🥚 Hybrid Egg Farm!", Content = "Hatching eggs until Boss spawns...", Duration = 4})
-                    else
-                        getgenv().RLW_Window:Notify({Title = "🥚 Secret Egg!", Content = roomID .. " found! Hatching...", Duration = 4})
-                    end
+                    getgenv().RLW_Window:Notify({Title = "🥚 Egg Farm!", Content = "Hatching eggs...", Duration = 4})
                 end
                 
                 -- Yumurta açılış animasyonunu kapat
@@ -1932,10 +1926,10 @@ task.spawn(function()
                 end
 
                 local hasTeleportedToEgg = false
-                while getgenv().Config.FindKeepOutEgg do
+                while getgenv().Config.AutoFarmEggs do
                     local timeNow = workspace:GetServerTimeNow()
                     
-                    if isHybridEggPhase then
+                    if getgenv().Config.AutoBossHunt then
                         local bossTimer = getgenv().SmartFarmState.BossRespawningUntil or 0
                         local remaining = bossTimer - timeNow
                         
@@ -2052,7 +2046,7 @@ task.spawn(function()
                 -- Her iki durumda da odada kal ve kamp kur
                 local isWaitingRespawn = false
                 local notifiedRespawn = false
-                while getgenv().Config.MetaFarmActive do
+                while getgenv().Config.AutoBossHunt do
                     task.wait(1)
                     local respawnTs = nil
                     pcall(function() respawnTs = bestRoom:GetAttribute("RespawnTimestamp") end)
@@ -2091,7 +2085,7 @@ task.spawn(function()
 
                         
                         -- HİBRİT KONTROL: Eğer doğmasına 15 saniyeden fazla varsa odadan ayrıl ve yumurta ara!
-                        if remaining > 15 and getgenv().Config.FindKeepOutEgg then
+                        if remaining > 15 and getgenv().Config.AutoFarmEggs then
                             if getgenv().RLW_Window then
                                 getgenv().RLW_Window:Notify({Title = "🚀 Hybrid Mode Active!", Content = "Farming eggs while waiting for Boss...", Duration = 5})
                             end
@@ -2154,7 +2148,7 @@ task.spawn(function()
                 local emptySeconds = 0
                 local bigCheckTimer = 0
                 
-                while getgenv().Config.MetaFarmActive do
+                while getgenv().Config.AutoFarmChests do
                     task.wait(1)
                     local currentKeys = getDaydreamKeyCount()
                     getgenv().LiveStats.CurrentKeys = currentKeys
@@ -2244,7 +2238,7 @@ task.spawn(function()
 
         -- Öncelikli oda bulunamadı → haritayı genişlet (en uzak odaya zıpla)
         local sortedRooms = {}
-        local isEggSearchMode = isHybridEggPhase or getgenv().Config.FindKeepOutEgg or getgenv().Config.FindFreeEggRoom
+        local isEggSearchMode = getgenv().Config.AutoFarmEggs
         for _, room in ipairs(rooms) do
             local uid = room:GetAttribute("RoomUID")
             if not VisitedRooms[uid] then
@@ -2289,7 +2283,7 @@ task.spawn(function()
             visitedCount = 0
             -- ✅ DeadEggRooms'u da temizle! Yeni oda gelmediyse, eski "ölü" odaları da tekrar dene.
             -- Aksi halde script 5 dakika boyunca boşta döngüye girer!
-            if isHybridEggPhase or getgenv().Config.FindKeepOutEgg or getgenv().Config.FindFreeEggRoom then
+            if getgenv().Config.AutoFarmEggs then
                 DeadEggRooms = {}
                 getgenv()._EggSpawnWaitTime = {}
                 task.wait(3)
@@ -2299,7 +2293,7 @@ task.spawn(function()
             continue
         end
 
-        local isSearchingOnly = isBossHuntPhase or getgenv().Config.FindKeepOutEgg or getgenv().Config.FindFreeEggRoom
+        local isSearchingOnly = getgenv().Config.AutoBossHunt or getgenv().Config.AutoFarmEggs
 
         -- Sadece EN UZAK odaya zıpla (1 oda per döngü)
         local roomData = sortedRooms[1]
@@ -2389,7 +2383,7 @@ task.spawn(function()
 
                     if getgenv().Config.AutoBossHunt and isBossRoom then
                         shouldUnlock = true
-                    elseif (getgenv().Config.FindKeepOutEgg or getgenv().Config.FindFreeEggRoom or getgenv().Config.AutoFarmEggs) and isEggRoom then
+                    elseif getgenv().Config.AutoFarmEggs and isEggRoom then
                         shouldUnlock = true
                     elseif getgenv().Config.AutoBossHunt and not radarFoundBoss then
                         -- Boss arıyoruz ama henüz haritada yok. Çıkması için kapıları kırarak etrafı keşfetmemiz ŞART!
@@ -2700,13 +2694,6 @@ TabEggs:CreateSlider({
     CurrentValue = 50,
     Flag = "Sld_EggMultiplier",
     Callback = function(Value) getgenv().Config.TargetEggMultiplier = Value end
-})
-
-TabEggs:CreateToggle({
-    Name = "Target Free Egg Rooms",
-    CurrentValue = false,
-    Flag = "Tgl_FindFreeEgg",
-    Callback = function(Value) getgenv().Config.FindFreeEggRoom = Value end
 })
 
 -- 🆙 UPGRADES TAB --
