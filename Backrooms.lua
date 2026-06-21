@@ -1080,7 +1080,7 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
                         
                         -- Eğer A* yol bulamadıysa veya yoldaki ileri odalar yüklenmemişse:
                         -- Eğer aradığımız hedef doğası gereği İZOLE bir oda ise (örn: GameMaster), A*'ı boşver direkt ışınlan!
-                        if string.lower(roomData.class):find("gamemaster") then
+                        if string.lower(roomInfo.class or ""):find("gamemaster") then
                             return targetVec, nil, nil, false
                         end
                         
