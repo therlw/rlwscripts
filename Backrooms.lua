@@ -802,6 +802,9 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
         local t1 = roomTypeStr and string.lower(roomTypeStr)
         local t2 = altTypeStr and string.lower(altTypeStr)
         
+        local bestDeadVec = nil
+        local lowestCooldown = math.huge
+        
         for _, roomInfo in ipairs(descriptor.rooms) do
             local c = string.lower(roomInfo.class or "")
             if (t1 and c:find(t1)) or (t2 and c:find(t2)) then
@@ -841,6 +844,11 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
                 getgenv().DeadCoords = getgenv().DeadCoords or {}
                 local coordKey = string.format("%d_%d", math.floor(targetVec.X), math.floor(targetVec.Z))
                 if getgenv().DeadCoords[coordKey] and getgenv().DeadCoords[coordKey] > workspace:GetServerTimeNow() then
+                    local timeLeft = getgenv().DeadCoords[coordKey] - workspace:GetServerTimeNow()
+                    if timeLeft < lowestCooldown then
+                        lowestCooldown = timeLeft
+                        bestDeadVec = targetVec
+                    end
                     continue
                 end
                 
@@ -864,12 +872,17 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
 
                 if not isVisited then
                     getgenv().CurrentRadarTargetCoordKey = coordKey
-                    return targetVec
+                    return targetVec, nil
                 end
             end
         end
+        
+        if bestDeadVec then
+            return nil, bestDeadVec
+        end
     end
-    return nil
+    
+    return nil, nil
 end
 
 local function HandleInstanceEntry()
@@ -1116,10 +1129,12 @@ task.spawn(function()
             
             local teleportedByRadar = false
             local radarFoundBoss = false
+            local bestWaitVec = nil
+            
             for _, tData in ipairs(radarTargets) do
                 local targetClass = tData[1]
                 local altClass = tData[2]
-                local targetVec = getTargetRoomVector(targetClass, altClass, VisitedRooms, rooms_raw, DeadChestRooms)
+                local targetVec, deadVec = getTargetRoomVector(targetClass, altClass, VisitedRooms, rooms_raw, DeadChestRooms)
                 
                 if targetVec then
                     if targetClass == "boss" then
@@ -1150,7 +1165,10 @@ task.spawn(function()
                             teleportedByRadar = true
                             break -- Döngüden çık
                         end
+                        end
                     end
+                elseif deadVec and not bestWaitVec then
+                    bestWaitVec = deadVec
                 end
             end
             
@@ -1182,6 +1200,29 @@ task.spawn(function()
                         end)
                     end
                     task.wait(5)
+                end
+            end
+            
+            -- HİÇBİR HEDEF YOKSA VE BEKLEYEN BİR ÖLÜ ODA VARSA
+            if bestWaitVec and not (isBossHuntPhase and getgenv().Config.HopOnBossCooldown) then
+                local currentRoot = getRootPart()
+                if currentRoot then
+                    local dist = (currentRoot.Position - bestWaitVec).Magnitude
+                    if dist > 300 then
+                        if getgenv().RLW_Window then
+                            getgenv().RLW_Window:Notify({Title = "⏳ Waiting...", Content = "All rooms are dead! Waiting at nearest respawn...", Duration = 3})
+                        end
+                        currentRoot.Anchored = true
+                        currentRoot.CFrame = CFrame.new(bestWaitVec + Vector3.new(0, 5, 0))
+                        local Network = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
+                        if Network and Network:FindFirstChild("RequestStreaming") then
+                            pcall(function() Network.RequestStreaming:FireServer(bestWaitVec) end)
+                        end
+                        task.wait(1)
+                        currentRoot.Anchored = false
+                    end
+                    task.wait(2)
+                    continue -- Boş boş dolanmayı engeller!
                 end
             end
         end
