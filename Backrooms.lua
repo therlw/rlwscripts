@@ -1063,7 +1063,7 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
                                 if isLoaded then
                                     -- Eğer bu oda currentPos'a 30 studdan daha uzaksa atla (zaten buradaysak atlamaya gerek yok)
                                     if (loadedPos - currentPos).Magnitude > 30 then
-                                        bestEdgeVec = loadedPos
+                                        bestEdgeVec = Vector3.new(loadedPos.X, targetY + 15, loadedPos.Z)
                                     end
                                     break -- Fiziksel olarak yüklü en uzak odayı bulduk, daha yakınına bakmaya gerek yok!
                                 end
