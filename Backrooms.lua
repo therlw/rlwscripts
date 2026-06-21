@@ -94,11 +94,11 @@ end)
 
 getgenv().SmartFarmState = {
     Running          = true,
-    PetAssignInterval= 0.5,
+    PetAssignInterval= 0.15,
     AutoTapInterval  = 0.08,
     MaxTargetsPerTick= 8,
-    FarmRange        = 85,
-    ClickAuraRange   = 75,
+    FarmRange        = 250,
+    ClickAuraRange   = 250,
     Mode             = "Combined",
 }
 
@@ -960,7 +960,7 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
                         -- Eğer A* yol bulamadıysa veya yoldaki ileri odalar yüklenmemişse:
                         -- Eğer aradığımız hedef doğası gereği İZOLE bir oda ise (örn: GameMaster), A*'ı boşver direkt ışınlan!
                         local cLower = string.lower(roomInfo.class or "")
-                        if cLower:find("gamemaster") or cLower:find("masterboss") or cLower:find("daydream") then
+                        if cLower:find("gamemaster") or cLower:find("masterboss") or cLower:find("daydream") or cLower:find("chest") or cLower:find("vault") then
                             return targetVec, nil, nil, false
                         end
                         
@@ -1167,19 +1167,9 @@ task.spawn(function()
         if getgenv().Config.RadarTeleport and not inBossArena then
             local radarTargets = {}
             
-            -- ÖNCELİK 1: BOSS HUNT
-            if getgenv().Config.AutoBossHunt then
-                if getgenv().Config.DeepBackroomsMode then
-                    table.insert(radarTargets, {"gamemaster", "deepportalroom"})
-                    table.insert(radarTargets, {"masterboss", "masterboss"})
-                    table.insert(radarTargets, {"daydream", "deepboss"})
-                else
-                    table.insert(radarTargets, {"boss", "miniboss"})
-                    table.insert(radarTargets, {"gamemaster", "masterboss"})
-                end
-            end
+            local hasKeysForBoss = (currentKeys >= getgenv().Config.TargetKeyCount)
             
-            -- ÖNCELİK 2: DEEP EVENTS (Çok değerli ödüller içerir)
+            -- ÖNCELİK 1: DEEP EVENTS (Çok değerli ödüller içerir, anahtar gerektirmez)
             if getgenv().Config.AutoFarmEvents then
                 table.insert(radarTargets, {"chalkboardkeypad", "code"})
                 table.insert(radarTargets, {"simonfloor", "deeplaserpattern"})
@@ -1187,24 +1177,64 @@ task.spawn(function()
                 table.insert(radarTargets, {"keyforge", "chestchoose"})
                 table.insert(radarTargets, {"vending", "garden"})
             end
-            
-            -- ÖNCELİK 3: DEEP CHESTS
-            if getgenv().Config.AutoFarmChests then 
-                if getgenv().Config.DeepBackroomsMode then
-                    table.insert(radarTargets, {"deepchestroom3", "deepchestroom3"})
-                    table.insert(radarTargets, {"deepchestroom2", "deepchestroom2"})
-                    table.insert(radarTargets, {"deepchestroom", "deepchestroom"})
-                    table.insert(radarTargets, {"deepvault", "deepvault"})
-                else
-                    table.insert(radarTargets, {"vault", "chest"}) 
+
+            if hasKeysForBoss then
+                -- ANAHTARIMIZ VAR, ARTIK BOSS KESEBİLİRİZ
+                -- ÖNCELİK 2: BOSS HUNT
+                if getgenv().Config.AutoBossHunt then
+                    if getgenv().Config.DeepBackroomsMode then
+                        table.insert(radarTargets, {"gamemaster", "deepportalroom"})
+                        table.insert(radarTargets, {"masterboss", "masterboss"})
+                        table.insert(radarTargets, {"daydream", "deepboss"})
+                    else
+                        table.insert(radarTargets, {"boss", "miniboss"})
+                        table.insert(radarTargets, {"gamemaster", "masterboss"})
+                    end
                 end
-            end
-            
-            -- ÖNCELİK 3.5: DEEP COINS (BREAKABLES)
-            if getgenv().Config.AutoFarmCoins then
-                if getgenv().Config.DeepBackroomsMode then
-                    table.insert(radarTargets, {"deepcoinroom3", "deepcoinroom3"})
-                    table.insert(radarTargets, {"deepcoinroom2", "deepcoinroom2"})
+                
+                -- ÖNCELİK 3: DEEP CHESTS
+                if getgenv().Config.AutoFarmChests then 
+                    if getgenv().Config.DeepBackroomsMode then
+                        table.insert(radarTargets, {"deepchestroom3", "deepchestroom3"})
+                        table.insert(radarTargets, {"deepchestroom2", "deepchestroom2"})
+                        table.insert(radarTargets, {"deepchestroom", "deepchestroom"})
+                        table.insert(radarTargets, {"deepvault", "deepvault"})
+                    else
+                        table.insert(radarTargets, {"vault", "chest"}) 
+                    end
+                end
+            else
+                -- ANAHTARIMIZ YOK, BOSS OLUŞSA BİLE KAPIYI AÇAMAYIZ
+                -- ÖNCELİK 2: DEEP COINS / BREAKABLES (Hızlıca Anahtar Bulmak İçin)
+                if getgenv().Config.AutoFarmCoins then
+                    if getgenv().Config.DeepBackroomsMode then
+                        table.insert(radarTargets, {"deepcoinroom3", "deepcoinroom3"})
+                        table.insert(radarTargets, {"deepcoinroom2", "deepcoinroom2"})
+                    end
+                end
+                
+                -- ÖNCELİK 3: NORMAL CHESTS (Eğer kasalar boss'tan daha hızlı anahtar veriyorsa)
+                if getgenv().Config.AutoFarmChests then 
+                    if getgenv().Config.DeepBackroomsMode then
+                        table.insert(radarTargets, {"deepchestroom3", "deepchestroom3"})
+                        table.insert(radarTargets, {"deepchestroom2", "deepchestroom2"})
+                        table.insert(radarTargets, {"deepchestroom", "deepchestroom"})
+                        table.insert(radarTargets, {"deepvault", "deepvault"})
+                    else
+                        table.insert(radarTargets, {"vault", "chest"}) 
+                    end
+                end
+                
+                -- Boss listesinin sonuna at, eğer hiçbir şey yoksa bari odası yüklensin
+                if getgenv().Config.AutoBossHunt then
+                    if getgenv().Config.DeepBackroomsMode then
+                        table.insert(radarTargets, {"gamemaster", "deepportalroom"})
+                        table.insert(radarTargets, {"masterboss", "masterboss"})
+                        table.insert(radarTargets, {"daydream", "deepboss"})
+                    else
+                        table.insert(radarTargets, {"boss", "miniboss"})
+                        table.insert(radarTargets, {"gamemaster", "masterboss"})
+                    end
                 end
             end
             
@@ -2176,6 +2206,15 @@ task.spawn(function()
             -- Eğer burada Explore Mode'a düşersek, script 8100 stud ötedeki en uzak odaya zıplar,
             -- Sonra radar tekrar hedefe zıplar ve SONSUZ BİR DÖNGÜ (2 stud - 8100 stud) oluşur!
             -- Bu yüzden burada Explore Mode'u atlayıp sadece odanın yüklenmesini (veya kapının açılmasını) bekliyoruz.
+            local root = getRootPart()
+            if root then
+                -- Odanın yüklenmesini tetiklemek için mikro-zıplamalar yap
+                root.CFrame = root.CFrame * CFrame.new(0, 0.5, 0)
+                local Network = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
+                if Network and Network:FindFirstChild("RequestStreaming") then
+                    pcall(function() Network.RequestStreaming:FireServer(root.Position) end)
+                end
+            end
             task.wait(1)
             continue
         end
@@ -2388,7 +2427,7 @@ task.spawn(function()
 
         -- AutoLoot
         if getgenv().Config.AutoLoot and invokeCustom then
-            for _, obj in ipairs(room:GetChildren()) do
+            for _, obj in ipairs(room:GetDescendants()) do
                 if obj.Name:find("RandomReward") and obj:IsA("Model") then
                     local part = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
                     if part then
