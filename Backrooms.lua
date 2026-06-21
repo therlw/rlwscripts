@@ -39,6 +39,16 @@ getgenv().Config = {
     AutoMailbox = false
 }
 
+getgenv().SmartFarmState = {
+    Running          = true,
+    PetAssignInterval= 0.5,
+    AutoTapInterval  = 0.08,
+    MaxTargetsPerTick= 8,
+    FarmRange        = 85,
+    ClickAuraRange   = 75,
+    Mode             = "Combined",
+}
+
 local TargetEggRooms = {}
 
 getgenv().LiveStats = {
@@ -294,17 +304,6 @@ local function getRootPart()
     return char:WaitForChild("HumanoidRootPart", 5)
 end
 
--- Anti-Void platform
-local antiVoid = workspace:FindFirstChild("AntiVoidPart_Antigravity")
-if not antiVoid then
-    antiVoid = Instance.new("Part")
-    antiVoid.Name = "AntiVoidPart_Antigravity"
-    antiVoid.Size = Vector3.new(500, 1, 500)
-    antiVoid.Anchored = true
-    antiVoid.Transparency = 1
-    antiVoid.CanCollide = true
-    antiVoid.Parent = workspace
-end
 
 -- ✅ TEK bir VisitedRooms tanımı
 local VisitedRooms = {}
@@ -397,8 +396,9 @@ local function safeTeleport(targetObj, fastMode)
     end
 
     local isRoom = typeof(targetObj) == "Instance" and targetObj:GetAttribute("RoomUID") ~= nil
+    local originalCFrame = root.CFrame
     if isRoom and not fastMode then
-        local timeout = 4
+        local timeout = 5
         local t = 0
         local loadedFloor = nil
 
@@ -415,249 +415,53 @@ local function safeTeleport(targetObj, fastMode)
             if not loadedFloor then
                 for _, part in ipairs(targetObj:GetDescendants()) do
                     if part:IsA("BasePart") and part.CanCollide
-                        and part.Name ~= "AntiVoidPart_Antigravity"
                         and part.Size.X > 5 and part.Size.Z > 5 then
                         loadedFloor = part
                         break
                     end
                 end
             end
+            
+            if not loadedFloor then
+                local rayParams = RaycastParams.new()
+                rayParams.FilterType = Enum.RaycastFilterType.Exclude
+                rayParams.FilterDescendantsInstances = {getCharacter()}
+                local hit = workspace:Raycast(safePosition, Vector3.new(0, -100, 0), rayParams)
+                if hit and hit.Instance and hit.Instance.CanCollide then
+                    loadedFloor = hit.Instance
+                end
+            end
 
             if loadedFloor then break end
-            task.wait(0.2)
-            t = t + 0.2
+            task.wait(0.25)
+            t = t + 0.25
         end
 
         if loadedFloor then
             local exactPos = loadedFloor.Position + Vector3.new(0, (loadedFloor.Size.Y / 2) + 5, 0)
             safePosition = exactPos
             root.CFrame = CFrame.new(safePosition)
+        else
+            root.CFrame = originalCFrame
+            if getgenv().RLW_Window then
+                getgenv().RLW_Window:Notify({Title = "⚠️ Teleport Failed!", Content = "Room didn't load physically! Returning to safe spot.", Duration = 3})
+            end
+            local roomUID = targetObj:GetAttribute("RoomUID")
+            if roomUID then
+                DeadEggRooms[roomUID] = os.clock()
+                DeadChestRooms[roomUID] = os.clock()
+            end
+            task.wait(0.1)
+            root.Anchored = false
+            return
         end
-    end
-
-    if antiVoid then
-        antiVoid.CFrame = CFrame.new(safePosition - Vector3.new(0, 4, 0))
     end
 
     task.wait(0.25)
     root.Anchored = false
 end
 
--- ==========================
--- 🗡️ SMART FARM (AUTOTAP & PETS)
--- ==========================
-getgenv().SmartFarmState = {
-    PetAssignInterval= 0.5,
-    AutoTapInterval  = 0.08,
-    MaxTargetsPerTick= 8,
-    FarmRange        = 300,
-    BossRespawningUntil = 0,
-    BossRoomUID = nil,
-    EggRoomUID = nil,
-}
 
-local function GetPlayerPets()
-    local pets = {}
-    pcall(function()
-        local PlayerPet = require(game:GetService("ReplicatedStorage").Library.Client.PlayerPet)
-        for _, petData in pairs(PlayerPet.GetAll()) do
-            if petData.owner == Players.LocalPlayer then table.insert(pets, petData) end
-        end
-    end)
-    return pets
-end
-
-local _prevPetMapping = {}
-
-local function DistributePets(breakables)
-    if #breakables == 0 then return end
-    local pets = GetPlayerPets()
-    if #pets == 0 then return end
-    local petsPerBreakable = math.floor(#pets / #breakables)
-    local remainder = #pets % #breakables
-    local mapping = {}
-    local petIndex = 1
-    for i, breakable in ipairs(breakables) do
-        local count = petsPerBreakable + (i <= remainder and 1 or 0)
-        for j = 1, count do
-            if petIndex > #pets then break end
-            mapping[pets[petIndex].euid] = {
-                ["t"] = 3,
-                ["v"] = breakable.Name
-            }
-            petIndex = petIndex + 1
-        end
-    end
-    if next(mapping) then
-        local changed = false
-        for k, vData in pairs(mapping) do 
-            if type(_prevPetMapping[k]) ~= "table" or _prevPetMapping[k].v ~= vData.v then changed=true break end 
-        end
-        if not changed then for k in pairs(_prevPetMapping) do if not mapping[k] then changed=true break end end end
-        if changed then
-            _prevPetMapping = mapping
-            local Network = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
-            if Network then
-                local brTarget = Network:FindFirstChild("BR_SetTarget")
-                local petTarget = Network:FindFirstChild("Pets_SetTarget")
-                if brTarget then
-                    brTarget:FireServer(mapping)
-                elseif petTarget then
-                    petTarget:FireServer(mapping)
-                else
-                    -- Fallback for older versions just in case
-                    local bulk = Network:FindFirstChild("Breakables_JoinPetBulk")
-                    if bulk then bulk:FireServer(mapping) end
-                end
-            end
-        end
-    end
-end
-
-local function GetBackroomsTargets()
-    local targets = {miniChests={}, bossChest={}, priority={}, normal={}}
-    local breakablesFolder = workspace:FindFirstChild("__THINGS") and workspace.__THINGS:FindFirstChild("Breakables")
-    if not breakablesFolder then return targets end
-
-    local char = getCharacter()
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return targets end
-    local pos = hrp.Position
-
-    -- MiniBossRoom Özel Hedefleri
-    local mbBossZone = nil
-    local mbMiniPoints = {}
-    pcall(function()
-        local active = workspace:FindFirstChild("__THINGS") and workspace.__THINGS:FindFirstChild("__INSTANCE_CONTAINER")
-        local backrooms = active and active:FindFirstChild("Active") and active.Active:FindFirstChild("Backrooms")
-        local genRooms = backrooms and backrooms:FindFirstChild("GeneratedBackrooms")
-        local mbRoom = genRooms and genRooms:FindFirstChild("MiniBossRoom")
-        if mbRoom then
-            mbBossZone = mbRoom:FindFirstChild("BREAK_ZONE")
-            local spawnPoints = mbRoom:FindFirstChild("MiniChestSpawnPoints")
-            if spawnPoints then
-                for _, child in ipairs(spawnPoints:GetChildren()) do
-                    table.insert(mbMiniPoints, child)
-                end
-            end
-        end
-    end)
-
-    for _, obj in ipairs(breakablesFolder:GetChildren()) do
-        if obj:IsA("Model") and tonumber(obj.Name) then
-            local pivot = obj.WorldPivot and obj.WorldPivot.Position
-            if pivot and (pivot - pos).Magnitude < getgenv().SmartFarmState.FarmRange then
-                local isBoss = false
-                local isMini = false
-                local isPriority = false
-                
-                if mbBossZone then
-                    local ptPos = mbBossZone:IsA("BasePart") and mbBossZone.Position or mbBossZone:GetPivot().Position
-                    if (pivot - ptPos).Magnitude < 15 then
-                        isBoss = true
-                    end
-                end
-
-                if not isBoss and #mbMiniPoints > 0 then
-                    for _, point in ipairs(mbMiniPoints) do
-                        local ptPos = point:IsA("BasePart") and point.Position or point:GetPivot().Position
-                        if (pivot - ptPos).Magnitude < 15 then
-                            isMini = true
-                            break
-                        end
-                    end
-                end
-
-                if not isBoss and not isMini then
-                    local bId = string.lower(tostring(obj:GetAttribute("BreakableID") or ""))
-                    if bId:find("gamemaster") or bId:find("grandmaster") then
-                        isBoss = true
-                    elseif bId:find("comet") or bId:find("jar") or bId:find("pinata") or bId:find("lucky") or bId:find("mini") or bId:find("chest") then
-                        isPriority = true
-                    elseif bId:find("boss") then
-                        isBoss = true
-                    end
-                end
-
-                if isBoss then table.insert(targets.bossChest, obj)
-                elseif isMini then table.insert(targets.miniChests, obj)
-                elseif isPriority then table.insert(targets.priority, obj)
-                else table.insert(targets.normal, obj) end
-            end
-        end
-    end
-    return targets
-end
-
-task.spawn(function()
-    while task.wait(getgenv().SmartFarmState.PetAssignInterval) do
-        if not (getgenv().Config.AutoBossHunt or getgenv().Config.AutoFarmChests or getgenv().Config.AutoFarmEvents or getgenv().Config.AutoFarmEggs or getgenv().Config.AutoFarmCoins or getgenv().Config.FastFarmBreakables) then continue end
-        local targets = GetBackroomsTargets()
-        local allTargets = {}
-        
-        -- GRANDMASTER & MINIBOSS FİX: Boss'a vurmadan önce odadaki tüm küçük/öncelikli kasaları (Kalkan Kasaları) canlarına göre sıralayıp yok et!
-        local weakTargets = {}
-        for _, v in ipairs(targets.miniChests) do table.insert(weakTargets, v) end
-        for _, v in ipairs(targets.priority) do table.insert(weakTargets, v) end
-        
-        table.sort(weakTargets, function(a, b)
-            local hA = a:GetAttribute("MaxHealth") or a:GetAttribute("Health") or math.huge
-            local hB = b:GetAttribute("MaxHealth") or b:GetAttribute("Health") or math.huge
-            return hA < hB
-        end)
-        
-        for _, v in ipairs(weakTargets) do table.insert(allTargets, v) end
-        
-        -- Eğer küçük kalkan kasaları veya öncelikli hedef bittiyse, Ana Boss'a dal!
-        if #allTargets == 0 and #targets.bossChest > 0 then
-            for _, v in ipairs(targets.bossChest) do table.insert(allTargets, v) end
-        end
-        
-        if #allTargets == 0 then
-            for _, v in ipairs(targets.normal) do table.insert(allTargets, v) end
-        end
-        
-        pcall(function() DistributePets(allTargets) end)
-    end
-end)
-
-task.spawn(function()
-    while task.wait(getgenv().SmartFarmState.AutoTapInterval) do
-        if not (getgenv().Config.AutoBossHunt or getgenv().Config.AutoFarmChests or getgenv().Config.AutoFarmEvents or getgenv().Config.AutoFarmEggs or getgenv().Config.AutoFarmCoins or getgenv().Config.FastFarmBreakables) then continue end
-        local targets = GetBackroomsTargets()
-        local hitCount = 0
-        local Network = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
-        local dealDmg = Network and Network:FindFirstChild("Breakables_PlayerDealDamage")
-        if dealDmg then
-            local function hitGroup(group)
-                for _, obj in ipairs(group) do
-                    if hitCount >= getgenv().SmartFarmState.MaxTargetsPerTick then return true end
-                    dealDmg:FireServer(obj.Name)
-                    hitCount = hitCount + 1
-                end
-                return hitCount >= getgenv().SmartFarmState.MaxTargetsPerTick
-            end
-            
-            local weakTargets = {}
-            for _, v in ipairs(targets.miniChests) do table.insert(weakTargets, v) end
-            for _, v in ipairs(targets.priority) do table.insert(weakTargets, v) end
-            
-            table.sort(weakTargets, function(a, b)
-                local hA = a:GetAttribute("MaxHealth") or a:GetAttribute("Health") or math.huge
-                local hB = b:GetAttribute("MaxHealth") or b:GetAttribute("Health") or math.huge
-                return hA < hB
-            end)
-            
-            if not hitGroup(weakTargets) and #targets.bossChest > 0 then
-                hitGroup(targets.bossChest)
-            end
-            
-            if hitCount < getgenv().SmartFarmState.MaxTargetsPerTick then
-                hitGroup(targets.normal)
-            end
-        end
-    end
-end)
 
 local function CollectOrbs()
     local orbs_container = workspace:FindFirstChild("__THINGS") and workspace.__THINGS:FindFirstChild("Orbs")
@@ -1483,7 +1287,7 @@ task.spawn(function()
                             getgenv().RadarLastTeleportTime = os.clock()
                             getgenv().RadarLastTeleportPos = targetVec
                             
-                            -- Haritanın yüklenmesi (Streaming) için karakteri havada dondur!
+                            local originalPos = currentRoot.CFrame
                             currentRoot.Anchored = true
                             currentRoot.CFrame = CFrame.new(targetVec + Vector3.new(0, 5, 0))
                             
@@ -1492,20 +1296,34 @@ task.spawn(function()
                                 pcall(function() Network.RequestStreaming:FireServer(targetVec) end)
                             end
                             
-                            print("[DEBUG-RADAR] Waiting 1.2s for physical room load...")
-                            task.wait(1.2) -- Odanın fiziksel olarak yüklenmesini bekle (Bağlantıya göre siyah ekranda kalmamak için süreyi artırdık)
+                            local timeout = 5
+                            local t = 0
+                            local floorFound = false
+                            while t < timeout do
+                                local rayParams = RaycastParams.new()
+                                rayParams.FilterType = Enum.RaycastFilterType.Exclude
+                                rayParams.FilterDescendantsInstances = {getCharacter()}
+                                local hit = workspace:Raycast(currentRoot.Position, Vector3.new(0, -100, 0), rayParams)
+                                if hit and hit.Instance and hit.Instance.CanCollide then
+                                    floorFound = true
+                                    break
+                                end
+                                task.wait(0.25)
+                                t = t + 0.25
+                            end
                             
-                            print("[DEBUG-RADAR] Creating AntiVoid platform for safety.")
-                            -- Güvenlik Ağı: Oda hala yüklenmediyse diye altına görünmez devasa bir zemin koy!
-                            -- (Kullanıcının anahtarı yoksa ve oda client'ta eksikse, boşluğa düşmemesi için devasa yaptık)
-                            local p = Instance.new("Part")
-                            p.Name = "AntiVoidPart_Antigravity"
-                            p.Size = Vector3.new(1000, 2, 1000)
-                            p.Anchored = true
-                            p.CFrame = CFrame.new(targetVec - Vector3.new(0, 5, 0))
-                            p.Parent = workspace
-                            p.Transparency = 1
-                            game:GetService("Debris"):AddItem(p, 300) -- 5 dakika boyunca kalsın ki boss savaşında düşmesin
+                            if not floorFound then
+                                currentRoot.CFrame = originalPos
+                                if getgenv().RLW_Window then
+                                    getgenv().RLW_Window:Notify({Title = "⚠️ Blocked!", Content = "Room didn't load! Returning to safety!", Duration = 3})
+                                end
+                                local targetRoomForBlacklist = isPathNode and nextRoom or targetRoom
+                                local uid = targetRoomForBlacklist and targetRoomForBlacklist:GetAttribute("RoomUID")
+                                if uid then
+                                    DeadEggRooms[uid] = os.clock()
+                                    DeadChestRooms[uid] = os.clock()
+                                end
+                            end
                             
                             print("[DEBUG-RADAR] Unanchoring character. Teleport sequence complete.")
                             currentRoot.Anchored = false
@@ -1582,17 +1400,6 @@ task.spawn(function()
                             pcall(function() Network.RequestStreaming:FireServer(bestWaitVec) end)
                         end
                         task.wait(1.5)
-                        
-                        -- Güvenlik Ağı: Oda yüklenmemişse boşluğa düşmeyi engelle
-                        local p = Instance.new("Part")
-                        p.Name = "AntiVoidPart_Antigravity"
-                        p.Size = Vector3.new(30, 2, 30)
-                        p.Anchored = true
-                        p.CFrame = CFrame.new(bestWaitVec - Vector3.new(0, 1, 0))
-                        p.Parent = workspace
-                        p.Transparency = 1
-                        game:GetService("Debris"):AddItem(p, 10)
-                        
                         currentRoot.Anchored = false
                     end
                     task.wait(2)
@@ -3014,5 +2821,100 @@ TabSettings:CreateButton({
         end
     end
 })
+
+-- ==========================
+-- ⚔️ SMART FARM: FAST BREAKABLES
+-- ==========================
+task.spawn(function()
+    local Network = game:GetService("ReplicatedStorage"):WaitForChild("Network")
+    local lastPetAssign = 0
+    
+    local function GetPlayerPets()
+        local pets = {}
+        pcall(function()
+            local PlayerPet = require(game:GetService("ReplicatedStorage").Library.Client.PlayerPet)
+            for _, petData in pairs(PlayerPet.GetAll()) do
+                if petData.owner == game.Players.LocalPlayer then table.insert(pets, petData) end
+            end
+        end)
+        return pets
+    end
+
+    while task.wait(getgenv().SmartFarmState.AutoTapInterval or 0.08) do
+        if not getgenv().SmartFarmState.Running then continue end
+        if not getgenv().Config.AutoFarmCoins and not getgenv().Config.MetaFarmActive then continue end
+        
+        local root = getRootPart()
+        if not root then continue end
+        local charPos = root.Position
+        
+        local things = workspace:FindFirstChild("__THINGS")
+        local breakables = things and things:FindFirstChild("Breakables")
+        if not breakables then continue end
+        
+        local targets = {}
+        for _, b in ipairs(breakables:GetChildren()) do
+            local part = b:FindFirstChild("Hitbox") or (b:IsA("Model") and b.PrimaryPart) or b:FindFirstChildWhichIsA("BasePart")
+            if part then
+                local dist = (part.Position - charPos).Magnitude
+                if dist <= (getgenv().SmartFarmState.FarmRange or 85) then
+                    table.insert(targets, {uid = b.Name, dist = dist, obj = b})
+                end
+            end
+        end
+        
+        table.sort(targets, function(a, b) return a.dist < b.dist end)
+        
+        local maxT = getgenv().SmartFarmState.MaxTargetsPerTick or 8
+        local now = tick()
+        local shouldAssignPet = (now - lastPetAssign) >= (getgenv().SmartFarmState.PetAssignInterval or 0.5)
+        if shouldAssignPet then lastPetAssign = now end
+        
+        local validTargets = {}
+
+        for i = 1, math.min(maxT, #targets) do
+            local uid = targets[i].uid
+            
+            -- Işık Hızında Auto Tap (Hepsi için anında vurur)
+            if targets[i].dist <= (getgenv().SmartFarmState.ClickAuraRange or 75) then
+                pcall(function() Network.Breakables_PlayerDealDamage:FireServer(uid) end)
+            end
+            
+            if shouldAssignPet then
+                table.insert(validTargets, uid)
+            end
+        end
+
+        -- Petleri eşit şekilde dağıtarak saldırt (BR_SetTarget)
+        if shouldAssignPet and #validTargets > 0 then
+            local pets = GetPlayerPets()
+            if #pets > 0 then
+                local mapping = {}
+                local petsPerBreakable = math.floor(#pets / #validTargets)
+                local remainder = #pets % #validTargets
+                local petIndex = 1
+                
+                for i, uid in ipairs(validTargets) do
+                    local count = petsPerBreakable + (i <= remainder and 1 or 0)
+                    for j = 1, count do
+                        if petIndex > #pets then break end
+                        mapping[pets[petIndex].euid] = {
+                            ["t"] = 3,
+                            ["v"] = uid
+                        }
+                        petIndex = petIndex + 1
+                    end
+                end
+                
+                if next(mapping) then
+                    pcall(function()
+                        local brTarget = Network:FindFirstChild("BR_SetTarget")
+                        if brTarget then brTarget:FireServer(mapping) end
+                    end)
+                end
+            end
+        end
+    end
+end)
 
 Window:LoadConfiguration()
