@@ -2911,7 +2911,10 @@ task.spawn(function()
             
             -- Işık Hızında Auto Tap (Hepsi için anında vurur)
             if targets[i].dist <= (getgenv().SmartFarmState.ClickAuraRange or 75) then
-                pcall(function() Network.Breakables_PlayerDealDamage:FireServer(uid) end)
+                pcall(function()
+                    local ClientNetwork = require(game:GetService("ReplicatedStorage").Library.Client.Network)
+                    ClientNetwork.UnreliableFire("Breakables_PlayerDealDamage", uid)
+                end)
             end
             
             if shouldAssignPet then
