@@ -1367,11 +1367,12 @@ task.spawn(function()
                                 end
                                 -- Komşu odaya geçmeden önce bulunduğumuz odadaki tüm kapıları açmaya zorla!
                                 if invokeCustom and rooms_raw then
-                                    for _, r in ipairs(rooms_raw) do
+                                    for i, r in ipairs(rooms_raw) do
                                         local uid = r:GetAttribute("RoomUID")
                                         if uid then
                                             pcall(function() invokeCustom:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", uid, "UnlockDeep") end)
                                         end
+                                        if i % 10 == 0 then task.wait() end
                                     end
                                 end
                             else
@@ -1388,7 +1389,7 @@ task.spawn(function()
                                 pcall(function() Network.RequestStreaming:FireServer(targetVec) end)
                             end
                             
-                            task.wait(1.5) -- Odanın fiziksel olarak yüklenmesini bekle
+                            task.wait(0.5) -- Odanın fiziksel olarak yüklenmesini bekle (Platform koruması var, hızlı geçiş yapabiliriz)
                             
                             -- Güvenlik Ağı: Oda hala yüklenmediyse diye altına görünmez zemin koy!
                             local p = Instance.new("Part")
@@ -2525,14 +2526,6 @@ TabRadar:CreateSlider({
     CurrentValue = 5,
     Flag = "Sld_TargetKeys",
     Callback = function(Value) getgenv().Config.TargetKeyCount = Value end
-})
-
-TabRadar:CreateSlider({
-    Name = "Max Keys To Spend (Server Hop if target is further)",
-    Range = {10, 500},
-    CurrentValue = 25,
-    Flag = "Sld_MaxKeysToSpend",
-    Callback = function(Value) getgenv().Config.MaxKeysToSpend = Value end
 })
 
 TabRadar:CreateSection("Deep Backrooms Entry")
