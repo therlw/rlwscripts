@@ -987,7 +987,8 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
                 end
 
                 -- Deep Backrooms haritası dinamik yaratıldığı için, kapılar açılmadan sunucu odayı yaratmaz!
-                if getgenv().Config.DeepBackroomsMode and not isPhysicallyLoaded then
+                local isBossRoomTarget = c:find("gamemaster")
+                if getgenv().Config.DeepBackroomsMode and not isPhysicallyLoaded and not isBossRoomTarget then
                     -- Oda yüklenmemişse, direkt uçmak yerine A* ile yol bulup bir sonraki komşu odaya uçmalıyız!
                     local root = getRootPart()
                     local charPos = root and root.Position or Vector3.zero
@@ -1971,6 +1972,36 @@ task.spawn(function()
                     local now = workspace:GetServerTimeNow()
                     if respawnTs and respawnTs > now then
                         local remaining = math.ceil(respawnTs - now)
+
+                        -- Önce Boss Chest'in kırılıp kırılmadığını kontrol et! (Boss ölünce çıkan sandık)
+                        local breakablesFolder = workspace:FindFirstChild("__THINGS") and workspace.__THINGS:FindFirstChild("Breakables")
+                        local bossChestExists = false
+                        if breakablesFolder then
+                            local root = getRootPart()
+                            local charPos = root and root.Position or Vector3.new(0,0,0)
+                            for _, b in ipairs(breakablesFolder:GetChildren()) do
+                                local bId = string.lower(tostring(b:GetAttribute("BreakableID") or ""))
+                                local bName = string.lower(b.Name)
+                                if bId:find("bosschest") or bName:find("bosschest") or bId:find("chest") or bName:find("chest") then
+                                    local part = b:FindFirstChild("Hitbox") or (b:IsA("Model") and b.PrimaryPart) or b:FindFirstChildWhichIsA("BasePart")
+                                    if part and (part.Position - charPos).Magnitude < 300 then
+                                        bossChestExists = true
+                                        break
+                                    end
+                                end
+                            end
+                        end
+
+                        if bossChestExists then
+                            if getgenv().RLW_Window and not getgenv().NotifiedBossChest then
+                                getgenv().RLW_Window:Notify({Title = "💰 Boss Chest!", Content = "Looting the Boss Chest...", Duration = 3})
+                                getgenv().NotifiedBossChest = true
+                            end
+                            task.wait(1)
+                            continue
+                        end
+                        getgenv().NotifiedBossChest = false
+
                         
                         -- HİBRİT KONTROL: Eğer doğmasına 15 saniyeden fazla varsa odadan ayrıl ve yumurta ara!
                         if remaining > 15 and getgenv().Config.FindKeepOutEgg then
