@@ -994,7 +994,15 @@ task.spawn(function()
             local pos = r:IsA("Model") and r:GetPivot().Position or (r:IsA("BasePart") and r.Position or Vector3.zero)
             if (pos - charPos).Magnitude < 500 then
                 local roomID = string.lower(r:GetAttribute("RoomID") or "")
-                local isBoss = roomID:find("bosschest") or roomID:find("minichest") or roomID:find("miniboss") or roomID:find("boss") or roomID:find("gamemaster") or r:GetAttribute("BossChestUID") or r:GetAttribute("ActiveMinichests")
+                
+                local isBoss = false
+                if getgenv().Config.DeepBackroomsMode then
+                    -- Deep modunda boss SADECE gamemaster'dır!
+                    isBoss = roomID:find("gamemaster")
+                else
+                    isBoss = roomID:find("bosschest") or roomID:find("minichest") or roomID:find("miniboss") or roomID:find("boss") or r:GetAttribute("BossChestUID") or r:GetAttribute("ActiveMinichests")
+                end
+                
                 if isBoss and not r:FindFirstChild("LockedDoors") then
                     isKeyFarmPhase = false
                     isBossHuntPhase = true
@@ -1312,9 +1320,14 @@ task.spawn(function()
                     end
                 end
                 
-                local isBoss = lowerID:find("bosschest") or lowerID:find("minichest")
-                    or lowerID:find("miniboss") or lowerID:find("boss") or lowerID:find("gamemaster")
-                    or room:GetAttribute("BossChestUID") or room:GetAttribute("ActiveMinichests")
+                local isBoss = false
+                if getgenv().Config.DeepBackroomsMode then
+                    -- Deep modunda boss SADECE gamemaster'dır! Miniboss'lar es geçilir.
+                    isBoss = lowerID:find("gamemaster")
+                else
+                    isBoss = lowerID:find("bosschest") or lowerID:find("minichest") or lowerID:find("miniboss") or lowerID:find("boss") or room:GetAttribute("BossChestUID") or room:GetAttribute("ActiveMinichests")
+                end
+                
                 local isVault = false
                 local isBreakable = false
                 
