@@ -1693,9 +1693,8 @@ task.spawn(function()
                         local invokeCustom = Network and Network:FindFirstChild("Instancing_InvokeCustomFromClient")
                         if getgenv().Config.DeepBackroomsMode and invokeCustom then
                             pcall(function() invokeCustom:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", roomUID, "UnlockDeep") end)
-                        else
-                            fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
                         end
+                        fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
                     end
                 end
                 -- Type 3 (Boss): teleport sonrası yükleme beklendiğinde kontrol edilecek
@@ -2045,9 +2044,9 @@ task.spawn(function()
                     if fireCustom2 then
                         if getgenv().Config.DeepBackroomsMode and invokeCustom2 then
                             pcall(function() invokeCustom2:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", roomUID, "UnlockDeep") end)
-                        else
-                            fireCustom2:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
+                            task.wait(0.2)
                         end
+                        fireCustom2:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
                     end
                 else
                     -- Kapı yok ama boss da yok, normal Boss Odası belki boş
@@ -2380,10 +2379,11 @@ task.spawn(function()
                 if not isUnlocked then
                     local isBossRoom = false
                     if getgenv().Config.DeepBackroomsMode then
-                        isBossRoom = lowerID:find("gamemaster") or lowerID:find("deepportalroom")
+                        isBossRoom = lowerID:find("gamemaster") or lowerID:find("deepportalroom") or lowerID:find("daydream") or lowerID:find("masterboss") or lowerID:find("deepboss")
                     else
                         isBossRoom = lowerID:find("bosschest") or lowerID:find("minichest")
                             or lowerID:find("miniboss") or lowerID:find("boss")
+                            or lowerID:find("gamemaster") or lowerID:find("masterboss")
                             or room:GetAttribute("BossChestUID") or room:GetAttribute("ActiveMinichests")
                     end
                     
@@ -2410,9 +2410,9 @@ task.spawn(function()
                     if shouldUnlock then
                         if getgenv().Config.DeepBackroomsMode and invokeCustom then
                             pcall(function() invokeCustom:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", roomUID, "UnlockDeep") end)
-                        else
-                            fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
+                            task.wait(0.2)
                         end
+                        fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
                     end
                 end
             end
