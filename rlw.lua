@@ -26,7 +26,6 @@ getgenv().Config = {
     RadarTeleport = false,
     FarmDeepChests = false,
     FarmDeepEvents = false,
-    MaxKeysToSpend = 25,
     AutoUpgrades = {
         BackroomsBossDamage = false,
         BackroomsExtraLootRoll = false,
@@ -1000,54 +999,24 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
                         local path = findPathAStar(startIdx, targetIdx, graph, descriptor)
                         
                         if path and #path > 1 then
-                            -- ANAHTAR KORUMASI: Yalnızca kullanıcının izin verdiği kadar harca!
-                            local keysNeeded = #path - 1
-                            if keysNeeded > (getgenv().Config.MaxKeysToSpend or 25) then
-                                if getgenv().RLW_Window then
-                                    getgenv().RLW_Window:Notify({Title = "❌ Too Far!", Content = targetClass .. " requires " .. tostring(keysNeeded) .. " keys. Skipping...", Duration = 2})
-                                end
-                                continue
-                            end
-
-                            local Network = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
-                            local invokeCustom = Network and Network:FindFirstChild("Instancing_InvokeCustomFromClient")
+                            local nextRoomIdx = path[2]
+                            local nextRoom = descriptor.rooms[nextRoomIdx]
+                            local res = descriptor.res or 45
+                            local x0 = descriptor.x0 or 1
+                            local y0 = descriptor.y0 or 1
+                            local rootVec = descriptor.root or Vector3.new(0,0,0)
                             
-                            if invokeCustom then
-                                -- BÜYÜK OPTİMİZASYON: Sunucunun mesafe kontrolünü aşmak için saniyede 20 odaya ışınlanıp kilit açıyoruz!
-                                task.spawn(function()
-                                    local char = getRootPart() and getRootPart().Parent
-                                    if not char then return end
-                                    
-                                    for i = 2, #path do
-                                        local rIdx = path[i]
-                                        local rData = descriptor.rooms[rIdx]
-                                        
-                                        local res = descriptor.res or 45
-                                        local cx = rData.x + (rData.w / 2)
-                                        local cy = rData.y + (rData.h / 2)
-                                        local nextX = (cx + (descriptor.x0 - 1)) * res + (descriptor.root and descriptor.root.X or 0)
-                                        local nextZ = (cy + (descriptor.y0 - 1)) * res + (descriptor.root and descriptor.root.Z or 0)
-                                        
-                                        -- Önce odaya ışınlan (Sunucudaki mesafe engelini aşmak için)
-                                        char:PivotTo(CFrame.new(nextX, targetY + 15, nextZ))
-                                        
-                                        -- Ardından anında kilit açma isteği yolla
-                                        pcall(function()
-                                            invokeCustom:InvokeServer("UnlockDeep", rData.id)
-                                        end)
-                                        
-                                        -- Sunucunun konumu algılaması ve odaları yüklemesi için çok kısa bir bekleme
-                                        task.wait(0.05) 
-                                    end
-                                end)
-                            end
+                            local cx = nextRoom.x + (nextRoom.w / 2)
+                            local cy = nextRoom.y + (nextRoom.h / 2)
+                            
+                            local nextX = (cx + (x0 - 1)) * res + rootVec.X
+                            local nextZ = (cy + (y0 - 1)) * res + rootVec.Z
+                            
+                            local nextWaypointVec = Vector3.new(nextX, targetY + 15, nextZ)
                             
                             -- CoordKey'i hedef oda için ayarla (Yol üzerindeki odalar DeadCoords'a girmesin diye)
                             getgenv().CurrentRadarTargetCoordKey = coordKey
-                            if getgenv().RLW_Window then
-                                getgenv().RLW_Window:Notify({Title = "⚡ Hyper-Skip!", Content = "Skipping " .. tostring(#path) .. " rooms instantly!", Duration = 2})
-                            end
-                            return targetVec, nil, nil, false -- isPathNode = false (Direkt ana hedefe uç)
+                            return nextWaypointVec, nil, nil, true -- isPathNode = true
                         end
                     end
                     continue -- Yol bulunamadıysa veya aynı odadaysa es geç
@@ -2628,14 +2597,6 @@ TabAutoFarm:CreateSlider({
     CurrentValue = 5,
     Flag = "Sld_TargetKeys",
     Callback = function(Value) getgenv().Config.TargetKeyCount = Value end
-})
-
-TabAutoFarm:CreateSlider({
-    Name = "Max Keys to Spend per Room",
-    Range = {1, 100}, 
-    CurrentValue = 25,
-    Flag = "Sld_MaxKeysToSpend",
-    Callback = function(Value) getgenv().Config.MaxKeysToSpend = Value end
 })
 
 TabAutoFarm:CreateToggle({
