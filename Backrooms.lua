@@ -884,7 +884,7 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
                                 -- DİKKAT: BOSS odaları (Gamemaster, Daydream, vs.) ASLA visited sayılmaz!
                                 -- Çünkü Boss odasına girsek bile içinde kamp kurmak istiyoruz.
                                 local cLower = string.lower(roomInfo.class or "")
-                                local isBossClass = cLower:find("gamemaster") or cLower:find("masterboss") or cLower:find("daydream") or cLower:find("deepboss") or cLower:find("boss") or cLower:find("deepportal")
+                                local isBossClass = cLower:find("gamemaster") or cLower:find("masterboss") or cLower:find("daydream") or cLower:find("deepboss") or cLower:find("boss") or cLower:find("deepportal") or cLower:find("chest") or cLower:find("vault")
                                 
                                 if not isBossClass then
                                     if not DeadChestRooms or not DeadChestRooms[uid] or DeadChestRooms[uid] > workspace:GetServerTimeNow() then
