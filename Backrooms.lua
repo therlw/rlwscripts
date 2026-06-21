@@ -1173,7 +1173,6 @@ task.spawn(function()
                             teleportedByRadar = true
                             break -- Döngüden çık
                         end
-                        end
                     end
                 elseif deadVec and not bestWaitVec then
                     bestWaitVec = deadVec
