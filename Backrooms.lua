@@ -255,8 +255,11 @@ pcall(function()
     Message.Error = function() end
     local oldNew = Message.New
     Message.New = function(msg, ...)
-        if msg and type(msg) == "string" and msg:lower():find("mini%-boss") then
-            return -- "Mini-boss defeated!" yazısını tamamen engelle
+        if msg and type(msg) == "string" then
+            local lowerMsg = msg:lower()
+            if lowerMsg:find("mini%-boss") or lowerMsg:find("boss defeated") or lowerMsg:find("gamemaster") then
+                return -- Boss öldüğünde çıkan yazıları tamamen engelle
+            end
         end
         return oldNew(msg, ...)
     end
