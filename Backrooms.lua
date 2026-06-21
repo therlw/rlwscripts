@@ -481,18 +481,35 @@ local function DistributePets(breakables)
         local count = petsPerBreakable + (i <= remainder and 1 or 0)
         for j = 1, count do
             if petIndex > #pets then break end
-            mapping[pets[petIndex].euid] = breakable.Name
+            mapping[pets[petIndex].euid] = {
+                ["t"] = 3,
+                ["v"] = breakable.Name
+            }
             petIndex = petIndex + 1
         end
     end
     if next(mapping) then
         local changed = false
-        for k, v in pairs(mapping) do if _prevPetMapping[k] ~= v then changed=true break end end
+        for k, vData in pairs(mapping) do 
+            if type(_prevPetMapping[k]) ~= "table" or _prevPetMapping[k].v ~= vData.v then changed=true break end 
+        end
         if not changed then for k in pairs(_prevPetMapping) do if not mapping[k] then changed=true break end end end
         if changed then
             _prevPetMapping = mapping
             local Network = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
-            if Network then Network:FindFirstChild("Breakables_JoinPetBulk"):FireServer(mapping) end
+            if Network then
+                local brTarget = Network:FindFirstChild("BR_SetTarget")
+                local petTarget = Network:FindFirstChild("Pets_SetTarget")
+                if brTarget then
+                    brTarget:FireServer(mapping)
+                elseif petTarget then
+                    petTarget:FireServer(mapping)
+                else
+                    -- Fallback for older versions just in case
+                    local bulk = Network:FindFirstChild("Breakables_JoinPetBulk")
+                    if bulk then bulk:FireServer(mapping) end
+                end
+            end
         end
     end
 end
