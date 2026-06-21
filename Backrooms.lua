@@ -1403,13 +1403,37 @@ task.spawn(function()
                         if getgenv().RLW_Window then
                             getgenv().RLW_Window:Notify({Title = "⏳ Waiting...", Content = "All rooms are dead! Waiting at nearest respawn...", Duration = 3})
                         end
+                        local originalPos = currentRoot.CFrame
                         currentRoot.Anchored = true
                         currentRoot.CFrame = CFrame.new(bestWaitVec + Vector3.new(0, 5, 0))
                         local Network = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
                         if Network and Network:FindFirstChild("RequestStreaming") then
                             pcall(function() Network.RequestStreaming:FireServer(bestWaitVec) end)
                         end
-                        task.wait(1.5)
+                        
+                        local timeout = 5
+                        local t = 0
+                        local floorFound = false
+                        while t < timeout do
+                            local rayParams = RaycastParams.new()
+                            rayParams.FilterType = Enum.RaycastFilterType.Exclude
+                            rayParams.FilterDescendantsInstances = {getCharacter()}
+                            local hit = workspace:Raycast(currentRoot.Position, Vector3.new(0, -100, 0), rayParams)
+                            if hit and hit.Instance and hit.Instance.CanCollide then
+                                floorFound = true
+                                break
+                            end
+                            task.wait(0.25)
+                            t = t + 0.25
+                        end
+                        
+                        if not floorFound then
+                            currentRoot.CFrame = originalPos
+                            if getgenv().RLW_Window then
+                                getgenv().RLW_Window:Notify({Title = "⚠️ Blocked!", Content = "Room didn't load! Returning to safety!", Duration = 3})
+                            end
+                        end
+                        
                         currentRoot.Anchored = false
                     end
                     task.wait(2)
