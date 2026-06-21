@@ -36,8 +36,19 @@ getgenv().Config = {
     },
     WebhookEnabled = false,
     WebhookURL = "",
-    AutoMailbox = false
 }
+
+-- ==========================
+-- 🚀 PET SPEED HACK (INSTANT)
+-- ==========================
+pcall(function()
+    local PlayerPet = require(game:GetService("ReplicatedStorage").Library.Client.PlayerPet)
+    if PlayerPet and type(PlayerPet) == "table" then
+        PlayerPet.CalculateSpeedMultiplier = function()
+            return math.huge -- Petleri sonsuz hıza (direkt ışınlanmaya) ayarlar
+        end
+    end
+end)
 
 getgenv().SmartFarmState = {
     Running          = true,
