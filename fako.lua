@@ -1071,12 +1071,16 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
                             
                             if bestEdgeVec then
                                 return bestEdgeVec, nil, nil, true -- isPathNode = true
+                            else
+                                -- A* yolda ilerledi ama sıradaki oda henüz yüklenmedi, fiziksel sınırdayız!
+                                -- Hedefi değiştirmemesi için özel bir bekleme sinyali gönder.
+                                return nil, nil, nil, false, true -- isWaitingAtBoundary = true
                             end
                         end
                         
                         -- Eğer A* yol bulamadıysa veya yoldaki ileri odalar yüklenmemişse:
                         -- Asla başka hedefe veya kör noktaya atlama, Explore Mode'un kapı kırmasını bekle!
-                        return nil, nil, nil, false
+                        return nil, nil, nil, false, true
                     end
                     return targetVec, nil, nil, false
                 end
@@ -1370,7 +1374,7 @@ task.spawn(function()
             for _, tData in ipairs(radarTargets) do
                 local targetClass = tData[1]
                 local altClass = tData[2]
-                local targetVec, deadVec, deadCooldown, isPathNode = getTargetRoomVector(targetClass, altClass, VisitedRooms, rooms_raw, DeadChestRooms)
+                local targetVec, deadVec, deadCooldown, isPathNode, isWaitingAtBoundary = getTargetRoomVector(targetClass, altClass, VisitedRooms, rooms_raw, DeadChestRooms)
                 
                 if targetVec then
                     if targetClass == "boss" then
@@ -1444,6 +1448,10 @@ task.spawn(function()
                             break -- Döngüden çık
                         end
                     end
+                elseif isWaitingAtBoundary then
+                    -- Radar bir hedefe kilitlendi ama fiziksel sınırda (kapı açılmasını) bekliyor!
+                    -- Ping-Pong (hedef değiştirme) olmasını engellemek için diğer hedefleri aramayı bırak.
+                    break
                 elseif deadVec and deadCooldown and deadCooldown < bestWaitCooldown then
                     bestWaitCooldown = deadCooldown
                     bestWaitVec = deadVec
