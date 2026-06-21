@@ -55,7 +55,7 @@ end)
 -- ==========================
 LocalPlayer.CharacterAdded:Connect(function()
     task.spawn(function()
-        task.wait(2.5) -- Karakterin tam yüklenmesini bekle
+        task.wait(3.5) -- Karakterin tam yüklenmesini bekle
         local SaveModule = game:GetService("ReplicatedStorage").Library.Client.Save
         local Network = game:GetService("ReplicatedStorage"):WaitForChild("Network")
         
@@ -72,21 +72,37 @@ LocalPlayer.CharacterAdded:Connect(function()
         if #equippedUIDs > 0 then
             -- Önce hepsini çıkar (Servera state değiştiğini bildir)
             local unequipAll = Network:FindFirstChild("Pets_UnequipAll")
-            if unequipAll then pcall(function() unequipAll:InvokeServer() end) end
+            if unequipAll then 
+                pcall(function() 
+                    if unequipAll:IsA("RemoteEvent") then unequipAll:FireServer() else unequipAll:InvokeServer() end
+                end) 
+            end
             
-            task.wait(0.5)
+            task.wait(1)
             
             -- Sonra eskisini birebir aynı şekilde geri tak
             local equip = Network:FindFirstChild("Pets_Equip")
             if equip then
                 for _, uid in ipairs(equippedUIDs) do
-                    pcall(function() equip:InvokeServer(uid, true) end)
+                    pcall(function() 
+                        if equip:IsA("RemoteEvent") then equip:FireServer(uid, true) else equip:InvokeServer(uid, true) end
+                    end)
                     task.wait(0.01)
                 end
             end
             
             if getgenv().RLW_Window then
                 getgenv().RLW_Window:Notify({Title = "🐾 Pets Restored!", Content = "Respawn detected. All pets have been re-equipped!", Duration = 3})
+            end
+        else
+            local equipBest = Network:FindFirstChild("Pets_EquipBest")
+            if equipBest then
+                pcall(function() 
+                    if equipBest:IsA("RemoteEvent") then equipBest:FireServer() else equipBest:InvokeServer() end
+                end)
+                if getgenv().RLW_Window then
+                    getgenv().RLW_Window:Notify({Title = "🐾 Pets Restored!", Content = "Respawn detected. Best pets equipped!", Duration = 3})
+                end
             end
         end
     end)
