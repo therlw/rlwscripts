@@ -1417,9 +1417,25 @@ task.spawn(function()
                             if getgenv().RadarLastTeleportPos and (getgenv().RadarLastTeleportPos - targetVec).Magnitude < 10 then
                                 if dist > 1000 then
                                     if getgenv().RLW_Window then
-                                        getgenv().RLW_Window:Notify({Title = "🔒 Locked Room!", Content = "You don't have a key! (Or Anti-Cheat killed us). Exploring for 60s...", Duration = 3})
+                                        local msgTitle = "Boss Room Found"
+                                        local msgContent = "Waiting 60s for the room to reset... Exploring nearby!"
+                                        
+                                        pcall(function()
+                                            local MiscItem = require(game:GetService("ReplicatedStorage").Library.Items.MiscItem)
+                                            local keyName = (targetClass == "deepboss") and "Deep Backrooms Crayon Key" or "Backrooms Crayon Key"
+                                            local keyItem = MiscItem(keyName)
+                                            
+                                            if keyItem and keyItem.HasAny and keyItem:HasAny() then
+                                                msgTitle = "🗝️ Unlocking Boss Door!"
+                                                msgContent = "We have a " .. keyName .. "! The door is currently opening (or we died). Waiting 60s to return safely!"
+                                            else
+                                                msgTitle = "🔒 Locked Boss Room!"
+                                                msgContent = "We don't have a " .. keyName .. " yet! Exploring for 60s to find one..."
+                                            end
+                                        end)
+                                        
+                                        getgenv().RLW_Window:Notify({Title = msgTitle, Content = msgContent, Duration = 4})
                                     end
-                                    print("[DEBUG-RADAR] ANTI-CHEAT KICK / DEATH LOOP DETECTED! Blacklisting locked room for 60s.")
                                     getgenv().RadarAntiCheatBlacklist[targetKey] = os.clock() + 60
                                     continue -- Blacklist'e aldık, diğer hedefe geç
                                 end
