@@ -1079,7 +1079,12 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
                         end
                         
                         -- Eğer A* yol bulamadıysa veya yoldaki ileri odalar yüklenmemişse:
-                        -- Asla başka hedefe veya kör noktaya atlama, Explore Mode'un kapı kırmasını bekle!
+                        -- Eğer aradığımız hedef doğası gereği İZOLE bir oda ise (örn: GameMaster), A*'ı boşver direkt ışınlan!
+                        if targetClass == "gamemaster" or altClass == "gamemaster" then
+                            return targetVec, nil, nil, false
+                        end
+                        
+                        -- Normal odaysa Asla başka hedefe veya kör noktaya atlama, Explore Mode'un kapı kırmasını bekle!
                         return nil, nil, nil, false, true
                     end
                     return targetVec, nil, nil, false
@@ -2369,16 +2374,25 @@ task.spawn(function()
                 end
 
                 if not isUnlocked then
-                    local isBossRoom = lowerID:find("bosschest") or lowerID:find("minichest")
-                        or lowerID:find("miniboss") or lowerID:find("boss")
-                        or room:GetAttribute("BossChestUID") or room:GetAttribute("ActiveMinichests")
+                    local isBossRoom = false
+                    if getgenv().Config.DeepBackroomsMode then
+                        isBossRoom = lowerID:find("gamemaster") or lowerID:find("deepportalroom")
+                    else
+                        isBossRoom = lowerID:find("bosschest") or lowerID:find("minichest")
+                            or lowerID:find("miniboss") or lowerID:find("boss")
+                            or room:GetAttribute("BossChestUID") or room:GetAttribute("ActiveMinichests")
+                    end
+                    
                     local isEggRoom = lowerID:find("titanicegg") or lowerID:find("hugeegg") or lowerID:find("egg") or lowerID:find("keepout")
 
                     local shouldUnlock = false
 
-                    if isBossHuntPhase and isBossRoom then
+                    if getgenv().Config.AutoBossHunt and isBossRoom then
                         shouldUnlock = true
-                    elseif (getgenv().Config.FindKeepOutEgg or getgenv().Config.FindFreeEggRoom or isHybridEggPhase) and isEggRoom then
+                    elseif (getgenv().Config.FindKeepOutEgg or getgenv().Config.FindFreeEggRoom or getgenv().Config.AutoFarmEggs) and isEggRoom then
+                        shouldUnlock = true
+                    elseif getgenv().Config.AutoBossHunt and not radarFoundBoss then
+                        -- Boss arıyoruz ama henüz haritada yok. Çıkması için kapıları kırarak etrafı keşfetmemiz ŞART!
                         shouldUnlock = true
                     else
                         -- ANAHTAR TASARRUFU GÜNCELLEMESİ:
