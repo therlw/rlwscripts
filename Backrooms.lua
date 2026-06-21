@@ -987,8 +987,7 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
                 end
 
                 -- Deep Backrooms haritası dinamik yaratıldığı için, kapılar açılmadan sunucu odayı yaratmaz!
-                local isBossRoomTarget = c:find("gamemaster")
-                if getgenv().Config.DeepBackroomsMode and not isPhysicallyLoaded and not isBossRoomTarget then
+                if getgenv().Config.DeepBackroomsMode and not isPhysicallyLoaded then
                     -- Oda yüklenmemişse, direkt uçmak yerine A* ile yol bulup bir sonraki komşu odaya uçmalıyız!
                     local root = getRootPart()
                     local charPos = root and root.Position or Vector3.zero
@@ -1259,8 +1258,9 @@ task.spawn(function()
             local radarTargets = {}
             if isBossHuntPhase then
                 if getgenv().Config.DeepBackroomsMode then
-                    -- Deep modunda SADECE Deep Boss (GameMaster) hedeflenir! Klasik minibossroom'lar GÖRMEZDEN GELİNİR!
-                    table.insert(radarTargets, {"gamemaster"})
+                    -- Deep modunda SADECE Deep Boss (GameMaster) hedeflenir!
+                    -- Ancak GameMaster odası izole olduğu için önce DeepPortalRoom'u bulmalıyız!
+                    table.insert(radarTargets, {"gamemaster", "deepportalroom"})
                 else
                     table.insert(radarTargets, {"boss", "miniboss"})
                 end
@@ -1518,7 +1518,7 @@ task.spawn(function()
                 local isBoss = false
                 if getgenv().Config.DeepBackroomsMode then
                     -- Deep modunda boss SADECE gamemaster'dır! Miniboss'lar es geçilir.
-                    isBoss = lowerID:find("gamemaster")
+                    isBoss = lowerID:find("gamemaster") or lowerID:find("deepportalroom")
                 else
                     isBoss = lowerID:find("bosschest") or lowerID:find("minichest") or lowerID:find("miniboss") or lowerID:find("boss") or room:GetAttribute("BossChestUID") or room:GetAttribute("ActiveMinichests")
                 end
