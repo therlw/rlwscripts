@@ -1386,6 +1386,7 @@ task.spawn(function()
             
             local teleportedByRadar = false
             local radarFoundBoss = false
+            local isParkedAtRadarTarget = false
             local bestWaitVec = nil
             local bestWaitCooldown = math.huge
             
@@ -1469,11 +1470,16 @@ task.spawn(function()
                             
                             teleportedByRadar = true
                             break -- Döngüden çık
+                        else
+                            -- Biz radar hedefinin çok yakınındayız!
+                            -- Eğer oda henüz yüklenmediyse bile Explore moduna geçip buradan uzaklaşmamalıyız!
+                            isParkedAtRadarTarget = true
                         end
                     end
                 elseif isWaitingAtBoundary then
                     -- Radar bir hedefe kilitlendi ama fiziksel sınırda (kapı açılmasını) bekliyor!
                     -- Ping-Pong (hedef değiştirme) olmasını engellemek için diğer hedefleri aramayı bırak.
+                    isParkedAtRadarTarget = true
                     break
                 elseif deadVec and deadCooldown and deadCooldown < bestWaitCooldown then
                     bestWaitCooldown = deadCooldown
@@ -2279,6 +2285,15 @@ task.spawn(function()
             end
 
             continue -- Bir sonraki döngü turuna geç
+        end
+
+        if bestRoomType == 0 and isParkedAtRadarTarget then
+            -- Hedefin tam dibindeyiz ama fiziksel oda henüz yüklenmediği için bestRoomType 0 kaldı.
+            -- Eğer burada Explore Mode'a düşersek, script 8100 stud ötedeki en uzak odaya zıplar,
+            -- Sonra radar tekrar hedefe zıplar ve SONSUZ BİR DÖNGÜ (2 stud - 8100 stud) oluşur!
+            -- Bu yüzden burada Explore Mode'u atlayıp sadece odanın yüklenmesini (veya kapının açılmasını) bekliyoruz.
+            task.wait(1)
+            continue
         end
 
         -- Öncelikli oda bulunamadı → haritayı genişlet (en uzak odaya zıpla)
