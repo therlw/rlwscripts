@@ -1167,7 +1167,18 @@ task.spawn(function()
                                 pcall(function() Network.RequestStreaming:FireServer(targetVec) end)
                             end
                             
-                            task.wait(1) -- Odanın fiziksel olarak yüklenmesini bekle
+                            task.wait(1.5) -- Odanın fiziksel olarak yüklenmesini bekle
+                            
+                            -- Güvenlik Ağı: Oda hala yüklenmediyse diye altına görünmez zemin koy!
+                            local p = Instance.new("Part")
+                            p.Name = "rlwpart"
+                            p.Size = Vector3.new(30, 2, 30)
+                            p.Anchored = true
+                            p.CFrame = CFrame.new(targetVec - Vector3.new(0, 1, 0))
+                            p.Parent = workspace
+                            p.Transparency = 1
+                            game:GetService("Debris"):AddItem(p, 10) -- 10 saniye sonra silinir
+                            
                             currentRoot.Anchored = false
                             
                             teleportedByRadar = true
@@ -1225,7 +1236,18 @@ task.spawn(function()
                         if Network and Network:FindFirstChild("RequestStreaming") then
                             pcall(function() Network.RequestStreaming:FireServer(bestWaitVec) end)
                         end
-                        task.wait(1)
+                        task.wait(1.5)
+                        
+                        -- Güvenlik Ağı: Oda yüklenmemişse boşluğa düşmeyi engelle
+                        local p = Instance.new("Part")
+                        p.Name = "AntiVoidPart_Antigravity"
+                        p.Size = Vector3.new(30, 2, 30)
+                        p.Anchored = true
+                        p.CFrame = CFrame.new(bestWaitVec - Vector3.new(0, 1, 0))
+                        p.Parent = workspace
+                        p.Transparency = 1
+                        game:GetService("Debris"):AddItem(p, 10)
+                        
                         currentRoot.Anchored = false
                     end
                     task.wait(2)
