@@ -1390,12 +1390,19 @@ task.spawn(function()
             local bestWaitVec = nil
             local bestWaitCooldown = math.huge
             
+            getgenv().RadarAntiCheatBlacklist = getgenv().RadarAntiCheatBlacklist or {}
+            
             for _, tData in ipairs(radarTargets) do
                 local targetClass = tData[1]
                 local altClass = tData[2]
                 local targetVec, deadVec, deadCooldown, isPathNode, isWaitingAtBoundary = getTargetRoomVector(targetClass, altClass, VisitedRooms, rooms_raw, DeadChestRooms)
                 
                 if targetVec then
+                    local targetKey = tostring(math.floor(targetVec.X)) .. "_" .. tostring(math.floor(targetVec.Z))
+                    if getgenv().RadarAntiCheatBlacklist[targetKey] and os.clock() < getgenv().RadarAntiCheatBlacklist[targetKey] then
+                        continue -- Bu hedef geçici olarak (Anti-Cheat yüzünden) kara listede, atla!
+                    end
+
                     if targetClass == "boss" or targetClass == "miniboss" or targetClass == "gamemaster" or targetClass == "masterboss" or targetClass == "daydream" or targetClass == "deepboss" then
                         radarFoundBoss = true
                         getgenv().LiveStats.BossStatus = "Radar Locked 📡"
@@ -1403,6 +1410,21 @@ task.spawn(function()
                     local currentRoot = getRootPart()
                     if currentRoot then
                         local dist = (currentRoot.Position - targetVec).Magnitude
+                        
+                        -- Anti-Cheat Kick veya Death Loop Algılama:
+                        -- Eğer 15 saniye içinde buraya ışınlandıysak ve şu an 1000 stud uzaktaysak BİZİ OYUN ÖLDÜRDÜ VEYA GERİ ATTI!
+                        if getgenv().RadarLastTeleportTime and (os.clock() - getgenv().RadarLastTeleportTime) < 15 then
+                            if getgenv().RadarLastTeleportPos and (getgenv().RadarLastTeleportPos - targetVec).Magnitude < 10 then
+                                if dist > 1000 then
+                                    if getgenv().RLW_Window then
+                                        getgenv().RLW_Window:Notify({Title = "🔒 Locked Room!", Content = "You don't have a key! (Or Anti-Cheat killed us). Exploring for 60s...", Duration = 3})
+                                    end
+                                    print("[DEBUG-RADAR] ANTI-CHEAT KICK / DEATH LOOP DETECTED! Blacklisting locked room for 60s.")
+                                    getgenv().RadarAntiCheatBlacklist[targetKey] = os.clock() + 60
+                                    continue -- Blacklist'e aldık, diğer hedefe geç
+                                end
+                            end
+                        end
                         
                         -- Update BossStatus with distance if it's a boss
                         if radarFoundBoss then
@@ -1442,6 +1464,9 @@ task.spawn(function()
                             end
                             
                             print("[DEBUG-RADAR] Anchoring character and teleporting to: " .. tostring(targetVec))
+                            getgenv().RadarLastTeleportTime = os.clock()
+                            getgenv().RadarLastTeleportPos = targetVec
+                            
                             -- Haritanın yüklenmesi (Streaming) için karakteri havada dondur!
                             currentRoot.Anchored = true
                             currentRoot.CFrame = CFrame.new(targetVec + Vector3.new(0, 5, 0))
@@ -1455,15 +1480,16 @@ task.spawn(function()
                             task.wait(1.2) -- Odanın fiziksel olarak yüklenmesini bekle (Bağlantıya göre siyah ekranda kalmamak için süreyi artırdık)
                             
                             print("[DEBUG-RADAR] Creating AntiVoid platform for safety.")
-                            -- Güvenlik Ağı: Oda hala yüklenmediyse diye altına görünmez zemin koy!
+                            -- Güvenlik Ağı: Oda hala yüklenmediyse diye altına görünmez devasa bir zemin koy!
+                            -- (Kullanıcının anahtarı yoksa ve oda client'ta eksikse, boşluğa düşmemesi için devasa yaptık)
                             local p = Instance.new("Part")
                             p.Name = "AntiVoidPart_Antigravity"
-                            p.Size = Vector3.new(30, 2, 30)
+                            p.Size = Vector3.new(1000, 2, 1000)
                             p.Anchored = true
-                            p.CFrame = CFrame.new(targetVec - Vector3.new(0, 1, 0))
+                            p.CFrame = CFrame.new(targetVec - Vector3.new(0, 5, 0))
                             p.Parent = workspace
                             p.Transparency = 1
-                            game:GetService("Debris"):AddItem(p, 10) -- 10 saniye sonra silinir
+                            game:GetService("Debris"):AddItem(p, 300) -- 5 dakika boyunca kalsın ki boss savaşında düşmesin
                             
                             print("[DEBUG-RADAR] Unanchoring character. Teleport sequence complete.")
                             currentRoot.Anchored = false
@@ -1474,6 +1500,7 @@ task.spawn(function()
                             -- Biz radar hedefinin çok yakınındayız!
                             -- Eğer oda henüz yüklenmediyse bile Explore moduna geçip buradan uzaklaşmamalıyız!
                             isParkedAtRadarTarget = true
+                            break -- En yüksek öncelikli hedefin dibindeyiz, alt hedefleri aramayı bırak!
                         end
                     end
                 elseif isWaitingAtBoundary then
