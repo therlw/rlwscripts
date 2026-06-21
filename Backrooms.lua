@@ -846,7 +846,7 @@ local function getRoomIndexFromPosition(pos, descriptor)
     local gridX = (relX / res) - (x0 - 1)
     local gridY = (relZ / res) - (y0 - 1)
     
-    local bestIdx = nil
+    local bestIdx = 1 -- Her zaman en azından bir başlangıç noktası olsun
     local bestDist = math.huge
     
     for i, room in ipairs(descriptor.rooms) do
@@ -865,6 +865,8 @@ local function getRoomIndexFromPosition(pos, descriptor)
 end
 
 local function findPathAStar(startIdx, targetIdx, graph, descriptor)
+    if not startIdx or not targetIdx or not descriptor.rooms[startIdx] or not descriptor.rooms[targetIdx] then return nil end
+    
     local openSet = {startIdx}
     local cameFrom = {}
     local gScore = {[startIdx] = 0}
@@ -873,7 +875,8 @@ local function findPathAStar(startIdx, targetIdx, graph, descriptor)
     local function heuristic(a, b)
         local rA = descriptor.rooms[a]
         local rB = descriptor.rooms[b]
-        return math.abs(rA.x - rB.x) + math.abs(rA.y - rB.y)
+        if not rA or not rB then return 0 end
+        return math.abs((rA.x or 0) - (rB.x or 0)) + math.abs((rA.y or 0) - (rB.y or 0))
     end
     
     fScore[startIdx] = heuristic(startIdx, targetIdx)
@@ -1020,31 +1023,64 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
                 if not isVisited then
                     getgenv().CurrentRadarTargetCoordKey = coordKey
                     if getgenv().Config.DeepBackroomsMode and not isPhysicallyLoaded then
-                        -- Hedef henüz fiziksel olarak oluşmamış (Void tehlikesi)! 
-                        -- Hedefe giden yolda sunucunun haritayı yaratması için, hedefe EN YAKIN fiziksel odaya sıçra.
-                        local bestEdgeVec = nil
-                        local minEdgeDist = math.huge
                         local currentRoot = getRootPart()
                         local currentPos = currentRoot and currentRoot.Position or Vector3.zero
-                        local distCurrentToTarget = (currentPos - targetVec).Magnitude
                         
-                        for _, r in ipairs(rooms_raw) do
-                            local rPos = r:IsA("Model") and r:GetPivot().Position or (r:IsA("BasePart") and r.Position or Vector3.zero)
-                            local distToTarget = (rPos - targetVec).Magnitude
+                        -- A* Pathfinding ile hedefe giden tam rotayı çıkar
+                        local startIdx = getRoomIndexFromPosition(currentPos, descriptor)
+                        local targetIdx = i
+                        local graph = buildNavGraph(descriptor)
+                        local path = findPathAStar(startIdx, targetIdx, graph, descriptor)
+                        
+                        if path and #path > 1 then
+                            local bestEdgeVec = nil
                             
-                            -- Sadece şu anki konumumuzdan DAHA YAKIN bir fiziksel odaya atla (yerinde saymayı/loopu engeller)
-                            if distToTarget < minEdgeDist and distToTarget < (distCurrentToTarget - 10) then
-                                minEdgeDist = distToTarget
-                                bestEdgeVec = rPos
+                            -- Target'ten başlayarak (en uzağı), Start'a doğru (yakına) fiziksel olarak yüklü odaları ara.
+                            for k = #path, 2, -1 do
+                                local pIdx = path[k]
+                                local pRoom = descriptor.rooms[pIdx]
+                                
+                                local pWorldX = descriptor.root.X + (pRoom.x - 1 + descriptor.x0) * descriptor.res
+                                local pWorldZ = descriptor.root.Z + (pRoom.y - 1 + descriptor.y0) * descriptor.res
+                                local pVec = Vector3.new(pWorldX, targetY + 15, pWorldZ)
+                                
+                                local isLoaded = false
+                                local loadedPos = nil
+                                if rooms_raw then
+                                    for _, physR in ipairs(rooms_raw) do
+                                        local physPos = physR:IsA("Model") and physR:GetPivot().Position or (physR:IsA("BasePart") and physR.Position or Vector3.zero)
+                                        if (physPos - pVec).Magnitude < 70 then
+                                            -- Sadece RoomUID'si olan "Gerçek" odalara atla (Boş modellere atlama!)
+                                            if physR:GetAttribute("RoomUID") then
+                                                isLoaded = true
+                                                loadedPos = physPos
+                                            end
+                                            break
+                                        end
+                                    end
+                                end
+                                
+                                if isLoaded then
+                                    -- Eğer bu oda currentPos'a 30 studdan daha uzaksa atla (zaten buradaysak atlamaya gerek yok)
+                                    if (loadedPos - currentPos).Magnitude > 30 then
+                                        bestEdgeVec = loadedPos
+                                    end
+                                    break -- Fiziksel olarak yüklü en uzak odayı bulduk, daha yakınına bakmaya gerek yok!
+                                end
+                            end
+                            
+                            if bestEdgeVec then
+                                return bestEdgeVec, nil, nil, true -- isPathNode = true
+                            else
+                                -- A* yolda ilerledi ama sıradaki oda henüz yüklenmedi, fiziksel sınırdayız!
+                                -- Hedefi değiştirmemesi için özel bir bekleme sinyali gönder.
+                                return nil, nil, nil, false, true -- isWaitingAtBoundary = true
                             end
                         end
-                        if bestEdgeVec then
-                            return bestEdgeVec, nil, nil, true -- isPathNode = true
-                        end
-                        -- Eğer daha yakın bir fiziksel oda yoksa (uç noktadaysak) ve hedef hala yüklenmediyse:
-                        -- Asla başka hedefe atlama! Atlar isen, bir sonraki döngüde eski hedeften uzaklaştığın için eski hedefin uç noktasına geri dönersin (Ping-Pong Loop).
-                        -- Bu yüzden radar aramayı TAMAMEN DURDUR ve Explore Mode'un bu uç noktadaki kapıları kırmasına izin ver!
-                        return nil, nil, nil, false
+                        
+                        -- Eğer A* yol bulamadıysa veya yoldaki ileri odalar yüklenmemişse:
+                        -- Asla başka hedefe veya kör noktaya atlama, Explore Mode'un kapı kırmasını bekle!
+                        return nil, nil, nil, false, true
                     end
                     return targetVec, nil, nil, false
                 end
@@ -1338,7 +1374,7 @@ task.spawn(function()
             for _, tData in ipairs(radarTargets) do
                 local targetClass = tData[1]
                 local altClass = tData[2]
-                local targetVec, deadVec, deadCooldown, isPathNode = getTargetRoomVector(targetClass, altClass, VisitedRooms, rooms_raw, DeadChestRooms)
+                local targetVec, deadVec, deadCooldown, isPathNode, isWaitingAtBoundary = getTargetRoomVector(targetClass, altClass, VisitedRooms, rooms_raw, DeadChestRooms)
                 
                 if targetVec then
                     if targetClass == "boss" then
@@ -1412,6 +1448,10 @@ task.spawn(function()
                             break -- Döngüden çık
                         end
                     end
+                elseif isWaitingAtBoundary then
+                    -- Radar bir hedefe kilitlendi ama fiziksel sınırda (kapı açılmasını) bekliyor!
+                    -- Ping-Pong (hedef değiştirme) olmasını engellemek için diğer hedefleri aramayı bırak.
+                    break
                 elseif deadVec and deadCooldown and deadCooldown < bestWaitCooldown then
                     bestWaitCooldown = deadCooldown
                     bestWaitVec = deadVec
