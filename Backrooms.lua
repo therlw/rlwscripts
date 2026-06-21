@@ -312,6 +312,8 @@ local visitedCount = 0
 local DeadEggRooms = {}        -- { [roomUID] = deadTimestamp }
 local DEAD_EGG_COOLDOWN = 300  -- 5 dakika sonra tekrar dene (saniye)
 
+local DeadChestRooms = {}      -- { [roomUID] = respawnTs }
+
 local Toggle_MetaFarm = nil
 local Toggle_KeepOutEgg = nil
 local Toggle_FreeEgg = nil
