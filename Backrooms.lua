@@ -1317,8 +1317,8 @@ task.spawn(function()
                 if getgenv().Config.DeepBackroomsMode then
                     -- SADECE tam isimleriyle Deep odalarına gider. Anahtar için en iyi odalar (Level 3/2) önceliklidir!
                     table.insert(radarTargets, {"deepchestroom3", "deepcoinroom3"})
-                    table.insert(radarTargets, {"deepchestroom2", "deepcoinroom2"})
-                    table.insert(radarTargets, {"deepchestroom", "deepcoinroom"})
+                    table.insert(radarTargets, {"deepchestroom2", "deepchestroom2"})
+                    table.insert(radarTargets, {"deepchestroom", "deepchestroom"})
                 else
                     table.insert(radarTargets, {"vault", "chest"}) 
                 end
