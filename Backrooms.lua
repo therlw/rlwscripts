@@ -1018,6 +1018,23 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
 
                 if not isVisited then
                     getgenv().CurrentRadarTargetCoordKey = coordKey
+                    if getgenv().Config.DeepBackroomsMode and not isPhysicallyLoaded then
+                        -- Hedef henüz fiziksel olarak oluşmamış (Void tehlikesi)! 
+                        -- Hedefe giden yolda sunucunun haritayı yaratması için, hedefe EN YAKIN fiziksel odaya sıçra.
+                        local bestEdgeVec = nil
+                        local minEdgeDist = math.huge
+                        for _, r in ipairs(rooms_raw) do
+                            local rPos = r:IsA("Model") and r:GetPivot().Position or (r:IsA("BasePart") and r.Position or Vector3.zero)
+                            local distToTarget = (rPos - targetVec).Magnitude
+                            if distToTarget < minEdgeDist then
+                                minEdgeDist = distToTarget
+                                bestEdgeVec = rPos
+                            end
+                        end
+                        if bestEdgeVec then
+                            return bestEdgeVec, nil, nil, true -- isPathNode = true
+                        end
+                    end
                     return targetVec, nil, nil, false
                 end
             end
@@ -2770,6 +2787,13 @@ TabSettings:CreateInput({
 })
 
 TabSettings:CreateSection("Server Management")
+
+TabSettings:CreateToggle({
+    Name = "🛡️ God Mode (Invincible)",
+    CurrentValue = getgenv().Config.GodMode,
+    Flag = "Tgl_GodMode",
+    Callback = function(Value) getgenv().Config.GodMode = Value end
+})
 
 TabSettings:CreateToggle({
     Name = "🚀 Hop on Boss Cooldown",
