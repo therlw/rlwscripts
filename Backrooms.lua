@@ -12,8 +12,7 @@ local LocalPlayer = Players.LocalPlayer
 getgenv().Config = {
     MetaFarmActive = false,
     TargetKeyCount = 5,
-    FindKeepOutEgg = false,
-    FindFreeEggRoom = false,
+    AutoFarmCoins = false,
     TargetEggType = "Any",
     TargetEggMultiplier = 50,
     TargetKeepOutMultiplier = 50,
@@ -575,7 +574,7 @@ end
 
 task.spawn(function()
     while task.wait(getgenv().SmartFarmState.PetAssignInterval) do
-        if not (getgenv().Config.AutoBossHunt or getgenv().Config.AutoFarmChests or getgenv().Config.AutoFarmEvents or getgenv().Config.AutoFarmEggs or getgenv().Config.FastFarmBreakables) then continue end
+        if not (getgenv().Config.AutoBossHunt or getgenv().Config.AutoFarmChests or getgenv().Config.AutoFarmEvents or getgenv().Config.AutoFarmEggs or getgenv().Config.AutoFarmCoins or getgenv().Config.FastFarmBreakables) then continue end
         local targets = GetBackroomsTargets()
         local allTargets = {}
         
@@ -607,7 +606,7 @@ end)
 
 task.spawn(function()
     while task.wait(getgenv().SmartFarmState.AutoTapInterval) do
-        if not (getgenv().Config.AutoBossHunt or getgenv().Config.AutoFarmChests or getgenv().Config.AutoFarmEvents or getgenv().Config.AutoFarmEggs or getgenv().Config.FastFarmBreakables) then continue end
+        if not (getgenv().Config.AutoBossHunt or getgenv().Config.AutoFarmChests or getgenv().Config.AutoFarmEvents or getgenv().Config.AutoFarmEggs or getgenv().Config.AutoFarmCoins or getgenv().Config.FastFarmBreakables) then continue end
         local targets = GetBackroomsTargets()
         local hitCount = 0
         local Network = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
@@ -665,7 +664,7 @@ end
 
 task.spawn(function()
     while task.wait(0.1) do
-        if not (getgenv().Config.AutoBossHunt or getgenv().Config.AutoFarmChests or getgenv().Config.AutoFarmEvents or getgenv().Config.AutoFarmEggs or getgenv().Config.FastFarmBreakables) then continue end
+        if not (getgenv().Config.AutoBossHunt or getgenv().Config.AutoFarmChests or getgenv().Config.AutoFarmEvents or getgenv().Config.AutoFarmEggs or getgenv().Config.AutoFarmCoins or getgenv().Config.FastFarmBreakables) then continue end
         pcall(CollectOrbs)
     end
 end)
@@ -1080,7 +1079,8 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
                         
                         -- Eğer A* yol bulamadıysa veya yoldaki ileri odalar yüklenmemişse:
                         -- Eğer aradığımız hedef doğası gereği İZOLE bir oda ise (örn: GameMaster), A*'ı boşver direkt ışınlan!
-                        if string.lower(roomInfo.class or ""):find("gamemaster") then
+                        local cLower = string.lower(roomInfo.class or "")
+                        if cLower:find("gamemaster") or cLower:find("masterboss") or cLower:find("daydream") then
                             return targetVec, nil, nil, false
                         end
                         
@@ -1140,7 +1140,7 @@ task.spawn(function()
         local root = getRootPart()
         if not root then continue end
 
-        if not (getgenv().Config.AutoBossHunt or getgenv().Config.AutoFarmChests or getgenv().Config.AutoFarmEvents or getgenv().Config.AutoFarmEggs) then
+        if not (getgenv().Config.AutoBossHunt or getgenv().Config.AutoFarmChests or getgenv().Config.AutoFarmEvents or getgenv().Config.AutoFarmEggs or getgenv().Config.AutoFarmCoins) then
             continue
         end
 
@@ -1319,8 +1319,11 @@ task.spawn(function()
             if getgenv().Config.AutoBossHunt then
                 if getgenv().Config.DeepBackroomsMode then
                     table.insert(radarTargets, {"gamemaster", "deepportalroom"})
+                    table.insert(radarTargets, {"masterboss", "masterboss"})
+                    table.insert(radarTargets, {"daydream", "deepboss"})
                 else
                     table.insert(radarTargets, {"boss", "miniboss"})
+                    table.insert(radarTargets, {"gamemaster", "masterboss"})
                 end
             end
             
@@ -1333,13 +1336,23 @@ task.spawn(function()
                 table.insert(radarTargets, {"vending", "garden"})
             end
             
-            -- ÖNCELİK 3: CHEST & COINS
+            -- ÖNCELİK 3: DEEP CHESTS
             if getgenv().Config.AutoFarmChests then 
+                if getgenv().Config.DeepBackroomsMode then
+                    table.insert(radarTargets, {"deepchestroom3", "deepchestroom3"})
+                    table.insert(radarTargets, {"deepchestroom2", "deepchestroom2"})
+                    table.insert(radarTargets, {"deepchestroom", "deepchestroom"})
+                    table.insert(radarTargets, {"deepvault", "deepvault"})
+                else
+                    table.insert(radarTargets, {"vault", "chest"}) 
+                end
+            end
+            
+            -- ÖNCELİK 3.5: DEEP COINS (BREAKABLES)
+            if getgenv().Config.AutoFarmCoins then
                 if getgenv().Config.DeepBackroomsMode then
                     table.insert(radarTargets, {"deepcoinroom3", "deepcoinroom3"})
                     table.insert(radarTargets, {"deepcoinroom2", "deepcoinroom2"})
-                else
-                    table.insert(radarTargets, {"vault", "chest"}) 
                 end
             end
             
@@ -1593,10 +1606,9 @@ task.spawn(function()
                 
                 local isBoss = false
                 if getgenv().Config.DeepBackroomsMode then
-                    -- Deep modunda boss SADECE gamemaster'dır! Miniboss'lar es geçilir.
-                    isBoss = lowerID:find("gamemaster") or lowerID:find("deepportalroom")
+                    isBoss = lowerID:find("gamemaster") or lowerID:find("deepportalroom") or lowerID:find("daydream") or lowerID:find("masterboss") or lowerID:find("deepboss")
                 else
-                    isBoss = lowerID:find("bosschest") or lowerID:find("minichest") or lowerID:find("miniboss") or lowerID:find("boss") or room:GetAttribute("BossChestUID") or room:GetAttribute("ActiveMinichests")
+                    isBoss = lowerID:find("bosschest") or lowerID:find("minichest") or lowerID:find("miniboss") or lowerID:find("boss") or lowerID:find("gamemaster") or lowerID:find("masterboss") or room:GetAttribute("BossChestUID") or room:GetAttribute("ActiveMinichests")
                 end
                 
                 local isVault = false
@@ -1654,14 +1666,12 @@ task.spawn(function()
                     break
                 end
 
-                if getgenv().Config.AutoFarmChests then
-                    if isVault and bestRoomType < 2 then
-                        bestRoom = room
-                        bestRoomType = 2
-                    elseif isBreakable and bestRoomType < 1 then
-                        bestRoom = room
-                        bestRoomType = 1
-                    end
+                if getgenv().Config.AutoFarmChests and isVault and bestRoomType < 2 then
+                    bestRoom = room
+                    bestRoomType = 2
+                elseif getgenv().Config.AutoFarmCoins and isBreakable and bestRoomType < 1 then
+                    bestRoom = room
+                    bestRoomType = 1
                 end
             end
         end
@@ -2148,7 +2158,7 @@ task.spawn(function()
                 local emptySeconds = 0
                 local bigCheckTimer = 0
                 
-                while getgenv().Config.AutoFarmChests do
+                while (bestRoomType == 2 and getgenv().Config.AutoFarmChests) or (bestRoomType == 1 and getgenv().Config.AutoFarmCoins) do
                     task.wait(1)
                     local currentKeys = getDaydreamKeyCount()
                     getgenv().LiveStats.CurrentKeys = currentKeys
@@ -2591,10 +2601,17 @@ TabRadar:CreateToggle({
 })
 
 TabRadar:CreateToggle({
-    Name = "💰 Auto Farm Chests & Coins",
+    Name = "💰 Auto Farm Deep Chests",
     CurrentValue = false,
     Flag = "Tgl_AutoChests",
     Callback = function(Value) getgenv().Config.AutoFarmChests = Value end
+})
+
+TabRadar:CreateToggle({
+    Name = "🪙 Auto Farm Deep Coins (Breakables)",
+    CurrentValue = false,
+    Flag = "Tgl_AutoCoins",
+    Callback = function(Value) getgenv().Config.AutoFarmCoins = Value end
 })
 
 TabRadar:CreateToggle({
