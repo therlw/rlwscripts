@@ -1,4 +1,4 @@
---ps99
+-- Made By RLW
 
 local Players = game:GetService("Players")
 local CollectionService = game:GetService("CollectionService")
@@ -45,7 +45,7 @@ pcall(function()
     local PlayerPet = require(game:GetService("ReplicatedStorage").Library.Client.PlayerPet)
     if PlayerPet and type(PlayerPet) == "table" then
         PlayerPet.CalculateSpeedMultiplier = function()
-            return math.huge -- Petleri sonsuz hıza (direkt ışınlanmaya) ayarlar
+            return 9999 -- Çok yüksek hız (math.huge Roblox fizik motorunu bozup petleri map dışına fırlattığı için 9999 kullanıyoruz)
         end
     end
 end)
