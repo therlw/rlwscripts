@@ -1254,7 +1254,25 @@ task.spawn(function()
         local bestRoomType = 0
 
         -- RADAR TELEPORT (GOD MODE) ARAMASI
-        if getgenv().Config.RadarTeleport then
+        local inBossArena = false
+        local roomsFolderRadar = workspace:FindFirstChild("__THINGS") and workspace.__THINGS:FindFirstChild("Instances")
+        if roomsFolderRadar then
+            local currentRoot = getRootPart()
+            local charPos = currentRoot and currentRoot.Position or Vector3.new(0,0,0)
+            for _, r in ipairs(roomsFolderRadar:GetChildren()) do
+                if not r:IsA("Model") then continue end
+                local rid = string.lower(r:GetAttribute("RoomID") or "")
+                if rid:find("gamemaster") then
+                    local roomPos = r:GetPivot().Position
+                    if (roomPos - charPos).Magnitude < 800 then
+                        inBossArena = true
+                        break
+                    end
+                end
+            end
+        end
+
+        if getgenv().Config.RadarTeleport and not inBossArena then
             local radarTargets = {}
             if isBossHuntPhase then
                 if getgenv().Config.DeepBackroomsMode then
