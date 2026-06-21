@@ -1007,10 +1007,16 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
                             isPhysicallyLoaded = true
                             local uid = r:GetAttribute("RoomUID")
                             if uid and VisitedRooms and VisitedRooms[uid] then
-                                -- Eger Boss veya Vault odasiysa ve yeniden dogmadiysa visited say!
-                                if not DeadChestRooms or not DeadChestRooms[uid] or DeadChestRooms[uid] > workspace:GetServerTimeNow() then
-                                    isVisited = true
-                                    break
+                                -- DİKKAT: BOSS odaları (Gamemaster, Daydream, vs.) ASLA visited sayılmaz!
+                                -- Çünkü Boss odasına girsek bile içinde kamp kurmak istiyoruz.
+                                local cLower = string.lower(roomInfo.class or "")
+                                local isBossClass = cLower:find("gamemaster") or cLower:find("masterboss") or cLower:find("daydream") or cLower:find("deepboss") or cLower:find("boss") or cLower:find("deepportal")
+                                
+                                if not isBossClass then
+                                    if not DeadChestRooms or not DeadChestRooms[uid] or DeadChestRooms[uid] > workspace:GetServerTimeNow() then
+                                        isVisited = true
+                                        break
+                                    end
                                 end
                             end
                         end
@@ -1616,7 +1622,7 @@ task.spawn(function()
                 
                 local isBoss = false
                 if getgenv().Config.DeepBackroomsMode then
-                    isBoss = lowerID:find("gamemaster") or lowerID:find("deepportalroom") or lowerID:find("daydream") or lowerID:find("masterboss") or lowerID:find("deepboss")
+                    isBoss = lowerID:find("gamemaster") or lowerID:find("deepportal") or lowerID:find("daydream") or lowerID:find("masterboss") or lowerID:find("deepboss")
                 else
                     isBoss = lowerID:find("bosschest") or lowerID:find("minichest") or lowerID:find("miniboss") or lowerID:find("boss") or lowerID:find("gamemaster") or lowerID:find("masterboss") or room:GetAttribute("BossChestUID") or room:GetAttribute("ActiveMinichests")
                 end
