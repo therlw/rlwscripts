@@ -1041,8 +1041,9 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
                             return bestEdgeVec, nil, nil, true -- isPathNode = true
                         end
                         -- Eğer daha yakın bir fiziksel oda yoksa (uç noktadaysak) ve hedef hala yüklenmediyse:
-                        -- Asla boşluğa (targetVec) atlama! Explore Mode'un fiziksel kapı açmasına izin ver.
-                        continue
+                        -- Asla başka hedefe atlama! Atlar isen, bir sonraki döngüde eski hedeften uzaklaştığın için eski hedefin uç noktasına geri dönersin (Ping-Pong Loop).
+                        -- Bu yüzden radar aramayı TAMAMEN DURDUR ve Explore Mode'un bu uç noktadaki kapıları kırmasına izin ver!
+                        return nil, nil, nil, false
                     end
                     return targetVec, nil, nil, false
                 end
