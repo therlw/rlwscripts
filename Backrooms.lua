@@ -1261,22 +1261,7 @@ task.spawn(function()
                                 if getgenv().RLW_Window then
                                     getgenv().RLW_Window:Notify({Title = "🗺️ Pathfinding!", Content = "Jumping to next room towards " .. targetClass .. "!", Duration = 1})
                                 end
-                                -- Komşu odaya geçmeden önce bulunduğumuz odadaki tüm kapıları açmaya zorla!
-                                if invokeCustom and rooms_raw then
-                                    local currentPos = currentRoot.Position
-                                    local unlockCount = 0
-                                    for _, r in ipairs(rooms_raw) do
-                                        local rPos = r:GetPivot().Position
-                                        if (rPos - currentPos).Magnitude < 150 then
-                                            local uid = r:GetAttribute("RoomUID")
-                                            if uid then
-                                                pcall(function() invokeCustom:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", uid, "UnlockDeep") end)
-                                                unlockCount = unlockCount + 1
-                                            end
-                                        end
-                                    end
-                                    print("[DEBUG-RADAR] Sent UnlockDeep for " .. tostring(unlockCount) .. " nearby rooms.")
-                                end
+
                             else
                                 if getgenv().RLW_Window then
                                     getgenv().RLW_Window:Notify({Title = "📡 Radar Locked!", Content = "Teleporting to " .. targetClass .. "!", Duration = 2})
@@ -1582,8 +1567,9 @@ task.spawn(function()
                         local invokeCustom = Network and Network:FindFirstChild("Instancing_InvokeCustomFromClient")
                         if getgenv().Config.DeepBackroomsMode and invokeCustom then
                             pcall(function() invokeCustom:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", roomUID, "UnlockDeep") end)
+                        else
+                            fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
                         end
-                        fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
                     end
                 end
                 -- Type 3 (Boss): teleport sonrası yükleme beklendiğinde kontrol edilecek
@@ -1934,8 +1920,9 @@ task.spawn(function()
                         if getgenv().Config.DeepBackroomsMode and invokeCustom2 then
                             pcall(function() invokeCustom2:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", roomUID, "UnlockDeep") end)
                             task.wait(0.2)
+                        else
+                            fireCustom2:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
                         end
-                        fireCustom2:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
                     end
                 else
                     -- Kapı yok ama boss da yok, normal Boss Odası belki boş
@@ -2299,21 +2286,15 @@ task.spawn(function()
                     elseif getgenv().Config.AutoBossHunt and not radarFoundBoss then
                         -- Boss arıyoruz ama henüz haritada yok. Çıkması için kapıları kırarak etrafı keşfetmemiz ŞART!
                         shouldUnlock = true
-                    else
-                        -- ANAHTAR TASARRUFU GÜNCELLEMESİ:
-                        -- Gidilebilecek açık odalar varken boşuna anahtar harcama!
-                        -- Sadece haritada başka gidilecek yer kalmadığında (darboğaz) yeni kapı aç.
-                        if #sortedRooms <= 2 then
-                            shouldUnlock = true
-                        end
                     end
 
                     if shouldUnlock then
                         if getgenv().Config.DeepBackroomsMode and invokeCustom then
                             pcall(function() invokeCustom:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", roomUID, "UnlockDeep") end)
                             task.wait(0.2)
+                        else
+                            fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
                         end
-                        fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
                     end
                 end
             end
