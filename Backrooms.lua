@@ -1181,6 +1181,22 @@ task.spawn(function()
         -- Öncelikli hedef arama (Egg, Boss, Vault, Breakable)
         local bestRoom = nil
         local bestRoomType = 0
+        
+        local forceExplore = false
+        if getgenv().Config.ExploreMapFirst then
+            local desc = getMapDescriptor()
+            if desc and desc.rooms then
+                local maxR = desc.maxRooms or 400
+                if #desc.rooms < maxR then
+                    forceExplore = true
+                else
+                    getgenv().Config.ExploreMapFirst = false
+                    if getgenv().RLW_Window then
+                        getgenv().RLW_Window:Notify({Title = "✅ Map Explored!", Content = "All " .. tostring(maxR) .. " rooms generated. Resuming farm!", Duration = 5})
+                    end
+                end
+            end
+        end
 
         -- RADAR TELEPORT (GOD MODE) ARAMASI
         local inBossArena = false
@@ -1201,7 +1217,7 @@ task.spawn(function()
             end
         end
 
-        if getgenv().Config.RadarTeleport and not inBossArena then
+        if getgenv().Config.RadarTeleport and not inBossArena and not forceExplore then
             local radarTargets = {}
             
             local hasKeysForBoss = (currentKeys >= getgenv().Config.TargetKeyCount)
@@ -1214,9 +1230,18 @@ task.spawn(function()
                 table.insert(radarTargets, {"keyforge", "chestchoose"})
                 table.insert(radarTargets, {"vending", "garden"})
             end
+            
+            -- ÖNCELİK 1.5: DEEP CHESTS (Anahtar İstemez)
+            if getgenv().Config.AutoFarmChests then 
+                if getgenv().Config.DeepBackroomsMode then
+                    table.insert(radarTargets, {"deepchestroom3", "deepchestroom3"})
+                    table.insert(radarTargets, {"deepchestroom2", "deepchestroom2"})
+                    table.insert(radarTargets, {"deepchestroom", "deepchestroom"})
+                end
+            end
 
             if hasKeysForBoss then
-                -- ANAHTARIMIZ VAR, ARTIK BOSS KESEBİLİRİZ
+                -- ANAHTARIMIZ VAR, ARTIK BOSS VE VAULT KESEBİLİRİZ
                 -- ÖNCELİK 2: BOSS HUNT
                 if getgenv().Config.AutoBossHunt then
                     if getgenv().Config.DeepBackroomsMode then
@@ -1229,36 +1254,21 @@ task.spawn(function()
                     end
                 end
                 
-                -- ÖNCELİK 3: DEEP CHESTS
+                -- ÖNCELİK 3: DEEP VAULTS (Kapılı Kasalar)
                 if getgenv().Config.AutoFarmChests then 
                     if getgenv().Config.DeepBackroomsMode then
-                        table.insert(radarTargets, {"deepchestroom3", "deepchestroom3"})
-                        table.insert(radarTargets, {"deepchestroom2", "deepchestroom2"})
-                        table.insert(radarTargets, {"deepchestroom", "deepchestroom"})
                         table.insert(radarTargets, {"deepvault", "deepvault"})
                     else
                         table.insert(radarTargets, {"vault", "chest"}) 
                     end
                 end
             else
-                -- ANAHTARIMIZ YOK, BOSS OLUŞSA BİLE KAPIYI AÇAMAYIZ
+                -- ANAHTARIMIZ YOK, BOSS VE VAULT KAPIYI AÇAMAYIZ
                 -- ÖNCELİK 2: DEEP COINS / BREAKABLES (Hızlıca Anahtar Bulmak İçin)
                 if getgenv().Config.AutoFarmCoins then
                     if getgenv().Config.DeepBackroomsMode then
                         table.insert(radarTargets, {"deepcoinroom3", "deepcoinroom3"})
                         table.insert(radarTargets, {"deepcoinroom2", "deepcoinroom2"})
-                    end
-                end
-                
-                -- ÖNCELİK 3: NORMAL CHESTS (Eğer kasalar boss'tan daha hızlı anahtar veriyorsa)
-                if getgenv().Config.AutoFarmChests then 
-                    if getgenv().Config.DeepBackroomsMode then
-                        table.insert(radarTargets, {"deepchestroom3", "deepchestroom3"})
-                        table.insert(radarTargets, {"deepchestroom2", "deepchestroom2"})
-                        table.insert(radarTargets, {"deepchestroom", "deepchestroom"})
-                        table.insert(radarTargets, {"deepvault", "deepvault"})
-                    else
-                        table.insert(radarTargets, {"vault", "chest"}) 
                     end
                 end
                 
@@ -1528,7 +1538,7 @@ task.spawn(function()
         end
 
         -- 2. ADIM: EĞER BULUNAMADIYSA NORMAL ARAMA YAP
-        if not bestRoom then
+        if not bestRoom and not forceExplore then
             for _, room in ipairs(rooms) do
                 local roomUID = room:GetAttribute("RoomUID")
                 
@@ -2596,6 +2606,13 @@ TabRadar:CreateToggle({
             getgenv().RLW_Window:Notify({Title = "⚠️ WARNING", Content = "Radar Teleport bypasses physics! It will teleport you instantly.", Duration = 5})
         end
     end
+})
+
+TabRadar:CreateToggle({
+    Name = "🗺️ Explore All Rooms First (Max 400)",
+    CurrentValue = false,
+    Flag = "Tgl_ExploreFirst",
+    Callback = function(Value) getgenv().Config.ExploreMapFirst = Value end
 })
 
 TabRadar:CreateToggle({
