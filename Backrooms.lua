@@ -2493,56 +2493,48 @@ local Window = RLW_Library:CreateWindow({
 })
 getgenv().RLW_Window = Window
 
-local TabAutoFarm = Window:CreateTab("⚔️ Auto Farm")
+local TabRadar = Window:CreateTab("🚀 Deep Radar")
+local TabCombat = Window:CreateTab("⚔️ Combat")
 local TabEggs = Window:CreateTab("🥚 Egg Hunter")
-local TabStats = Window:CreateTab("📊 Live Stats")
-local TabScanner = Window:CreateTab("📡 Scanner")
-local TabMailbox = Window:CreateTab("📬 Mailbox")
 local TabUpgrades = Window:CreateTab("🆙 Upgrades")
-local TabWebhook = Window:CreateTab("🔔 Webhook")
+local TabStats = Window:CreateTab("📊 Stats")
+local TabScanner = Window:CreateTab("📡 Scanner")
 local TabSettings = Window:CreateTab("⚙️ Settings")
 
--- 📊 LIVE STATS TAB --
-TabStats:CreateSection("Session Information")
+-- 🚀 DEEP RADAR TAB (MAIN) --
+TabRadar:CreateSection("Radar Teleport (God Mode)")
 
-local lblTime = TabStats:CreateLabel({Name = "⏱️ Session Time", CurrentValue = "00:00:00"})
-local lblRooms = TabStats:CreateLabel({Name = "🚪 Rooms Explored", CurrentValue = "0", Color = Color3.fromRGB(150, 150, 255)})
-local lblKeys = TabStats:CreateLabel({Name = "🔑 Target Keys", CurrentValue = "0 / 0", Color = Color3.fromRGB(200, 255, 100)})
-local lblHighest = TabStats:CreateLabel({Name = "🚀 Highest Multiplier", CurrentValue = "0x", Color = Color3.fromRGB(255, 215, 0)})
-local lblBosses = TabStats:CreateLabel({Name = "⚔️ Bosses Defeated", CurrentValue = "0", Color = Color3.fromRGB(255, 100, 100)})
-local lblBossStatus = TabStats:CreateLabel({Name = "👁️ Boss Radar", CurrentValue = "Searching...", Color = Color3.fromRGB(200, 200, 200)})
-
--- Sayaç Loop
-task.spawn(function()
-    while task.wait(1) do
-        if not getgenv().LiveStats then continue end
-        local elapsed = os.time() - getgenv().LiveStats.StartTime
-        local hours = math.floor(elapsed / 3600)
-        local mins = math.floor((elapsed % 3600) / 60)
-        local secs = elapsed % 60
-        local timeStr = string.format("%02d:%02d:%02d", hours, mins, secs)
-        
-        pcall(function()
-            if lblTime and lblTime.SetText then lblTime:SetText(timeStr) end
-            if lblRooms and lblRooms.SetText then lblRooms:SetText(tostring(getgenv().LiveStats.RoomsExplored)) end
-            if lblKeys and lblKeys.SetText then lblKeys:SetText(tostring(getgenv().LiveStats.CurrentKeys) .. " / " .. tostring(getgenv().Config.TargetKeyCount)) end
-            if lblHighest and lblHighest.SetText then 
-                local multStr = tostring(getgenv().LiveStats.HighestMultiplier) .. "x"
-                if getgenv().LiveStats.HighestMultiplierName then
-                    multStr = multStr .. " (" .. getgenv().LiveStats.HighestMultiplierName .. ")"
-                end
-                lblHighest:SetText(multStr) 
-            end
-            if lblBosses and lblBosses.SetText then lblBosses:SetText(tostring(getgenv().LiveStats.BossesKilled)) end
-            if lblBossStatus and lblBossStatus.SetText then lblBossStatus:SetText(getgenv().LiveStats.BossStatus) end
-        end)
+TabRadar:CreateToggle({
+    Name = "A* Pathfinding Radar",
+    CurrentValue = getgenv().Config.RadarTeleport,
+    Flag = "Tgl_RadarTeleport",
+    Callback = function(Value)
+        getgenv().Config.RadarTeleport = Value
+        if Value and getgenv().RLW_Window then
+            getgenv().RLW_Window:Notify({Title = "⚠️ WARNING", Content = "Radar Teleport bypasses physics! It will teleport you instantly.", Duration = 5})
+        end
     end
-end)
+})
 
--- ⚔️ AUTO FARM TAB --
-TabAutoFarm:CreateSection("Standalone Farm")
+TabRadar:CreateSlider({
+    Name = "Target Key Count (Start Radar)",
+    Range = {0, 100}, 
+    CurrentValue = 5,
+    Flag = "Sld_TargetKeys",
+    Callback = function(Value) getgenv().Config.TargetKeyCount = Value end
+})
 
-TabAutoFarm:CreateToggle({
+TabRadar:CreateSlider({
+    Name = "Max Keys To Spend (Server Hop if target is further)",
+    Range = {10, 500},
+    CurrentValue = 25,
+    Flag = "Sld_MaxKeysToSpend",
+    Callback = function(Value) getgenv().Config.MaxKeysToSpend = Value end
+})
+
+TabRadar:CreateSection("Deep Backrooms Entry")
+
+TabRadar:CreateToggle({
     Name = "🌌 Deep Backrooms Mode",
     CurrentValue = getgenv().Config.DeepBackroomsMode,
     Flag = "Tgl_DeepBackroomsMode",
@@ -2554,31 +2546,11 @@ TabAutoFarm:CreateToggle({
     end
 })
 
-TabAutoFarm:CreateToggle({
-    Name = "🚀 A* Pathfinding Radar (God Mode)",
-    CurrentValue = getgenv().Config.RadarTeleport,
-    Flag = "Tgl_RadarTeleport",
-    Callback = function(Value)
-        getgenv().Config.RadarTeleport = Value
-        if Value and getgenv().RLW_Window then
-            getgenv().RLW_Window:Notify({Title = "⚠️ WARNING", Content = "Radar Teleport bypasses physics! It will teleport you instantly.", Duration = 5})
-        end
-    end
-})
+-- ⚔️ COMBAT TAB --
+TabCombat:CreateSection("Smart Farm & Breakables")
 
-TabAutoFarm:CreateToggle({
-    Name = "⚡ Fast Farm Breakables",
-    CurrentValue = false,
-    Flag = "Tgl_FastFarm",
-    Callback = function(Value)
-        getgenv().Config.FastFarmBreakables = Value
-    end
-})
-
-TabAutoFarm:CreateSection("Phase 1: Smart Loop (Meta)")
-
-TabAutoFarm:CreateToggle({
-    Name = "Start Boss Farming",
+TabCombat:CreateToggle({
+    Name = "Start Boss Farming (Meta)",
     CurrentValue = false,
     Flag = "Tgl_MetaFarm",
     Callback = function(Value)
@@ -2589,42 +2561,18 @@ TabAutoFarm:CreateToggle({
     end
 })
 
-TabAutoFarm:CreateToggle({
-    Name = "✅ Always Farm Chest/Vault Rooms",
+TabCombat:CreateToggle({
+    Name = "⚡ Fast Farm Breakables",
     CurrentValue = false,
-    Flag = "Tgl_FarmDeepChests",
+    Flag = "Tgl_FastFarm",
     Callback = function(Value)
-        getgenv().Config.FarmDeepChests = Value
+        getgenv().Config.FastFarmBreakables = Value
     end
 })
 
-TabAutoFarm:CreateToggle({
-    Name = "🧩 Auto-Complete Deep Events",
-    CurrentValue = false,
-    Flag = "Tgl_FarmDeepEvents",
-    Callback = function(Value)
-        getgenv().Config.FarmDeepEvents = Value
-    end
-})
+TabCombat:CreateSection("Deep Events & Loot")
 
-TabAutoFarm:CreateToggle({
-    Name = "🚀 Hop on Boss Cooldown",
-    CurrentValue = false,
-    Flag = "Tgl_HopOnBossCooldown",
-    Callback = function(Value)
-        getgenv().Config.HopOnBossCooldown = Value
-    end
-})
-
-TabAutoFarm:CreateSlider({
-    Name = "Target Key Count (For Boss)",
-    Range = {0, 100}, 
-    CurrentValue = 5,
-    Flag = "Sld_TargetKeys",
-    Callback = function(Value) getgenv().Config.TargetKeyCount = Value end
-})
-
-TabAutoFarm:CreateToggle({
+TabCombat:CreateToggle({
     Name = "💰 Always Farm Chest/Vault Rooms",
     CurrentValue = false,
     Flag = "Tgl_FarmDeepChests",
@@ -2633,293 +2581,186 @@ TabAutoFarm:CreateToggle({
     end
 })
 
-TabAutoFarm:CreateToggle({
+TabCombat:CreateToggle({
+    Name = "🧩 Auto-Complete Deep Events",
+    CurrentValue = false,
+    Flag = "Tgl_FarmDeepEvents",
+    Callback = function(Value)
+        getgenv().Config.FarmDeepEvents = Value
+    end
+})
+
+TabCombat:CreateToggle({
     Name = "Auto Loot Chests/Rewards",
     CurrentValue = false,
     Flag = "Tgl_AutoLoot",
     Callback = function(Value) getgenv().Config.AutoLoot = Value end
 })
 
-
 -- 🥚 EGG HUNTER TAB --
-TabEggs:CreateSection("Auto Hatch (No Teleport)")
+TabEggs:CreateSection("Auto Hatching")
 
 TabEggs:CreateToggle({
     Name = "🥚 Auto Hatch Nearest Egg",
     CurrentValue = false,
     Flag = "Tgl_AutoHatchNearest",
-    Callback = function(Value)
-        getgenv().Config.AutoHatchNearest = Value
-    end
-})
-
-TabEggs:CreateSection("Phase 2: Hybrid Egg (Optional)")
-
-TabEggs:CreateToggle({
-    Name = "🥚 Auto Titanic Egg (Keep Out)",
-    CurrentValue = false,
-    Flag = "Tgl_KeepOutEgg",
-    Callback = function(Value)
-        getgenv().Config.FindKeepOutEgg = Value
-    end
-})
-
-TabEggs:CreateToggle({
-    Name = "🎁 Find Free Egg Room",
-    CurrentValue = false,
-    Flag = "Tgl_FreeEgg",
-    Callback = function(Value)
-        getgenv().Config.FindFreeEggRoom = Value
-    end
+    Callback = function(Value) getgenv().Config.AutoHatchNearest = Value end
 })
 
 TabEggs:CreateDropdown({
-    Name = "🥚 Target Specific Egg",
-    Options = {"Any", "Nightmare", "Smile", "Flower", "Gooey", "Scribble", "Tentacles", "Keep Out", "Night Terror", "Fear", "Swirl", "Overgrown", "Ender", "Corrupt", "Titanic", "Huge", "Heart", "Balloon", "Rain", "Eyes", "Danger"},
-    CurrentOption = {"Any"},
-    Flag = "Drp_SpecificEgg",
-    Callback = function(Option)
-        getgenv().Config.TargetEggType = Option[1]
-    end,
+    Name = "Target Egg Type",
+    Options = {"Any", "KeepOut", "Huge", "Titanic", "Free"},
+    CurrentOption = "Any",
+    Flag = "Drp_TargetEggType",
+    Callback = function(Option) getgenv().Config.TargetEggType = Option end
 })
 
-TabEggs:CreateDropdown({
-    Name = "🎯 Target Egg Multiplier",
-    Options = {"2x", "3x", "5x", "10x", "15x", "20x", "25x", "30x", "35x", "40x", "45x", "50x", "75x", "100x", "250x"},
-    CurrentOption = {"50x"},
-    Flag = "Drp_Multiplier",
-    Callback = function(Option)
-        local val = string.gsub(Option[1], "x", "")
-        getgenv().Config.TargetEggMultiplier = tonumber(val) or 50
-    end,
+TabEggs:CreateSlider({
+    Name = "Minimum Egg Multiplier",
+    Range = {1, 100},
+    CurrentValue = 50,
+    Flag = "Sld_EggMultiplier",
+    Callback = function(Value) getgenv().Config.TargetEggMultiplier = Value end
 })
 
--- ⚙️ SETTINGS TAB --
-TabSettings:CreateSection("Speed & Safety Settings")
-
-TabSettings:CreateSlider({
-    Name = "Teleport Delay (Speed)",
-    Range = {0, 3},
-    CurrentValue = 0,
-    Flag = "Sld_Teleport",
-    Callback = function(Value) getgenv().Config.TeleportDelay = Value end
-})
-
-TabSettings:CreateToggle({
-    Name = "God Mode (Invincibility)",
+TabEggs:CreateToggle({
+    Name = "Target Free Egg Rooms",
     CurrentValue = false,
-    Flag = "Tgl_GodMode",
-    Callback = function(Value) getgenv().Config.GodMode = Value end
+    Flag = "Tgl_FindFreeEgg",
+    Callback = function(Value) getgenv().Config.FindFreeEggRoom = Value end
 })
 
 -- 🆙 UPGRADES TAB --
-TabUpgrades:CreateSection("Backrooms Upgrades (Tokens)")
+TabUpgrades:CreateSection("Auto Upgrade Machine")
 
-TabUpgrades:CreateToggle({
-    Name = "Auto Boss Damage",
-    CurrentValue = false,
-    Flag = "Tgl_UpgBossDamage",
-    Callback = function(Value)
-        getgenv().Config.AutoUpgrades.BackroomsBossDamage = Value
-    end
-})
+local function makeUpgradeToggle(name, flag, confKey)
+    TabUpgrades:CreateToggle({
+        Name = name,
+        CurrentValue = false,
+        Flag = flag,
+        Callback = function(Value)
+            getgenv().Config.AutoUpgrades[confKey] = Value
+        end
+    })
+end
 
-TabUpgrades:CreateToggle({
-    Name = "Auto Extra Loot Roll",
-    CurrentValue = false,
-    Flag = "Tgl_UpgExtraLoot",
-    Callback = function(Value)
-        getgenv().Config.AutoUpgrades.BackroomsExtraLootRoll = Value
-    end
-})
+makeUpgradeToggle("Boss Damage", "Tgl_Up_BossDmg", "BackroomsBossDamage")
+makeUpgradeToggle("Extra Loot Roll", "Tgl_Up_ExtraLoot", "BackroomsExtraLootRoll")
+makeUpgradeToggle("Token Find", "Tgl_Up_TokenFind", "BackroomsTokenFind")
+makeUpgradeToggle("Deep Boss Damage", "Tgl_Up_DeepBossDmg", "BackroomsDeepBossDamage")
+makeUpgradeToggle("Coin Multiplier", "Tgl_Up_CoinMult", "BackroomsCoinMultiplier")
+makeUpgradeToggle("Egg Luck", "Tgl_Up_EggLuck", "BackroomsEggLuck")
+makeUpgradeToggle("Key Find", "Tgl_Up_KeyFind", "BackroomsKeyFind")
 
-TabUpgrades:CreateToggle({
-    Name = "Auto Token Find",
-    CurrentValue = false,
-    Flag = "Tgl_UpgTokenFind",
-    Callback = function(Value)
-        getgenv().Config.AutoUpgrades.BackroomsTokenFind = Value
-    end
-})
+-- 📊 STATS TAB --
+TabStats:CreateSection("Session Information")
+local lblTime = TabStats:CreateLabel({Name = "⏱️ Session Time", CurrentValue = "00:00:00"})
+local lblRooms = TabStats:CreateLabel({Name = "🚪 Rooms Explored", CurrentValue = "0", Color = Color3.fromRGB(150, 150, 255)})
+local lblKeys = TabStats:CreateLabel({Name = "🔑 Target Keys", CurrentValue = "0 / 0", Color = Color3.fromRGB(200, 255, 100)})
+local lblHighest = TabStats:CreateLabel({Name = "🚀 Highest Multiplier", CurrentValue = "0x", Color = Color3.fromRGB(255, 215, 0)})
+local lblBosses = TabStats:CreateLabel({Name = "⚔️ Bosses Defeated", CurrentValue = "0", Color = Color3.fromRGB(255, 100, 100)})
+local lblBossStatus = TabStats:CreateLabel({Name = "👁️ Boss Radar", CurrentValue = "Searching...", Color = Color3.fromRGB(200, 200, 200)})
 
--- 🔔 WEBHOOK TAB --
-
-TabUpgrades:CreateSection("Deep Chest Upgrades")
-
-TabUpgrades:CreateToggle({
-    Name = "Auto Deep Boss Damage",
-    CurrentValue = false,
-    Flag = "Tgl_UpgDeepBossDmg",
-    Callback = function(Value)
-        getgenv().Config.AutoUpgrades.BackroomsDeepBossDamage = Value
-    end
-})
-
-TabUpgrades:CreateToggle({
-    Name = "Auto Coin Multiplier",
-    CurrentValue = false,
-    Flag = "Tgl_UpgDeepCoinMult",
-    Callback = function(Value)
-        getgenv().Config.AutoUpgrades.BackroomsCoinMultiplier = Value
-    end
-})
-
-TabUpgrades:CreateToggle({
-    Name = "Auto Egg Luck",
-    CurrentValue = false,
-    Flag = "Tgl_UpgDeepEggLuck",
-    Callback = function(Value)
-        getgenv().Config.AutoUpgrades.BackroomsEggLuck = Value
-    end
-})
-
-TabUpgrades:CreateToggle({
-    Name = "Auto Key Find",
-    CurrentValue = false,
-    Flag = "Tgl_UpgDeepKeyFind",
-    Callback = function(Value)
-        getgenv().Config.AutoUpgrades.BackroomsKeyFind = Value
-    end
-})
-TabWebhook:CreateSection("Discord Notifications (Huge/Titanic)")
-
-TabWebhook:CreateToggle({
-    Name = "Enable Discord Webhook",
-    CurrentValue = false,
-    Flag = "Tgl_Webhook",
-    Callback = function(Value)
-        getgenv().Config.WebhookEnabled = Value
-    end
-})
-
-TabWebhook:CreateInput({
-    Name = "Discord Webhook URL",
-    PlaceholderText = "https://discord.com/api/webhooks/...",
-    RemoveTextAfterFocusLost = false,
-    Flag = "Inp_WebhookURL",
-    Callback = function(Text)
-        getgenv().Config.WebhookURL = Text
-    end,
-})
-
-TabWebhook:CreateButton({
-    Name = "Test Webhook",
-    Callback = function()
-        if not getgenv().Config.WebhookEnabled then
-            if getgenv().RLW_Window then
-                getgenv().RLW_Window:Notify({Title = "Error", Content = "Please enable the Webhook toggle first!", Duration = 3})
+task.spawn(function()
+    while task.wait(1) do
+        if not getgenv().LiveStats then continue end
+        local elapsed = os.time() - getgenv().LiveStats.StartTime
+        local hours = math.floor(elapsed / 3600)
+        local mins = math.floor((elapsed % 3600) / 60)
+        local secs = elapsed % 60
+        local timeStr = string.format("%02d:%02d:%02d", hours, mins, secs)
+        pcall(function()
+            if lblTime and lblTime.SetText then lblTime:SetText(timeStr) end
+            if lblRooms and lblRooms.SetText then lblRooms:SetText(tostring(getgenv().LiveStats.RoomsExplored)) end
+            if lblKeys and lblKeys.SetText then lblKeys:SetText(tostring(getgenv().LiveStats.CurrentKeys) .. " / " .. tostring(getgenv().Config.TargetKeyCount)) end
+            if lblHighest and lblHighest.SetText then 
+                local multStr = tostring(getgenv().LiveStats.HighestMultiplier) .. "x"
+                if getgenv().LiveStats.HighestMultiplierName then multStr = multStr .. " (" .. getgenv().LiveStats.HighestMultiplierName .. ")" end
+                lblHighest:SetText(multStr) 
             end
-            return
-        end
-        if getgenv().Config.WebhookURL == "" then
-            if getgenv().RLW_Window then
-                getgenv().RLW_Window:Notify({Title = "Error", Content = "Please enter a valid Webhook URL!", Duration = 3})
-            end
-            return
-        end
-        SendWebhook("✅ Webhook Test Successful!", "Your Webhook is working perfectly.\nYou will receive Huge and Titanic notifications here.", 0x00ff00)
-        if getgenv().RLW_Window then
-            getgenv().RLW_Window:Notify({Title = "Success", Content = "Test message sent to your Discord!", Duration = 3})
-        end
+            if lblBosses and lblBosses.SetText then lblBosses:SetText(tostring(getgenv().LiveStats.BossesKilled)) end
+            if lblBossStatus and lblBossStatus.SetText then lblBossStatus:SetText(getgenv().LiveStats.BossStatus) end
+        end)
     end
-})
+end)
 
 -- 📡 SCANNER TAB --
-TabScanner:CreateSection("Room Radar")
-
-local scannedRoomsList = {}
+TabScanner:CreateSection("Deep Backrooms Live Scanner")
+local scannedRoomsList = {"[Scan to find rooms]"}
 local scannedRoomsMap = {}
-
+local selectedScannedRoom = nil
 local ScannerDropdown = TabScanner:CreateDropdown({
-    Name = "Scanned Rooms (Click to TP)",
-    Options = {"[Waiting for scan...]"},
-    CurrentOption = {"[Waiting for scan...]"},
-    Flag = "Drp_ScannerList",
-    Callback = function(Option)
-        local optStr = Option[1]
-        if optStr == "[Waiting for scan...]" or optStr == "[No rooms found!]" then return end
-        
-        -- Extract UID
-        local uid = string.match(optStr, "UID: ([%w%-]+)")
-        if uid and scannedRoomsMap[uid] then
-            local targetRoom = scannedRoomsMap[uid]
-            if targetRoom and targetRoom.Parent then
-                safeTeleport(targetRoom, true)
-                if getgenv().RLW_Window then
-                    getgenv().RLW_Window:Notify({Title = "Teleported", Content = "Teleported to the selected room!", Duration = 3})
-                end
-            else
-                if getgenv().RLW_Window then
-                    getgenv().RLW_Window:Notify({Title = "Error", Content = "Room no longer exists (despawned)!", Duration = 3})
-                end
-            end
+    Name = "Found Rooms",
+    Options = scannedRoomsList,
+    CurrentOption = scannedRoomsList[1],
+    Flag = "Drp_ScannedRooms",
+    Callback = function(Option) 
+        if type(Option) == "table" then
+            selectedScannedRoom = Option[1]
+        else
+            selectedScannedRoom = Option
         end
-    end,
+    end
 })
 
 TabScanner:CreateButton({
-    Name = "🔍 Scan All Rooms",
+    Name = "🚀 Teleport To Selected Room",
+    Callback = function()
+        if selectedScannedRoom then
+            local uidMatch = selectedScannedRoom:match("UID: ([a-f0-9%-]+)")
+            if uidMatch and scannedRoomsMap[uidMatch] then
+                local room = scannedRoomsMap[uidMatch]
+                local root = getRootPart()
+                if root and room:GetPivot() then root.CFrame = room:GetPivot() + Vector3.new(0, 5, 0) end
+            end
+        end
+    end
+})
+
+TabScanner:CreateButton({
+    Name = "🔄 Scan All Rooms",
     Callback = function()
         scannedRoomsList = {}
         scannedRoomsMap = {}
-        
         local rooms = CollectionService:GetTagged("Backrooms")
         for _, room in ipairs(rooms) do
             local roomUID = room:GetAttribute("RoomUID")
             local roomID = room:GetAttribute("RoomID") or "Unknown"
             local lowerID = string.lower(roomID)
-            
             if not roomUID then continue end
-            
-            -- Sadece Boss ve Yumurta odalarını göster (Breakable ve Vault'lar çok kalabalık yapar)
             local isEgg = lowerID:find("keepout") or lowerID:find("hugeegg") or lowerID:find("titanicegg") or lowerID:find("freeegg")
             local isBoss = lowerID:find("boss") or lowerID:find("minichest")
-            
             if isEgg or isBoss then
                 local label = roomID
-                
                 if isEgg then
-                    if not isEggAlive(room) then
-                        label = "💀 [DEAD] " .. label
-                    else
+                    if not isEggAlive(room) then label = "💀 [DEAD] " .. label else
                         local eggType = room:GetAttribute("EggType") or room:GetAttribute("EggName")
                         if eggType then label = label .. " (" .. tostring(eggType) .. ")" end
-                        
                         local multiplier = room:GetAttribute("EggMultiplier")
                         if multiplier then label = "[" .. tostring(multiplier) .. "x] " .. label end
                     end
-                elseif isBoss then
-                    label = "👹 " .. label
-                end
-                
+                elseif isBoss then label = "⚔️ " .. label end
                 label = label .. " (UID: " .. tostring(roomUID) .. ")"
                 table.insert(scannedRoomsList, label)
                 scannedRoomsMap[tostring(roomUID)] = room
             end
         end
-        
-        if #scannedRoomsList == 0 then
-            table.insert(scannedRoomsList, "[No rooms found!]")
-        end
-        
+        if #scannedRoomsList == 0 then table.insert(scannedRoomsList, "[No rooms found!]") end
         if ScannerDropdown and ScannerDropdown.RefreshOptions then
             ScannerDropdown:RefreshOptions(scannedRoomsList)
-            if getgenv().RLW_Window then
-                getgenv().RLW_Window:Notify({Title = "Scan Complete", Content = "Found " .. tostring(#scannedRoomsList) .. " interesting rooms!", Duration = 3})
-            end
+            if getgenv().RLW_Window then getgenv().RLW_Window:Notify({Title = "Scan Complete", Content = "Found " .. tostring(#scannedRoomsList) .. " interesting rooms!", Duration = 3}) end
         end
     end
 })
 
--- 📬 MAILBOX TAB --
-TabMailbox:CreateSection("Mailbox Automation")
-TabMailbox:CreateToggle({
+-- ⚙️ SETTINGS TAB --
+TabSettings:CreateSection("Mailbox & Webhook")
+
+TabSettings:CreateToggle({
     Name = "Auto Claim Mailbox",
     CurrentValue = false,
     Flag = "Tgl_AutoMailbox",
-    Callback = function(Value)
-        getgenv().Config.AutoMailbox = Value
-    end
+    Callback = function(Value) getgenv().Config.AutoMailbox = Value end
 })
 
 task.spawn(function()
@@ -2929,24 +2770,38 @@ task.spawn(function()
             local NetworkFolder = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
             local remote = NetworkFolder and NetworkFolder:FindFirstChild("Mailbox: Claim All")
             if remote then
-                if remote:IsA("RemoteFunction") then remote:InvokeServer()
-                else remote:FireServer() end
+                if remote:IsA("RemoteFunction") then remote:InvokeServer() else remote:FireServer() end
             end
         end)
     end
 end)
 
-Window:LoadConfiguration()
+TabSettings:CreateToggle({
+    Name = "Enable Webhook Logs",
+    CurrentValue = false,
+    Flag = "Tgl_Webhook",
+    Callback = function(Value) getgenv().Config.WebhookEnabled = Value end
+})
 
--- ⚙️ SETTINGS TAB --
+TabSettings:CreateInput({
+    Name = "Webhook URL",
+    PlaceholderText = "https://discord.com/api/webhooks/...",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(Text) getgenv().Config.WebhookURL = Text end
+})
+
 TabSettings:CreateSection("Server Management")
+
+TabSettings:CreateToggle({
+    Name = "🚀 Hop on Boss Cooldown",
+    CurrentValue = false,
+    Flag = "Tgl_HopOnBossCooldown",
+    Callback = function(Value) getgenv().Config.HopOnBossCooldown = Value end
+})
 
 TabSettings:CreateButton({
     Name = "🔄 Rejoin Server",
     Callback = function()
-        if getgenv().RLW_Window then
-            getgenv().RLW_Window:Notify({Title = "Rejoining...", Content = "Please wait...", Duration = 3})
-        end
         local ts = game:GetService("TeleportService")
         local p = game:GetService("Players").LocalPlayer
         ts:TeleportToPlaceInstance(game.PlaceId, game.JobId, p)
@@ -2956,9 +2811,6 @@ TabSettings:CreateButton({
 TabSettings:CreateButton({
     Name = "🚀 Server Hop",
     Callback = function()
-        if getgenv().RLW_Window then
-            getgenv().RLW_Window:Notify({Title = "Server Hopping...", Content = "Finding a new server...", Duration = 3})
-        end
         local HttpService = game:GetService("HttpService")
         local TeleportService = game:GetService("TeleportService")
         local req = request or http_request or (syn and syn.request)
@@ -2978,3 +2830,5 @@ TabSettings:CreateButton({
         end
     end
 })
+
+Window:LoadConfiguration()
