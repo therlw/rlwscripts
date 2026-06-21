@@ -26,6 +26,7 @@ getgenv().Config = {
     RadarTeleport = false,
     FarmDeepChests = false,
     FarmDeepEvents = false,
+    MaxKeysToSpend = 25,
     AutoUpgrades = {
         BackroomsBossDamage = false,
         BackroomsExtraLootRoll = false,
@@ -999,21 +1000,44 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
                         local path = findPathAStar(startIdx, targetIdx, graph, descriptor)
                         
                         if path and #path > 1 then
+                            -- ANAHTAR KORUMASI: Yalnızca kullanıcının izin verdiği kadar harca!
+                            local keysNeeded = #path - 1
+                            if keysNeeded > (getgenv().Config.MaxKeysToSpend or 25) then
+                                if getgenv().RLW_Window then
+                                    getgenv().RLW_Window:Notify({Title = "❌ Too Far!", Content = targetClass .. " requires " .. tostring(keysNeeded) .. " keys. Skipping...", Duration = 2})
+                                end
+                                continue
+                            end
+
                             local Network = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
                             local invokeCustom = Network and Network:FindFirstChild("Instancing_InvokeCustomFromClient")
                             
                             if invokeCustom then
-                                -- BÜYÜK OPTİMİZASYON: 300 oda tek tek yürümek yerine, saliseler içinde tüm yolu aç!
+                                -- BÜYÜK OPTİMİZASYON: Sunucunun mesafe kontrolünü aşmak için saniyede 20 odaya ışınlanıp kilit açıyoruz!
                                 task.spawn(function()
+                                    local char = getRootPart() and getRootPart().Parent
+                                    if not char then return end
+                                    
                                     for i = 2, #path do
                                         local rIdx = path[i]
                                         local rData = descriptor.rooms[rIdx]
-                                        task.spawn(function()
-                                            pcall(function()
-                                                invokeCustom:InvokeServer("UnlockDeep", rData.id)
-                                            end)
+                                        
+                                        local res = descriptor.res or 45
+                                        local cx = rData.x + (rData.w / 2)
+                                        local cy = rData.y + (rData.h / 2)
+                                        local nextX = (cx + (descriptor.x0 - 1)) * res + (descriptor.root and descriptor.root.X or 0)
+                                        local nextZ = (cy + (descriptor.y0 - 1)) * res + (descriptor.root and descriptor.root.Z or 0)
+                                        
+                                        -- Önce odaya ışınlan (Sunucudaki mesafe engelini aşmak için)
+                                        char:PivotTo(CFrame.new(nextX, targetY + 15, nextZ))
+                                        
+                                        -- Ardından anında kilit açma isteği yolla
+                                        pcall(function()
+                                            invokeCustom:InvokeServer("UnlockDeep", rData.id)
                                         end)
-                                        task.wait(0.03) -- Saniyede ~33 odayı anında aç (Sunucuyu yormadan süper hızlı)
+                                        
+                                        -- Sunucunun konumu algılaması ve odaları yüklemesi için çok kısa bir bekleme
+                                        task.wait(0.05) 
                                     end
                                 end)
                             end
@@ -2604,6 +2628,14 @@ TabAutoFarm:CreateSlider({
     CurrentValue = 5,
     Flag = "Sld_TargetKeys",
     Callback = function(Value) getgenv().Config.TargetKeyCount = Value end
+})
+
+TabAutoFarm:CreateSlider({
+    Name = "Max Keys to Spend per Room",
+    Range = {1, 100}, 
+    CurrentValue = 25,
+    Flag = "Sld_MaxKeysToSpend",
+    Callback = function(Value) getgenv().Config.MaxKeysToSpend = Value end
 })
 
 TabAutoFarm:CreateToggle({
