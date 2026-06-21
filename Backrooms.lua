@@ -2477,7 +2477,7 @@ TabAutoFarm:CreateToggle({
 })
 
 TabAutoFarm:CreateToggle({
-    Name = "🚀 BETA: Map Radar Teleport (God Mode)",
+    Name = "🚀 A* Pathfinding Radar (God Mode)",
     CurrentValue = getgenv().Config.RadarTeleport,
     Flag = "Tgl_RadarTeleport",
     Callback = function(Value)
