@@ -857,7 +857,9 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
                 if rooms_raw and VisitedRooms then
                     for _, r in ipairs(rooms_raw) do
                         local pos = r:IsA("Model") and r:GetPivot().Position or (r:IsA("BasePart") and r.Position or Vector3.zero)
-                        if (pos - targetVec).Magnitude < 300 then
+                        -- 300 stud ÇOK fazlaydı ve yan odaların yanlışlıkla eşleşmesine sebep olabiliyordu.
+                        -- Grid boyutu genelde 45 stud olduğu için, 70 studluk bir sapma payı oldukça güvenli ve isabetlidir.
+                        if (pos - targetVec).Magnitude < 70 then
                             local uid = r:GetAttribute("RoomUID")
                             if uid and VisitedRooms[uid] then
                                 -- Eger Boss veya Vault odasiysa ve yeniden dogmadiysa visited say!
@@ -872,17 +874,17 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
 
                 if not isVisited then
                     getgenv().CurrentRadarTargetCoordKey = coordKey
-                    return targetVec, nil
+                    return targetVec, nil, nil
                 end
             end
         end
         
         if bestDeadVec then
-            return nil, bestDeadVec
+            return nil, bestDeadVec, lowestCooldown
         end
     end
     
-    return nil, nil
+    return nil, nil, nil
 end
 
 local function HandleInstanceEntry()
@@ -1138,11 +1140,12 @@ task.spawn(function()
             local teleportedByRadar = false
             local radarFoundBoss = false
             local bestWaitVec = nil
+            local bestWaitCooldown = math.huge
             
             for _, tData in ipairs(radarTargets) do
                 local targetClass = tData[1]
                 local altClass = tData[2]
-                local targetVec, deadVec = getTargetRoomVector(targetClass, altClass, VisitedRooms, rooms_raw, DeadChestRooms)
+                local targetVec, deadVec, deadCooldown = getTargetRoomVector(targetClass, altClass, VisitedRooms, rooms_raw, DeadChestRooms)
                 
                 if targetVec then
                     if targetClass == "boss" then
@@ -1171,7 +1174,7 @@ task.spawn(function()
                             
                             -- Güvenlik Ağı: Oda hala yüklenmediyse diye altına görünmez zemin koy!
                             local p = Instance.new("Part")
-                            p.Name = "rlwpart"
+                            p.Name = "AntiVoidPart_Antigravity"
                             p.Size = Vector3.new(30, 2, 30)
                             p.Anchored = true
                             p.CFrame = CFrame.new(targetVec - Vector3.new(0, 1, 0))
@@ -1185,7 +1188,8 @@ task.spawn(function()
                             break -- Döngüden çık
                         end
                     end
-                elseif deadVec and not bestWaitVec then
+                elseif deadVec and deadCooldown and deadCooldown < bestWaitCooldown then
+                    bestWaitCooldown = deadCooldown
                     bestWaitVec = deadVec
                 end
             end
