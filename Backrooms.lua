@@ -1,5 +1,7 @@
 -- Made By RLW
 
+
+
 local Players = game:GetService("Players")
 local CollectionService = game:GetService("CollectionService")
 local RunService = game:GetService("RunService")
@@ -990,19 +992,19 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
                             else
                                 -- A* yolda ilerledi ama sıradaki oda henüz yüklenmedi, fiziksel sınırdayız!
                                 -- Hedefi değiştirmemesi için özel bir bekleme sinyali gönder.
-                                return nil, nil, nil, false, true -- isWaitingAtBoundary = true
+                                return targetVec, nil, nil, false, true -- isWaitingAtBoundary = true
                             end
                         end
                         
                         -- Eğer A* yol bulamadıysa veya yoldaki ileri odalar yüklenmemişse:
                         -- Eğer aradığımız hedef doğası gereği İZOLE bir oda ise (örn: GameMaster), A*'ı boşver direkt ışınlan!
                         local cLower = string.lower(roomInfo.class or "")
-                        if cLower:find("gamemaster") or cLower:find("masterboss") or cLower:find("daydream") or cLower:find("chest") or cLower:find("vault") then
+                        if cLower:find("gamemaster") or cLower:find("masterboss") or cLower:find("daydream") then
                             return targetVec, nil, nil, false
                         end
                         
                         -- Normal odaysa Asla başka hedefe veya kör noktaya atlama, Explore Mode'un kapı kırmasını bekle!
-                        return nil, nil, nil, false, true
+                        return targetVec, nil, nil, false, true
                     end
                     return targetVec, nil, nil, false
                 end
@@ -1205,18 +1207,7 @@ task.spawn(function()
         
         local forceExplore = false
         if getgenv().Config.ExploreMapFirst then
-            local desc = getMapDescriptor()
-            if desc and desc.rooms then
-                local maxR = desc.maxRooms or 400
-                if #desc.rooms < maxR then
-                    forceExplore = true
-                else
-                    getgenv().Config.ExploreMapFirst = false
-                    if getgenv().RLW_Window then
-                        getgenv().RLW_Window:Notify({Title = "✅ Map Explored!", Content = "All " .. tostring(maxR) .. " rooms generated. Resuming farm!", Duration = 5})
-                    end
-                end
-            end
+            forceExplore = true
         end
 
         -- RADAR TELEPORT (GOD MODE) ARAMASI
@@ -1324,7 +1315,7 @@ task.spawn(function()
                 local altClass = tData[2]
                 local targetVec, deadVec, deadCooldown, isPathNode, isWaitingAtBoundary = getTargetRoomVector(targetClass, altClass, VisitedRooms, rooms_raw, DeadChestRooms)
                 
-                if targetVec then
+                if targetVec and not isWaitingAtBoundary then
                     local targetKey = tostring(math.floor(targetVec.X)) .. "_" .. tostring(math.floor(targetVec.Z))
                     if getgenv().RadarAntiCheatBlacklist[targetKey] and os.clock() < getgenv().RadarAntiCheatBlacklist[targetKey] then
                         continue -- Bu hedef geçici olarak (Anti-Cheat yüzünden) kara listede, atla!
@@ -1399,10 +1390,10 @@ task.spawn(function()
                             currentRoot.Anchored = true
                             currentRoot.CFrame = CFrame.new(targetVec + Vector3.new(0, 5, 0))
                             
-                            if Network and Network:FindFirstChild("RequestStreaming") then
-                                print("[DEBUG-RADAR] Sending RequestStreaming to server...")
-                                pcall(function() Network.RequestStreaming:FireServer(targetVec) end)
-                            end
+                            print("[DEBUG-RADAR] Requesting area stream from server...")
+                            pcall(function()
+                                game.Players.LocalPlayer:RequestStreamAroundAsync(targetVec, 2)
+                            end)
                             
                             local timeout = 5
                             local t = 0
@@ -1447,9 +1438,13 @@ task.spawn(function()
                     end
                 elseif isWaitingAtBoundary then
                     -- Radar bir hedefe kilitlendi ama fiziksel sınırda (kapı açılmasını) bekliyor!
-                    -- Ping-Pong (hedef değiştirme) olmasını engellemek için diğer hedefleri aramayı bırak.
-                    isParkedAtRadarTarget = true
-                    break
+                    if targetVec and charPos and (targetVec - charPos).Magnitude < 150 then
+                        -- Eğer hedefe 150 studdan daha yakınsak, demek ki odanın tam dibindeyiz ve oda yüklenmek üzere!
+                        -- Ping-Pong'u engellemek ve odayı beklemek için park et.
+                        isParkedAtRadarTarget = true
+                        break
+                    end
+                    -- Eğer uzaksak, isParkedAtRadarTarget false kalır ve script Explore Mode'a girip yeni odalar kırmaya devam eder!
                 elseif deadVec and deadCooldown and deadCooldown < bestWaitCooldown then
                     bestWaitCooldown = deadCooldown
                     bestWaitVec = deadVec
@@ -1505,9 +1500,9 @@ task.spawn(function()
                         currentRoot.Anchored = true
                         currentRoot.CFrame = CFrame.new(bestWaitVec + Vector3.new(0, 5, 0))
                         local Network = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
-                        if Network and Network:FindFirstChild("RequestStreaming") then
-                            pcall(function() Network.RequestStreaming:FireServer(bestWaitVec) end)
-                        end
+                        pcall(function()
+                            game.Players.LocalPlayer:RequestStreamAroundAsync(bestWaitVec, 2)
+                        end)
                         
                         local timeout = 5
                         local t = 0
@@ -2306,34 +2301,68 @@ task.spawn(function()
         table.sort(sortedRooms, function(a, b) return a.Dist > b.Dist end)
 
         if #sortedRooms == 0 then
-            if visitedCount > 300 and getgenv().Config.HopOnBossCooldown then
-                if getgenv().RLW_Window then
-                    getgenv().RLW_Window:Notify({Title = "🚀 Dead Server!", Content = "Map fully explored. Hopping servers...", Duration = 5})
-                end
-                pcall(function()
-                    local HttpService = game:GetService("HttpService")
-                    local TeleportService = game:GetService("TeleportService")
-                    local req = request or http_request or (syn and syn.request)
-                    if req then
-                        local servers = req({Url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Desc&limit=100"}).Body
-                        local decoded = HttpService:JSONDecode(servers)
-                        if decoded and decoded.data then
-                            for _, v in pairs(decoded.data) do
-                                if type(v) == "table" and v.playing and v.playing < v.maxPlayers and v.id ~= game.JobId then
-                                    TeleportService:TeleportToPlaceInstance(game.PlaceId, v.id, game.Players.LocalPlayer)
-                                    break
+            local isMinimapFull = false
+            local pGui = game.Players.LocalPlayer:FindFirstChild("PlayerGui")
+            if pGui and pGui:FindFirstChild("BackroomsMiniMap") then
+                local miniMapFrame = pGui.BackroomsMiniMap:FindFirstChild("MiniMap")
+                if miniMapFrame then
+                    for _, c in ipairs(miniMapFrame:GetChildren()) do
+                        if c:IsA("TextLabel") and c.Text:find("Rooms found:") then
+                            local f, t = c.Text:match("Rooms found: (%d+) / (%d+)")
+                            if f and t then
+                                -- Bazen oyun labirenti %100 bağlamıyor, %95 tolerans bırakalım.
+                                local ratio = tonumber(f) / tonumber(t)
+                                if tonumber(f) >= tonumber(t) or ratio >= 0.95 then
+                                    isMinimapFull = true
                                 end
                             end
                         end
                     end
-                end)
-                task.wait(5)
+                end
+            else
+                -- Eğer UI yoksa eski sisteme düş (güvenlik için)
+                isMinimapFull = true
+            end
+
+            if isMinimapFull then
+                if getgenv().Config.ExploreMapFirst then
+                    getgenv().Config.ExploreMapFirst = false
+                    if getgenv().RLW_Window then
+                        getgenv().RLW_Window:Notify({Title = "✅ Map Fully Explored!", Content = "Exploration complete. Resuming farm!", Duration = 5})
+                    end
+                end
+                
+                if visitedCount > 300 and getgenv().Config.HopOnBossCooldown then
+                    if getgenv().RLW_Window then
+                        getgenv().RLW_Window:Notify({Title = "🚀 Dead Server!", Content = "Map fully explored. Hopping servers...", Duration = 5})
+                    end
+                    pcall(function()
+                        local HttpService = game:GetService("HttpService")
+                        local TeleportService = game:GetService("TeleportService")
+                        local req = request or http_request or (syn and syn.request)
+                        if req then
+                            local servers = req({Url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Desc&limit=100"}).Body
+                            local decoded = HttpService:JSONDecode(servers)
+                            if decoded and decoded.data then
+                                for _, v in pairs(decoded.data) do
+                                    if type(v) == "table" and v.playing and v.playing < v.maxPlayers and v.id ~= game.JobId then
+                                        TeleportService:TeleportToPlaceInstance(game.PlaceId, v.id, game.Players.LocalPlayer)
+                                        break
+                                    end
+                                end
+                            end
+                        end
+                    end)
+                    task.wait(5)
+                end
+            else
+                if getgenv().RLW_Window and getgenv().Config.ExploreMapFirst then
+                    getgenv().RLW_Window:Notify({Title = "🔍 Scanning...", Content = "Minimap not full yet. Re-scanning physical rooms!", Duration = 3})
+                end
             end
             
             VisitedRooms = {}
             visitedCount = 0
-            -- ✅ DeadEggRooms'u da temizle! Yeni oda gelmediyse, eski "ölü" odaları da tekrar dene.
-            -- Aksi halde script 5 dakika boyunca boşta döngüye girer!
             if getgenv().Config.AutoFarmEggs then
                 DeadEggRooms = {}
                 getgenv()._EggSpawnWaitTime = {}
@@ -2350,8 +2379,10 @@ task.spawn(function()
         local roomData = sortedRooms[1]
         local room = roomData.Room
         local roomUID = roomData.UID
-        -- PARADOX FİX 2: Odanın merkezine zıplamak, devasa odalarda sunucunun (server) yeni odaları yüklemesi için
-        -- gereken yakınlık (proximity) şartını sağlamayabilir. Bu yüzden karakteri odanın tüm sınır hatlarına sürtüyoruz.
+        -- Önce Minimap'in odayı bulduğunu anlaması için Odanın MERKEZİNE (Pivot) mikro zıplama yapıyoruz.
+        safeTeleport(room, true)
+        task.wait(0.25)
+        
         local edgeParts = {}
         local namesToFind = {"door", "exit", "entrance", "portal", "hallway", "corridor"}
         for _, part in ipairs(room:GetDescendants()) do
