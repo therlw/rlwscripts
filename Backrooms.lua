@@ -1443,7 +1443,8 @@ task.spawn(function()
                                     end
                                 end
                                 
-                                if targetRoom and (targetRoom:FindFirstChild("BREAK_ZONE", true) or targetRoom:FindFirstChild("Floor", true)) then
+                                if targetRoom then
+                                    -- Eğer hedef oda (özellikle Boss odası) fiziken klasördeyse, yüklenmiş kabul et!
                                     floorFound = true
                                 end
                                 
@@ -1473,7 +1474,7 @@ task.spawn(function()
 
                             -- KAPI AÇMA MANTIĞI: Radar doğrudan merkeze (arenaya) ışınlandığı için
                             -- kapı açma işlemini (ExploreMode'u) tamamen atlıyordu! Bunu düzeltiyoruz.
-                            if targetRoom then
+                            if floorFound and targetRoom then
                                 -- Odanın kilitli kapıları henüz stream edilmemiş olabilir, 3 saniye kadar bekleyelim
                                 local lockWaitTimeout = 3
                                 local lt = 0
@@ -1516,8 +1517,14 @@ task.spawn(function()
                                             fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", tonumber(roomUID), "UnlockDoors")
                                             task.wait(0.3)
                                             
+                                            local r = getRootPart()
+                                            if r then r.Anchored = false end
+                                            
                                             -- Kilit kırıldıktan sonra arenanın (merkezin) içine geri uç
                                             safeTeleport(targetRoom, true)
+                                        else
+                                            local r = getRootPart()
+                                            if r then r.Anchored = false end
                                         end
                                     end
                                 end
