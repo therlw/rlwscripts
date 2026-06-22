@@ -524,11 +524,12 @@ local function safeTeleport(targetObj, fastMode)
         end
         task.wait(0.1)
         root.Anchored = false
-        return
+        return false
     end
 
     task.wait(0.25)
     root.Anchored = false
+    return true
 end
 
 
@@ -1533,27 +1534,40 @@ task.spawn(function()
                                             local root = getRootPart()
                                             if root then
                                                 root.Anchored = true
+                                                root.CFrame = targetLockPart.CFrame
+                                                task.wait(1.5) -- Sunucunun pozisyonumuzu algılamasını bekle
                                                 
                                                 local lastSend = 0
                                                 while true do
+                                                    -- LockedDoors silindiyse veya şeffaflaştıysa kapı açıldı demektir
+                                                    if not targetRoom:FindFirstChild("LockedDoors") then break end
+                                                    if not targetLockPart.Parent then break end
+                                                    if targetLockPart.Transparency >= 0.99 then break end
+                                                    
                                                     root.CFrame = targetLockPart.CFrame
                                                     
-                                                    if os.clock() - lastSend >= 5 then
-                                                        if (root.Position - targetLockPart.Position).Magnitude < 15 then
+                                                    -- Sadece kapı tamamen kapalıyken istek gönder (animasyon başlamadıysa)
+                                                    if targetLockPart.Transparency <= 0.05 then
+                                                        if os.clock() - lastSend >= 5 then
                                                             fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", tonumber(roomUID), "UnlockDoors")
+                                                            lastSend = os.clock()
+                                                            if getgenv().RLW_Window then
+                                                                getgenv().RLW_Window:Notify({Title = "🔑 Unlocking Boss Door...", Content = "Waiting for key...", Duration = 3})
+                                                            end
+                                                        end
+                                                    else
+                                                        if getgenv().RLW_Window and os.clock() - lastSend >= 5 then
+                                                            getgenv().RLW_Window:Notify({Title = "⏳ Opening...", Content = "Door is opening, please wait...", Duration = 3})
                                                             lastSend = os.clock()
                                                         end
                                                     end
                                                     
                                                     task.wait(0.2)
-                                                    
-                                                    if not targetLockPart.Parent or targetLockPart.Transparency == 1 then
-                                                        break
-                                                    end
                                                 end
                                                 
                                                 root.Anchored = false 
                                                 root.CFrame = CFrame.new(targetVec)
+                                                task.wait(1)
                                             end
                                         end
                                     end
@@ -2645,7 +2659,10 @@ task.spawn(function()
         end
         
         -- Oda taramasına devam etmek için merkeze geri dön
-        safeTeleport(room, isSearchingOnly)
+        local teleportSuccess = safeTeleport(room, isSearchingOnly)
+        if teleportSuccess == false then
+            continue -- Eğer ışınlanma başarısız olduysa, kilit kırma mantığını atla (uzaktan unlock atmayı engeller)
+        end
 
         local roomID = room:GetAttribute("RoomID") or ""
         local lowerID = string.lower(roomID)
@@ -2710,30 +2727,52 @@ task.spawn(function()
                             local root = getRootPart()
                             if root then
                                 root.Anchored = true
+                                root.CFrame = targetLockPart.CFrame
+                                task.wait(1.5) -- Sunucunun pozisyonumuzu algılamasını bekle
                                 
                                 local lastSend = 0
                                 while true do
+                                    if not room:FindFirstChild("LockedDoors") then break end
+                                    if not targetLockPart.Parent then break end
+                                    if targetLockPart.Transparency >= 0.99 then break end
+                                    
                                     root.CFrame = targetLockPart.CFrame
                                     
-                                    if os.clock() - lastSend >= 5 then
-                                        if (root.Position - targetLockPart.Position).Magnitude < 15 then
+                                    if targetLockPart.Transparency <= 0.05 then
+                                        if os.clock() - lastSend >= 5 then
                                             fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", tonumber(roomUID), "UnlockDoors")
+                                            lastSend = os.clock()
+                                            if getgenv().RLW_Window then
+                                                getgenv().RLW_Window:Notify({Title = "🔑 Unlocking...", Content = "Waiting for key...", Duration = 3})
+                                            end
+                                        end
+                                    else
+                                        if getgenv().RLW_Window and os.clock() - lastSend >= 5 then
+                                            getgenv().RLW_Window:Notify({Title = "⏳ Opening...", Content = "Door is opening, please wait...", Duration = 3})
                                             lastSend = os.clock()
                                         end
                                     end
                                     
                                     task.wait(0.2)
-                                    
-                                    -- BUG FIX: targetLockPart artık her zaman BasePart (yukarıda güvence altına alındı)
-                                    -- Parent nil kontrolü önce yapılır (kısa devre), sonra Transparency kontrol edilir
-                                    if not targetLockPart.Parent then break end
-                                    if targetLockPart.Transparency >= 0.99 then break end
                                 end
                                 
                                 root.Anchored = false
+                                task.wait(1)
                             end
                         else
-                            fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", tonumber(roomUID), "UnlockDoors")
+                            local root = getRootPart()
+                            if root then
+                                local lastSend = 0
+                                while true do
+                                    if not room:FindFirstChild("LockedDoors") then break end
+                                    if os.clock() - lastSend >= 5 then
+                                        fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", tonumber(roomUID), "UnlockDoors")
+                                        lastSend = os.clock()
+                                    end
+                                    task.wait(0.2)
+                                end
+                                task.wait(1)
+                            end
                         end
                     end
                 end
