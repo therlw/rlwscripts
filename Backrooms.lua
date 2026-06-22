@@ -1299,7 +1299,11 @@ task.spawn(function()
             
             -- ÖNCELİK 4: EGGS
             if getgenv().Config.AutoFarmEggs then 
-                table.insert(radarTargets, {"keepout", "egg"}) 
+                -- Hiyerarşik Yumurta Taraması (En nadir odalara öncelik verir)
+                table.insert(radarTargets, {"titanicegg", "hugeegg"})
+                table.insert(radarTargets, {"deepfreeegg", "deeplockedegg"})
+                table.insert(radarTargets, {"freeegg", "keepout"})
+                table.insert(radarTargets, {"egg", "egg"})
             end
             
             local teleportedByRadar = false
@@ -2474,8 +2478,13 @@ task.spawn(function()
                     end
 
                     if shouldUnlock then
+                        -- Hem Deep Mode hem de Normal Mod için standart kilitleri kırmak için önce UnlockDoors dene, 
+                        -- Deep kasalar için UnlockDeep. GameMaster kapısı standart bir Lock objesidir.
                         if getgenv().Config.DeepBackroomsMode and invokeCustom then
+                            -- Önce derin kasa kilidini dene
                             pcall(function() invokeCustom:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", roomUID, "UnlockDeep") end)
+                            -- Hemen ardından Boss kapısı/normal kapı ihtimaline karşı standart UnlockDoors gönder
+                            fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
                             task.wait(0.2)
                         else
                             fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
@@ -2767,7 +2776,7 @@ TabEggs:CreateToggle({
 
 TabEggs:CreateDropdown({
     Name = "Target Egg Type",
-    Options = {"Any", "KeepOut", "Huge", "Titanic", "Free"},
+    Options = {"Any", "Danger", "Night Terror", "Corrupt", "Keep Out", "Eyes", "Tentacles", "Scribble", "Rain", "Ender"},
     CurrentOption = "Any",
     Flag = "Drp_TargetEggType",
     Callback = function(Option) 
@@ -2781,7 +2790,7 @@ TabEggs:CreateDropdown({
 
 TabEggs:CreateSlider({
     Name = "Minimum Egg Multiplier",
-    Range = {1, 100},
+    Range = {1, 250},
     CurrentValue = 50,
     Flag = "Sld_EggMultiplier",
     Callback = function(Value) getgenv().Config.TargetEggMultiplier = Value end
