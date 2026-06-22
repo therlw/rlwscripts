@@ -1520,34 +1520,40 @@ task.spawn(function()
                                         -- Kapının tam dibine, havada olsa bile tam kilit hizasına git (Mesafe Kontrolü)
                                         local roomUID = targetRoom:GetAttribute("RoomUID")
                                         if roomUID then
-                                            local root = getRootPart()
-                                            if root then
-                                                root.Anchored = true
-                                                
-                                                local attempts = 0
-                                                while attempts < 10 do
-                                                    -- Her denemede CFrame'i kilide yapıştır
-                                                    root.CFrame = targetLockPart.CFrame
+                                            getgenv().RoomUnlockCooldown = getgenv().RoomUnlockCooldown or {}
+                                            if not getgenv().RoomUnlockCooldown[roomUID] or os.clock() > getgenv().RoomUnlockCooldown[roomUID] then
+                                                local root = getRootPart()
+                                                if root then
+                                                    root.Anchored = true
                                                     
-                                                    -- İstemci tarafında kilidin yanında olduğumuzu teyit edelim
-                                                    if (root.Position - targetLockPart.Position).Magnitude < 15 then
-                                                        if getgenv().Config.DeepBackroomsMode and invokeCustom then
-                                                            pcall(function() invokeCustom:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", tonumber(roomUID), "UnlockDeep") end)
+                                                    local attempts = 0
+                                                    local success = false
+                                                    while attempts < 10 do
+                                                        root.CFrame = targetLockPart.CFrame
+                                                        
+                                                        if (root.Position - targetLockPart.Position).Magnitude < 15 then
+                                                            fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", tonumber(roomUID), "UnlockDoors")
                                                         end
-                                                        fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", tonumber(roomUID), "UnlockDoors")
+                                                        
+                                                        task.wait(0.5)
+                                                        
+                                                        if not targetLockPart.Parent or targetLockPart.Transparency == 1 then
+                                                            success = true
+                                                            break
+                                                        end
+                                                        attempts = attempts + 1
                                                     end
                                                     
-                                                    task.wait(0.5)
-                                                    
-                                                    -- Sunucu paketi kabul edip kilidi görünmez/yok yaptı mı?
-                                                    if not targetLockPart.Parent or targetLockPart.Transparency == 1 then
-                                                        break
+                                                    if not success then
+                                                        getgenv().RoomUnlockCooldown[roomUID] = os.clock() + 10
+                                                        if getgenv().RLW_Window then
+                                                            getgenv().RLW_Window:Notify({Title = "🔒 Lock Failed", Content = "Failed to unlock! Missing key? Retrying in 10s...", Duration = 3})
+                                                        end
                                                     end
-                                                    attempts = attempts + 1
+                                                    
+                                                    root.Anchored = false 
+                                                    root.CFrame = CFrame.new(targetVec)
                                                 end
-                                                
-                                                root.Anchored = false 
-                                                root.CFrame = CFrame.new(targetVec)
                                             end
                                         end
                                     end
@@ -2604,38 +2610,41 @@ task.spawn(function()
                     end
 
                     if shouldUnlock then
-                        if targetLockPart then
-                            local root = getRootPart()
-                            if root then
-                                root.Anchored = true
-                                
-                                local attempts = 0
-                                while attempts < 10 do
-                                    root.CFrame = targetLockPart.CFrame
+                        getgenv().RoomUnlockCooldown = getgenv().RoomUnlockCooldown or {}
+                        if not getgenv().RoomUnlockCooldown[roomUID] or os.clock() > getgenv().RoomUnlockCooldown[roomUID] then
+                            if targetLockPart then
+                                local root = getRootPart()
+                                if root then
+                                    root.Anchored = true
                                     
-                                    if (root.Position - targetLockPart.Position).Magnitude < 15 then
-                                        if getgenv().Config.DeepBackroomsMode and invokeCustom then
-                                            pcall(function() invokeCustom:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", tonumber(roomUID), "UnlockDeep") end)
+                                    local attempts = 0
+                                    local success = false
+                                    while attempts < 10 do
+                                        root.CFrame = targetLockPart.CFrame
+                                        
+                                        if (root.Position - targetLockPart.Position).Magnitude < 15 then
+                                            fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", tonumber(roomUID), "UnlockDoors")
                                         end
-                                        fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", tonumber(roomUID), "UnlockDoors")
+                                        
+                                        task.wait(0.5)
+                                        
+                                        if not targetLockPart.Parent or targetLockPart.Transparency == 1 then
+                                            success = true
+                                            break
+                                        end
+                                        attempts = attempts + 1
                                     end
                                     
-                                    task.wait(0.5)
-                                    
-                                    if not targetLockPart.Parent or targetLockPart.Transparency == 1 then
-                                        break
+                                    if not success then
+                                        getgenv().RoomUnlockCooldown[roomUID] = os.clock() + 10
                                     end
-                                    attempts = attempts + 1
+                                    
+                                    root.Anchored = false
                                 end
-                                
-                                root.Anchored = false
+                            else
+                                fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", tonumber(roomUID), "UnlockDoors")
+                                getgenv().RoomUnlockCooldown[roomUID] = os.clock() + 10
                             end
-                        else
-                            -- Lock yoksa ama yinede gönderilmesi gerekiyorsa (fallback)
-                            if getgenv().Config.DeepBackroomsMode and invokeCustom then
-                                pcall(function() invokeCustom:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", tonumber(roomUID), "UnlockDeep") end)
-                            end
-                            fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", tonumber(roomUID), "UnlockDoors")
                         end
                     end
                 end
