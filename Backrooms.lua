@@ -919,9 +919,17 @@ local function getTargetRoomVector(roomTypeStr, altTypeStr, VisitedRooms, rooms_
                         if (pos - targetVec).Magnitude < 70 then
                             isPhysicallyLoaded = true
                             local uid = r:GetAttribute("RoomUID")
+                            local respawnTime = r:GetAttribute("RespawnTimestamp")
+                            
+                            -- Eğer odanın üzerinde aktif bir bekleme süresi varsa (Boss/Chest kesilmişse) bunu ölü listesine al ve atla!
+                            if respawnTime and respawnTime > workspace:GetServerTimeNow() then
+                                getgenv().DeadCoords[coordKey] = respawnTime
+                                isVisited = true
+                                break
+                            end
+                            
                             if uid and VisitedRooms and VisitedRooms[uid] then
-                                -- DİKKAT: BOSS odaları (Gamemaster, Daydream, vs.) ASLA visited sayılmaz!
-                                -- Çünkü Boss odasına girsek bile içinde kamp kurmak istiyoruz.
+                                -- DİKKAT: BOSS odaları (Gamemaster, vb.) veya Sandıklar, eyleme hazırsa visited sayılmaz. Kamp kurarız!
                                 local cLower = string.lower(roomInfo.class or "")
                                 local isBossClass = cLower:find("gamemaster") or cLower:find("masterboss") or cLower:find("daydream") or cLower:find("deepboss") or cLower:find("boss") or cLower:find("deepportal") or cLower:find("chest") or cLower:find("vault")
                                 
@@ -2443,12 +2451,15 @@ task.spawn(function()
         if fireCustom then
             if room:FindFirstChild("LockedDoors") then
                 local isUnlocked = false
+                local targetLockPart = nil
                 for _, door in ipairs(room.LockedDoors:GetChildren()) do
                     if door:GetAttribute("HasConnection") then
                         local lock = door:FindFirstChild("Lock")
                         if lock and lock.Transparency == 1 then
                             isUnlocked = true
                             break
+                        elseif lock then
+                            targetLockPart = lock
                         end
                     end
                 end
@@ -2478,16 +2489,21 @@ task.spawn(function()
                     end
 
                     if shouldUnlock then
+                        if targetLockPart then
+                            safeTeleport(targetLockPart, false)
+                            task.wait(0.35) -- Server'ın yeni pozisyonumuzu işlemesi için biraz daha fazla bekle
+                        end
+
                         -- Hem Deep Mode hem de Normal Mod için standart kilitleri kırmak için önce UnlockDoors dene, 
                         -- Deep kasalar için UnlockDeep. GameMaster kapısı standart bir Lock objesidir.
                         if getgenv().Config.DeepBackroomsMode and invokeCustom then
                             -- Önce derin kasa kilidini dene
-                            pcall(function() invokeCustom:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", roomUID, "UnlockDeep") end)
+                            pcall(function() invokeCustom:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", tonumber(roomUID), "UnlockDeep") end)
                             -- Hemen ardından Boss kapısı/normal kapı ihtimaline karşı standart UnlockDoors gönder
-                            fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
+                            fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", tonumber(roomUID), "UnlockDoors")
                             task.wait(0.2)
                         else
-                            fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
+                            fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", tonumber(roomUID), "UnlockDoors")
                         end
                     end
                 end
