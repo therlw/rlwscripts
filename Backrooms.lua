@@ -1444,8 +1444,23 @@ task.spawn(function()
                                 end
                                 
                                 if targetRoom then
-                                    -- Eğer hedef oda (özellikle Boss odası) fiziken klasördeyse, yüklenmiş kabul et!
-                                    floorFound = true
+                                    -- Odanın fiziksel parçalarının stream edilip edilmediğini kontrol et
+                                    local lockedDoors = targetRoom:FindFirstChild("LockedDoors")
+                                    if lockedDoors then
+                                        -- Eğer kilitli odaysa, Lock parçasının yüklenmesini bekle
+                                        for _, door in ipairs(lockedDoors:GetChildren()) do
+                                            local lock = door:FindFirstChild("Lock")
+                                            if lock and (lock:IsA("BasePart") or (lock:IsA("Model") and lock.PrimaryPart)) then
+                                                floorFound = true
+                                                break
+                                            end
+                                        end
+                                    else
+                                        -- Kilitli değilse herhangi bir fiziksel parçanın yüklenmesini bekle
+                                        if targetRoom:FindFirstChildWhichIsA("BasePart", true) then
+                                            floorFound = true
+                                        end
+                                    end
                                 end
                                 
                                 if floorFound then
@@ -1502,29 +1517,37 @@ task.spawn(function()
                                             getgenv().RLW_Window:Notify({Title = "🚪 Radar Unlock", Content = "Unlocking Boss Door before entering!", Duration = 3})
                                         end
                                         -- Kapının tam dibine, havada olsa bile tam kilit hizasına git (Mesafe Kontrolü)
-                                        local root = getRootPart()
-                                        if root then
-                                            root.Anchored = true
-                                            root.CFrame = targetLockPart.CFrame
-                                            task.wait(0.4)
-                                        end
-                                        
                                         local roomUID = targetRoom:GetAttribute("RoomUID")
                                         if roomUID then
-                                            if getgenv().Config.DeepBackroomsMode and invokeCustom then
-                                                pcall(function() invokeCustom:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", tonumber(roomUID), "UnlockDeep") end)
+                                            local root = getRootPart()
+                                            if root then
+                                                root.Anchored = true
+                                                
+                                                local attempts = 0
+                                                while attempts < 10 do
+                                                    -- Her denemede CFrame'i kilide yapıştır
+                                                    root.CFrame = targetLockPart.CFrame
+                                                    
+                                                    -- İstemci tarafında kilidin yanında olduğumuzu teyit edelim
+                                                    if (root.Position - targetLockPart.Position).Magnitude < 15 then
+                                                        if getgenv().Config.DeepBackroomsMode and invokeCustom then
+                                                            pcall(function() invokeCustom:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", tonumber(roomUID), "UnlockDeep") end)
+                                                        end
+                                                        fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", tonumber(roomUID), "UnlockDoors")
+                                                    end
+                                                    
+                                                    task.wait(0.5)
+                                                    
+                                                    -- Sunucu paketi kabul edip kilidi görünmez/yok yaptı mı?
+                                                    if not targetLockPart.Parent or targetLockPart.Transparency == 1 then
+                                                        break
+                                                    end
+                                                    attempts = attempts + 1
+                                                end
+                                                
+                                                root.Anchored = false 
+                                                root.CFrame = CFrame.new(targetVec)
                                             end
-                                            fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", tonumber(roomUID), "UnlockDoors")
-                                            task.wait(0.3)
-                                            
-                                            local r = getRootPart()
-                                            if r then r.Anchored = false end
-                                            
-                                            -- Kilit kırıldıktan sonra arenanın (merkezin) içine geri uç
-                                            safeTeleport(targetRoom, true)
-                                        else
-                                            local r = getRootPart()
-                                            if r then r.Anchored = false end
                                         end
                                     end
                                 end
@@ -2584,20 +2607,33 @@ task.spawn(function()
                             local root = getRootPart()
                             if root then
                                 root.Anchored = true
-                                root.CFrame = targetLockPart.CFrame
-                                task.wait(0.4)
+                                
+                                local attempts = 0
+                                while attempts < 10 do
+                                    root.CFrame = targetLockPart.CFrame
+                                    
+                                    if (root.Position - targetLockPart.Position).Magnitude < 15 then
+                                        if getgenv().Config.DeepBackroomsMode and invokeCustom then
+                                            pcall(function() invokeCustom:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", tonumber(roomUID), "UnlockDeep") end)
+                                        end
+                                        fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", tonumber(roomUID), "UnlockDoors")
+                                    end
+                                    
+                                    task.wait(0.5)
+                                    
+                                    if not targetLockPart.Parent or targetLockPart.Transparency == 1 then
+                                        break
+                                    end
+                                    attempts = attempts + 1
+                                end
+                                
+                                root.Anchored = false
                             end
-                        end
-
-                        -- Hem Deep Mode hem de Normal Mod için standart kilitleri kırmak için önce UnlockDoors dene, 
-                        -- Deep kasalar için UnlockDeep. GameMaster kapısı standart bir Lock objesidir.
-                        if getgenv().Config.DeepBackroomsMode and invokeCustom then
-                            -- Önce derin kasa kilidini dene
-                            pcall(function() invokeCustom:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", tonumber(roomUID), "UnlockDeep") end)
-                            -- Hemen ardından Boss kapısı/normal kapı ihtimaline karşı standart UnlockDoors gönder
-                            fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", tonumber(roomUID), "UnlockDoors")
-                            task.wait(0.2)
                         else
+                            -- Lock yoksa ama yinede gönderilmesi gerekiyorsa (fallback)
+                            if getgenv().Config.DeepBackroomsMode and invokeCustom then
+                                pcall(function() invokeCustom:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", tonumber(roomUID), "UnlockDeep") end)
+                            end
                             fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", tonumber(roomUID), "UnlockDoors")
                         end
                     end
