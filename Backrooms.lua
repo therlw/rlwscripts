@@ -468,12 +468,18 @@ local function safeTeleport(targetObj, fastMode)
 
     local isRoom = typeof(targetObj) == "Instance" and targetObj:GetAttribute("RoomUID") ~= nil
     local originalCFrame = root.CFrame
-    if isRoom and not fastMode then
-        local timeout = 5
-        local t = 0
-        local loadedFloor = nil
+    
+    -- fastMode ise daha kısa bekle, normal ise uzun bekle
+    local timeout = fastMode and 1.5 or 5
+    local t = 0
+    local loadedFloor = nil
 
-        while t < timeout do
+    pcall(function()
+        game.Players.LocalPlayer:RequestStreamAroundAsync(safePosition, timeout)
+    end)
+
+    while t < timeout do
+        if isRoom then
             local priorityNames = {"BREAK_ZONE", "Floor", "Base", "Ground", "Hitbox"}
             for _, name in ipairs(priorityNames) do
                 local part = targetObj:FindFirstChild(name, true)
@@ -492,40 +498,33 @@ local function safeTeleport(targetObj, fastMode)
                     end
                 end
             end
-            
-            if not loadedFloor then
-                local rayParams = RaycastParams.new()
-                rayParams.FilterType = Enum.RaycastFilterType.Exclude
-                rayParams.FilterDescendantsInstances = {getCharacter()}
-                local hit = workspace:Raycast(safePosition, Vector3.new(0, -100, 0), rayParams)
-                if hit and hit.Instance and hit.Instance.CanCollide then
-                    loadedFloor = hit.Instance
-                end
-            end
-
-            if loadedFloor then break end
-            task.wait(0.25)
-            t = t + 0.25
         end
 
         if loadedFloor then
             local exactPos = loadedFloor.Position + Vector3.new(0, (loadedFloor.Size.Y / 2) + 5, 0)
             safePosition = exactPos
             root.CFrame = CFrame.new(safePosition)
-        else
-            root.CFrame = originalCFrame
-            if getgenv().RLW_Window then
-                getgenv().RLW_Window:Notify({Title = "⚠️ Teleport Failed!", Content = "Room didn't load physically! Returning to safe spot.", Duration = 3})
-            end
-            local roomUID = targetObj:GetAttribute("RoomUID")
-            if roomUID then
-                DeadEggRooms[roomUID] = os.clock()
-                DeadChestRooms[roomUID] = os.clock()
-            end
-            task.wait(0.1)
-            root.Anchored = false
-            return
+            break -- Zemin bulundu ve pozisyon ayarlandı, döngüden çık
         end
+
+        task.wait(0.25)
+        t = t + 0.25
+    end
+
+    if not loadedFloor then
+        -- Döngü bitti ve hala zemin bulunamadıysa geri dön
+        root.CFrame = originalCFrame
+        if getgenv().RLW_Window then
+            getgenv().RLW_Window:Notify({Title = "⚠️ Teleport Failed!", Content = "Room didn't load physically! Returning to safe spot.", Duration = 3})
+        end
+        local roomUID = targetObj:GetAttribute("RoomUID")
+        if roomUID then
+            DeadEggRooms[roomUID] = os.clock()
+            DeadChestRooms[roomUID] = os.clock()
+        end
+        task.wait(0.1)
+        root.Anchored = false
+        return
     end
 
     task.wait(0.25)
