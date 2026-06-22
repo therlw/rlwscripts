@@ -1520,40 +1520,30 @@ task.spawn(function()
                                         -- Kapının tam dibine, havada olsa bile tam kilit hizasına git (Mesafe Kontrolü)
                                         local roomUID = targetRoom:GetAttribute("RoomUID")
                                         if roomUID then
-                                            getgenv().RoomUnlockCooldown = getgenv().RoomUnlockCooldown or {}
-                                            if not getgenv().RoomUnlockCooldown[roomUID] or os.clock() > getgenv().RoomUnlockCooldown[roomUID] then
-                                                local root = getRootPart()
-                                                if root then
-                                                    root.Anchored = true
+                                            local root = getRootPart()
+                                            if root then
+                                                root.Anchored = true
+                                                
+                                                local lastSend = 0
+                                                while true do
+                                                    root.CFrame = targetLockPart.CFrame
                                                     
-                                                    local attempts = 0
-                                                    local success = false
-                                                    while attempts < 10 do
-                                                        root.CFrame = targetLockPart.CFrame
-                                                        
+                                                    if os.clock() - lastSend >= 5 then
                                                         if (root.Position - targetLockPart.Position).Magnitude < 15 then
                                                             fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", tonumber(roomUID), "UnlockDoors")
-                                                        end
-                                                        
-                                                        task.wait(0.5)
-                                                        
-                                                        if not targetLockPart.Parent or targetLockPart.Transparency == 1 then
-                                                            success = true
-                                                            break
-                                                        end
-                                                        attempts = attempts + 1
-                                                    end
-                                                    
-                                                    if not success then
-                                                        getgenv().RoomUnlockCooldown[roomUID] = os.clock() + 10
-                                                        if getgenv().RLW_Window then
-                                                            getgenv().RLW_Window:Notify({Title = "🔒 Lock Failed", Content = "Failed to unlock! Missing key? Retrying in 10s...", Duration = 3})
+                                                            lastSend = os.clock()
                                                         end
                                                     end
                                                     
-                                                    root.Anchored = false 
-                                                    root.CFrame = CFrame.new(targetVec)
+                                                    task.wait(0.2)
+                                                    
+                                                    if not targetLockPart.Parent or targetLockPart.Transparency == 1 then
+                                                        break
+                                                    end
                                                 end
+                                                
+                                                root.Anchored = false 
+                                                root.CFrame = CFrame.new(targetVec)
                                             end
                                         end
                                     end
@@ -2610,41 +2600,33 @@ task.spawn(function()
                     end
 
                     if shouldUnlock then
-                        getgenv().RoomUnlockCooldown = getgenv().RoomUnlockCooldown or {}
-                        if not getgenv().RoomUnlockCooldown[roomUID] or os.clock() > getgenv().RoomUnlockCooldown[roomUID] then
-                            if targetLockPart then
-                                local root = getRootPart()
-                                if root then
-                                    root.Anchored = true
+                        if targetLockPart then
+                            local root = getRootPart()
+                            if root then
+                                root.Anchored = true
+                                
+                                local lastSend = 0
+                                while true do
+                                    root.CFrame = targetLockPart.CFrame
                                     
-                                    local attempts = 0
-                                    local success = false
-                                    while attempts < 10 do
-                                        root.CFrame = targetLockPart.CFrame
-                                        
+                                    if os.clock() - lastSend >= 5 then
                                         if (root.Position - targetLockPart.Position).Magnitude < 15 then
                                             fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", tonumber(roomUID), "UnlockDoors")
+                                            lastSend = os.clock()
                                         end
-                                        
-                                        task.wait(0.5)
-                                        
-                                        if not targetLockPart.Parent or targetLockPart.Transparency == 1 then
-                                            success = true
-                                            break
-                                        end
-                                        attempts = attempts + 1
                                     end
                                     
-                                    if not success then
-                                        getgenv().RoomUnlockCooldown[roomUID] = os.clock() + 10
-                                    end
+                                    task.wait(0.2)
                                     
-                                    root.Anchored = false
+                                    if not targetLockPart.Parent or targetLockPart.Transparency == 1 then
+                                        break
+                                    end
                                 end
-                            else
-                                fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", tonumber(roomUID), "UnlockDoors")
-                                getgenv().RoomUnlockCooldown[roomUID] = os.clock() + 10
+                                
+                                root.Anchored = false
                             end
+                        else
+                            fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", tonumber(roomUID), "UnlockDoors")
                         end
                     end
                 end
