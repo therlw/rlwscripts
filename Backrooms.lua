@@ -1217,9 +1217,18 @@ task.spawn(function()
             forceExplore = true
         end
 
+        local roomsFolderRadar = nil
+        local activeBackrooms = workspace:FindFirstChild("__THINGS") and workspace.__THINGS:FindFirstChild("__INSTANCE_CONTAINER") 
+            and workspace.__THINGS.__INSTANCE_CONTAINER:FindFirstChild("Active") 
+            and workspace.__THINGS.__INSTANCE_CONTAINER.Active:FindFirstChild("Backrooms")
+        if activeBackrooms and activeBackrooms:FindFirstChild("GeneratedBackrooms") then
+            roomsFolderRadar = activeBackrooms.GeneratedBackrooms
+        elseif workspace:FindFirstChild("__THINGS") and workspace.__THINGS:FindFirstChild("Instances") then
+            roomsFolderRadar = workspace.__THINGS.Instances
+        end
+
         -- RADAR TELEPORT (GOD MODE) ARAMASI
         local inBossArena = false
-        local roomsFolderRadar = workspace:FindFirstChild("__THINGS") and workspace.__THINGS:FindFirstChild("Instances")
         if roomsFolderRadar then
             local currentRoot = getRootPart()
             local charPos = currentRoot and currentRoot.Position or Vector3.new(0,0,0)
@@ -1414,12 +1423,15 @@ task.spawn(function()
                                 rayParams.FilterType = Enum.RaycastFilterType.Exclude
                                 rayParams.FilterDescendantsInstances = {getCharacter()}
                                 local hit = workspace:Raycast(currentRoot.Position, Vector3.new(0, -100, 0), rayParams)
+                                
                                 if hit and hit.Instance and hit.Instance.CanCollide then
                                     floorFound = true
-                                    break
+                                    if not targetRoom then
+                                        targetRoom = hit.Instance:FindFirstAncestorWhichIsA("Model")
+                                    end
                                 end
                                 
-                                -- Raycast tutturamasa bile, model fiziksel olarak gelmişse yüklenmiş say!
+                                -- Raycast tutturamasa bile, veya targetRoom hit.Instance'dan gelmediyse genel arama yap
                                 if not targetRoom then
                                     for _, r in ipairs(roomsFolderRadar:GetChildren()) do
                                         local pos = r:IsA("Model") and r:GetPivot().Position or Vector3.zero
@@ -1433,6 +1445,9 @@ task.spawn(function()
                                 
                                 if targetRoom and (targetRoom:FindFirstChild("BREAK_ZONE", true) or targetRoom:FindFirstChild("Floor", true)) then
                                     floorFound = true
+                                end
+                                
+                                if floorFound then
                                     break
                                 end
                                 
