@@ -1102,6 +1102,8 @@ task.spawn(function()
         local rooms_raw = CollectionService:GetTagged("Backrooms")
         
         -- Eğer oyuncu halihazırda "AÇIK" bir Boss Odasının içindeyse, boşuna anahtar aramaya gitmesin!
+        local inOpenBossRoom = false
+        local openBossRoomRef = nil
         local charPos = getRootPart() and getRootPart().Position or Vector3.zero
         for _, r in ipairs(rooms_raw) do
             local pos = r:IsA("Model") and r:GetPivot().Position or (r:IsA("BasePart") and r.Position or Vector3.zero)
@@ -1117,9 +1119,17 @@ task.spawn(function()
                 end
                 
                 if isBoss and not r:FindFirstChild("LockedDoors") then
+                    inOpenBossRoom = true
+                    openBossRoomRef = r
                     break
                 end
             end
+        end
+        -- BUG FIX: Açık boss odasındaysak, doğrudan boss kampına geç (explore yapmayı bırak)
+        if inOpenBossRoom and openBossRoomRef and getgenv().Config.AutoBossHunt then
+            getgenv().LiveStats.BossStatus = "Fighting Boss ⚔️"
+            task.wait(2)
+            continue
         end
         if #rooms_raw == 0 then
             VisitedRooms = {}
@@ -1824,21 +1834,8 @@ task.spawn(function()
             local Network = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
             local fireCustom = Network and Network:FindFirstChild("Instancing_FireCustomFromClient")
 
-            -- Kapı açma: Önce ışınlan, streaming yüklenmesini bekle, sonra karar ver
-            if fireCustom then
-                if bestRoomType == 5 or bestRoomType == 4 then
-                    if bestRoom:FindFirstChild("LockedDoors") then
-                        local Network = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
-                        local invokeCustom = Network and Network:FindFirstChild("Instancing_InvokeCustomFromClient")
-                        if getgenv().Config.DeepBackroomsMode and invokeCustom then
-                            pcall(function() invokeCustom:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", roomUID, "UnlockDeep") end)
-                        else
-                            fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
-                        end
-                    end
-                end
-                -- Type 3 (Boss): teleport sonrası yükleme beklendiğinde kontrol edilecek
-            end
+            -- Kapı açma: ÖNCELİKLE ışınlan, zemin yüklensin; unlock sonra yapılacak (BUG FIX: uzaklık kontrolü)
+            -- Type 3 (Boss): teleport sonrası yükleme beklendiğinde kontrol edilecek
 
             safeTeleport(bestRoom, false)
 
@@ -1925,6 +1922,39 @@ task.spawn(function()
                 if getgenv().RLW_Window then
                     getgenv().RLW_Window:Notify({Title = "🎁 Free Egg Room!", Content = mult .. "x Huge Chance room found! Hatching...", Duration = 10, Image = 4483362458})
                 end
+
+                -- BUG FIX: Unlock POST-teleport (ışınlandıktan sonra kapıyı aç, sunucu uzaklık kontrolü geçebilsin)
+                task.wait(1)
+                pcall(function()
+                    local netF5 = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
+                    local fireF5 = netF5 and netF5:FindFirstChild("Instancing_FireCustomFromClient")
+                    local invF5 = netF5 and netF5:FindFirstChild("Instancing_InvokeCustomFromClient")
+                    if fireF5 and bestRoom:FindFirstChild("LockedDoors") then
+                        if getgenv().Config.DeepBackroomsMode and invF5 then
+                            invF5:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", roomUID, "UnlockDeep")
+                        else
+                            -- Kapıya yakın dur, sonra fire et
+                            local root5 = getRootPart()
+                            if root5 then
+                                local lockPart5 = nil
+                                for _, door5 in ipairs(bestRoom.LockedDoors:GetChildren()) do
+                                    local lk = door5:FindFirstChild("Lock")
+                                    if lk then
+                                        lockPart5 = lk:IsA("BasePart") and lk or (lk:IsA("Model") and lk.PrimaryPart or nil)
+                                        if lockPart5 then break end
+                                    end
+                                end
+                                if lockPart5 then
+                                    root5.Anchored = true
+                                    root5.CFrame = lockPart5.CFrame
+                                    task.wait(0.1)
+                                end
+                            end
+                            fireF5:FireServer("Backrooms", "AbstractRoom_FireServer", tonumber(roomUID), "UnlockDoors")
+                            if getRootPart() then getRootPart().Anchored = false end
+                        end
+                    end
+                end)
 
                 -- Yumurta açılış animasyonunu kapat
                 pcall(function()
@@ -2033,6 +2063,38 @@ task.spawn(function()
                     getgenv().RLW_Window:Notify({Title = "🥚 Egg Farm!", Content = "Hatching eggs...", Duration = 4})
                 end
                 
+                -- BUG FIX: Unlock POST-teleport - ışınlandıktan sonra kapı açma (sunucu uzaklık kontrolü geçsin)
+                task.wait(1)
+                pcall(function()
+                    local netF4 = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
+                    local fireF4 = netF4 and netF4:FindFirstChild("Instancing_FireCustomFromClient")
+                    local invF4  = netF4 and netF4:FindFirstChild("Instancing_InvokeCustomFromClient")
+                    if fireF4 and bestRoom:FindFirstChild("LockedDoors") then
+                        if getgenv().Config.DeepBackroomsMode and invF4 then
+                            invF4:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", roomUID, "UnlockDeep")
+                        else
+                            local root4 = getRootPart()
+                            if root4 then
+                                local lockPart4 = nil
+                                for _, door4 in ipairs(bestRoom.LockedDoors:GetChildren()) do
+                                    local lk = door4:FindFirstChild("Lock")
+                                    if lk then
+                                        lockPart4 = lk:IsA("BasePart") and lk or (lk:IsA("Model") and lk.PrimaryPart or nil)
+                                        if lockPart4 then break end
+                                    end
+                                end
+                                if lockPart4 then
+                                    root4.Anchored = true
+                                    root4.CFrame = lockPart4.CFrame
+                                    task.wait(0.1)
+                                end
+                            end
+                            fireF4:FireServer("Backrooms", "AbstractRoom_FireServer", tonumber(roomUID), "UnlockDoors")
+                            if getRootPart() then getRootPart().Anchored = false end
+                        end
+                    end
+                end)
+
                 -- Yumurta açılış animasyonunu kapat
                 pcall(function()
                     local fe = getsenv(LocalPlayer.PlayerScripts.Scripts.Game["Egg Opening Frontend"])
@@ -2066,7 +2128,7 @@ task.spawn(function()
                     ["huge"] = "Huge Backrooms Egg"
                 }
 
-                local eggIdToBuy = "Keep Out Egg"
+                local eggIdToBuy = "Backrooms Nightmare Egg" -- Default (BUG FIX: eskiden hatalı "Keep Out Egg" yazıyordu)
                 for key, eggName in pairs(BackroomsEggMap) do
                     if lowerID:find(key) then
                         eggIdToBuy = eggName
@@ -2086,7 +2148,7 @@ task.spawn(function()
                         local mult = tonumber(bestRoom:GetAttribute("EggMultiplier")) or 0
                         local isPriorityEgg = mult >= getgenv().Config.TargetEggMultiplier
                         
-                        if bossTimer > 0 and remaining <= 8 and not isPriorityEgg then
+                        if bossTimer > 0 and remaining > 0 and remaining <= 8 and not isPriorityEgg then
                             if getgenv().RLW_Window then
                                 getgenv().RLW_Window:Notify({Title = "⚔️ Boss Time!", Content = "Leaving normal egg for Boss spawn!", Duration = 3})
                             end
@@ -2178,6 +2240,7 @@ task.spawn(function()
                     end
                 elseif bestRoom:FindFirstChild("LockedDoors") then
                     -- Door closed, spend key.
+                    -- BUG FIX: Unlock öncesi karakteri kilit parçasına yaklaştır (sunucu uzaklık kontrolü geçsin)
                     local Network2 = game:GetService("ReplicatedStorage"):FindFirstChild("Network")
                     local fireCustom2 = Network2 and Network2:FindFirstChild("Instancing_FireCustomFromClient")
                     local invokeCustom2 = Network2 and Network2:FindFirstChild("Instancing_InvokeCustomFromClient")
@@ -2186,7 +2249,40 @@ task.spawn(function()
                             pcall(function() invokeCustom2:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", roomUID, "UnlockDeep") end)
                             task.wait(0.2)
                         else
-                            fireCustom2:FireServer("Backrooms", "AbstractRoom_FireServer", roomUID, "UnlockDoors")
+                            -- Kilit parçasını bul ve yakınına anchor'la
+                            local bossLockPart = nil
+                            pcall(function()
+                                for _, door3 in ipairs(bestRoom.LockedDoors:GetChildren()) do
+                                    local lk = door3:FindFirstChild("Lock")
+                                    if lk then
+                                        if lk:IsA("BasePart") then bossLockPart = lk
+                                        elseif lk:IsA("Model") and lk.PrimaryPart then bossLockPart = lk.PrimaryPart end
+                                        if bossLockPart then break end
+                                    end
+                                end
+                            end)
+                            local root3 = getRootPart()
+                            if root3 and bossLockPart then
+                                root3.Anchored = true
+                                root3.CFrame = bossLockPart.CFrame
+                                task.wait(0.15)
+                                local lastSendB = 0
+                                local unlockTimeout = os.clock() + 30  -- Maksimum 30 saniye dene
+                                while os.clock() < unlockTimeout do
+                                    if os.clock() - lastSendB >= 5 then
+                                        fireCustom2:FireServer("Backrooms", "AbstractRoom_FireServer", tonumber(roomUID), "UnlockDoors")
+                                        lastSendB = os.clock()
+                                    end
+                                    task.wait(0.2)
+                                    if not bestRoom:FindFirstChild("LockedDoors") then break end
+                                    if not bossLockPart.Parent then break end
+                                    if bossLockPart.Transparency >= 0.99 then break end
+                                end
+                                root3.Anchored = false
+                            else
+                                -- Kilit parçası bulunamadı, direkt fire et
+                                fireCustom2:FireServer("Backrooms", "AbstractRoom_FireServer", tonumber(roomUID), "UnlockDoors")
+                            end
                         end
                     end
                 else
@@ -2563,14 +2659,24 @@ task.spawn(function()
             if room:FindFirstChild("LockedDoors") then
                 local isUnlocked = false
                 local targetLockPart = nil
+                -- BUG FIX: HasConnection filtresi kaldırıldı (bazı kapıları atlıyordu)
+                -- BUG FIX: lock.Transparency direkt çağrısı Model'de crash atıyordu → BasePart/Model ayrımı eklendi
                 for _, door in ipairs(room.LockedDoors:GetChildren()) do
-                    if door:GetAttribute("HasConnection") then
-                        local lock = door:FindFirstChild("Lock")
-                        if lock and lock.Transparency == 1 then
-                            isUnlocked = true
-                            break
-                        elseif lock then
-                            targetLockPart = lock
+                    local lock = door:FindFirstChild("Lock")
+                    if lock then
+                        local lockBasePart = nil
+                        if lock:IsA("BasePart") then
+                            lockBasePart = lock
+                        elseif lock:IsA("Model") and lock.PrimaryPart then
+                            lockBasePart = lock.PrimaryPart
+                        end
+                        if lockBasePart then
+                            if lockBasePart.Transparency >= 0.99 then
+                                isUnlocked = true
+                                break
+                            else
+                                targetLockPart = lockBasePart
+                            end
                         end
                     end
                 end
@@ -2618,9 +2724,10 @@ task.spawn(function()
                                     
                                     task.wait(0.2)
                                     
-                                    if not targetLockPart.Parent or targetLockPart.Transparency == 1 then
-                                        break
-                                    end
+                                    -- BUG FIX: targetLockPart artık her zaman BasePart (yukarıda güvence altına alındı)
+                                    -- Parent nil kontrolü önce yapılır (kısa devre), sonra Transparency kontrol edilir
+                                    if not targetLockPart.Parent then break end
+                                    if targetLockPart.Transparency >= 0.99 then break end
                                 end
                                 
                                 root.Anchored = false
