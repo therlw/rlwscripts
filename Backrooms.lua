@@ -1418,6 +1418,7 @@ task.spawn(function()
                             local timeout = 5
                             local t = 0
                             local floorFound = false
+                            local targetRoom = nil
                             while t < timeout do
                                 local rayParams = RaycastParams.new()
                                 rayParams.FilterType = Enum.RaycastFilterType.Exclude
