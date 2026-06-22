@@ -1485,9 +1485,13 @@ task.spawn(function()
                                         if getgenv().RLW_Window then
                                             getgenv().RLW_Window:Notify({Title = "🚪 Radar Unlock", Content = "Unlocking Boss Door before entering!", Duration = 3})
                                         end
-                                        -- Önce kapının tam dibine git (Anti-Cheat mesafe kontrolü için)
-                                        safeTeleport(targetLockPart, false)
-                                        task.wait(0.4)
+                                        -- Kapının tam dibine, havada olsa bile tam kilit hizasına git (Mesafe Kontrolü)
+                                        local root = getRootPart()
+                                        if root then
+                                            root.Anchored = true
+                                            root.CFrame = targetLockPart.CFrame
+                                            task.wait(0.4)
+                                        end
                                         
                                         local roomUID = targetRoom:GetAttribute("RoomUID")
                                         if roomUID then
@@ -2555,8 +2559,12 @@ task.spawn(function()
 
                     if shouldUnlock then
                         if targetLockPart then
-                            safeTeleport(targetLockPart, false)
-                            task.wait(0.35) -- Server'ın yeni pozisyonumuzu işlemesi için biraz daha fazla bekle
+                            local root = getRootPart()
+                            if root then
+                                root.Anchored = true
+                                root.CFrame = targetLockPart.CFrame
+                                task.wait(0.4)
+                            end
                         end
 
                         -- Hem Deep Mode hem de Normal Mod için standart kilitleri kırmak için önce UnlockDoors dene, 
