@@ -1418,6 +1418,24 @@ task.spawn(function()
                                     floorFound = true
                                     break
                                 end
+                                
+                                -- Raycast tutturamasa bile, model fiziksel olarak gelmişse yüklenmiş say!
+                                if not targetRoom then
+                                    for _, r in ipairs(roomsFolderRadar:GetChildren()) do
+                                        local pos = r:IsA("Model") and r:GetPivot().Position or Vector3.zero
+                                        local roomID = string.lower(r:GetAttribute("RoomID") or "")
+                                        if (pos - targetVec).Magnitude < 300 and (roomID == string.lower(targetClass) or roomID == string.lower(altClass)) then
+                                            targetRoom = r
+                                            break
+                                        end
+                                    end
+                                end
+                                
+                                if targetRoom and (targetRoom:FindFirstChild("BREAK_ZONE", true) or targetRoom:FindFirstChild("Floor", true)) then
+                                    floorFound = true
+                                    break
+                                end
+                                
                                 task.wait(0.25)
                                 t = t + 0.25
                             end
@@ -1437,17 +1455,6 @@ task.spawn(function()
                             
                             print("[DEBUG-RADAR] Unanchoring character. Teleport sequence complete.")
                             currentRoot.Anchored = false
-                            
-                            -- Odanın modeli fiziksel olarak yeni yüklendiyse targetRoom'u tekrar bul
-                            if not targetRoom then
-                                for _, r in ipairs(roomsFolderRadar:GetChildren()) do
-                                    local pos = r:IsA("Model") and r:GetPivot().Position or Vector3.zero
-                                    if (pos - targetVec).Magnitude < 50 then
-                                        targetRoom = r
-                                        break
-                                    end
-                                end
-                            end
 
                             -- KAPI AÇMA MANTIĞI: Radar doğrudan merkeze (arenaya) ışınlandığı için
                             -- kapı açma işlemini (ExploreMode'u) tamamen atlıyordu! Bunu düzeltiyoruz.
