@@ -1438,6 +1438,65 @@ task.spawn(function()
                             print("[DEBUG-RADAR] Unanchoring character. Teleport sequence complete.")
                             currentRoot.Anchored = false
                             
+                            -- Odanın modeli fiziksel olarak yeni yüklendiyse targetRoom'u tekrar bul
+                            if not targetRoom then
+                                for _, r in ipairs(roomsFolderRadar:GetChildren()) do
+                                    local pos = r:IsA("Model") and r:GetPivot().Position or Vector3.zero
+                                    if (pos - targetVec).Magnitude < 50 then
+                                        targetRoom = r
+                                        break
+                                    end
+                                end
+                            end
+
+                            -- KAPI AÇMA MANTIĞI: Radar doğrudan merkeze (arenaya) ışınlandığı için
+                            -- kapı açma işlemini (ExploreMode'u) tamamen atlıyordu! Bunu düzeltiyoruz.
+                            if targetRoom then
+                                -- Odanın kilitli kapıları henüz stream edilmemiş olabilir, 3 saniye kadar bekleyelim
+                                local lockWaitTimeout = 3
+                                local lt = 0
+                                while not targetRoom:FindFirstChild("LockedDoors") and lt < lockWaitTimeout do
+                                    task.wait(0.25)
+                                    lt = lt + 0.25
+                                end
+                                
+                                if targetRoom:FindFirstChild("LockedDoors") then
+                                    local fireCustom = Network and Network:FindFirstChild("Instancing_FireCustomFromClient")
+                                    local targetLockPart = nil
+                                    for _, door in ipairs(targetRoom.LockedDoors:GetChildren()) do
+                                        local lock = door:FindFirstChild("Lock")
+                                        if lock and lock:IsA("BasePart") then
+                                            targetLockPart = lock
+                                            break
+                                        elseif lock and lock:IsA("Model") and lock.PrimaryPart then
+                                            targetLockPart = lock.PrimaryPart
+                                            break
+                                        end
+                                    end
+                                    
+                                    if targetLockPart and fireCustom then
+                                        if getgenv().RLW_Window then
+                                            getgenv().RLW_Window:Notify({Title = "🚪 Radar Unlock", Content = "Unlocking Boss Door before entering!", Duration = 3})
+                                        end
+                                        -- Önce kapının tam dibine git (Anti-Cheat mesafe kontrolü için)
+                                        safeTeleport(targetLockPart, false)
+                                        task.wait(0.4)
+                                        
+                                        local roomUID = targetRoom:GetAttribute("RoomUID")
+                                        if roomUID then
+                                            if getgenv().Config.DeepBackroomsMode and invokeCustom then
+                                                pcall(function() invokeCustom:InvokeServer("Backrooms", "AbstractRoom_InvokeServer", tonumber(roomUID), "UnlockDeep") end)
+                                            end
+                                            fireCustom:FireServer("Backrooms", "AbstractRoom_FireServer", tonumber(roomUID), "UnlockDoors")
+                                            task.wait(0.3)
+                                            
+                                            -- Kilit kırıldıktan sonra arenanın (merkezin) içine geri uç
+                                            safeTeleport(targetRoom, true)
+                                        end
+                                    end
+                                end
+                            end
+                            
                             teleportedByRadar = true
                             break -- Döngüden çık
                         else
