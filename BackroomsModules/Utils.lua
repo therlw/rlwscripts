@@ -67,7 +67,14 @@ function Utils.safeTeleport(targetObj, fastMode)
         or (targetObj:IsA("Model") and targetObj:GetPivot() or targetObj.CFrame)
     local safePosition = initialCFrame.Position + Vector3.new(0, 6, 0)
 
-    if typeof(targetObj) == "Instance" and targetObj:IsA("Model") then
+    local breakZone = nil
+    if typeof(targetObj) == "Instance" then
+        breakZone = targetObj:FindFirstChild("BREAK_ZONE")
+    end
+
+    if breakZone and breakZone:IsA("BasePart") then
+        safePosition = Vector3.new(breakZone.Position.X, breakZone.Position.Y - breakZone.Size.Y / 2 + 5, breakZone.Position.Z)
+    elseif typeof(targetObj) == "Instance" and targetObj:IsA("Model") then
         local boundingCFrame, size = targetObj:GetBoundingBox()
         safePosition = boundingCFrame.Position - Vector3.new(0, size.Y / 2, 0) + Vector3.new(0, 5, 0)
     end
@@ -130,7 +137,12 @@ function Utils.safeTeleport(targetObj, fastMode)
         end
 
         if loadedFloor then
-            local exactPos = loadedFloor.Position + Vector3.new(0, (loadedFloor.Size.Y / 2) + 5, 0)
+            local exactPos
+            if breakZone and breakZone:IsA("BasePart") then
+                exactPos = Vector3.new(breakZone.Position.X, loadedFloor.Position.Y + (loadedFloor.Size.Y / 2) + 5, breakZone.Position.Z)
+            else
+                exactPos = loadedFloor.Position + Vector3.new(0, (loadedFloor.Size.Y / 2) + 5, 0)
+            end
             safePosition = exactPos
             pcall(function() root.CFrame = CFrame.new(safePosition) end)
             break
