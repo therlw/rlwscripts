@@ -30,6 +30,7 @@ if not getgenv().Config then
         },
         WebhookEnabled = false,
         WebhookURL = "",
+        WebhookPingValue = "",
         AutoMailbox = false,
     }
 end
