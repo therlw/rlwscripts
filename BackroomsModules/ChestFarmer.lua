@@ -42,7 +42,7 @@ function ChestFarmer.farm(bestRoom, roomUID, bestRoomType)
         end
         
         bigCheckTimer = bigCheckTimer + 1
-        if bigCheckTimer == 3 and not foundBig then
+        if bestRoomType == 2 and bigCheckTimer == 3 and not foundBig then
             Shared.VisitedRooms[roomUID] = true
             local respawnTs = nil
             respawnTs = bestRoom:GetAttribute("RespawnTimestamp")
