@@ -429,6 +429,13 @@ TabSettings:CreateInput({
     Callback = function(Text) getgenv().Config.WebhookURL = Text end
 })
 
+TabSettings:CreateInput({
+    Name = "Webhook Ping Discord ID / Value",
+    PlaceholderText = "Discord User ID or @everyone",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(Text) getgenv().Config.WebhookPingValue = Text end
+})
+
 TabSettings:CreateSection("Server Management")
 
 TabSettings:CreateToggle({
