@@ -57,14 +57,26 @@ local function SendWebhook(title, desc, color, thumbId)
         embed["thumbnail"] = { ["url"] = "https://ps99.biggamesapi.io/image/" .. tostring(thumbId) }
     end
 
+    local payload = {
+        ["username"] = "RLWSCRIPTS Notification",
+        ["embeds"]   = { embed }
+    }
+    
+    local ping = getgenv().Config.WebhookPingValue
+    if ping and tostring(ping) ~= "" then
+        local pingStr = tostring(ping)
+        if pingStr:match("^%d+$") then
+            payload["content"] = "<@" .. pingStr .. ">"
+        else
+            payload["content"] = pingStr
+        end
+    end
+
     requestFn({
         Url     = getgenv().Config.WebhookURL,
         Method  = "POST",
         Headers = { ["Content-Type"] = "application/json" },
-        Body    = HttpService:JSONEncode({
-            ["username"] = "RLWSCRIPTS Notification",
-            ["embeds"]   = { embed }
-        })
+        Body    = HttpService:JSONEncode(payload)
     })
 end
 
