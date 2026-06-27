@@ -733,7 +733,10 @@ function RLW_Library:CreateWindow(options)
         function Tab:CreateDropdown(opts)
             opts = opts or {}
             local options = opts.Options or {}
-            local current = opts.CurrentOption and opts.CurrentOption[1] or (options[1] or "")
+            local isMulti = opts.MultipleOptions or false
+            
+            -- current is a table if multi, string if not
+            local current = isMulti and (type(opts.CurrentOption) == "table" and opts.CurrentOption or {opts.CurrentOption or options[1]}) or (opts.CurrentOption and (type(opts.CurrentOption) == "table" and opts.CurrentOption[1] or opts.CurrentOption) or (options[1] or ""))
             
             local DropdownFrame = Instance.new("Frame", TabPage)
             DropdownFrame.Size = UDim2.new(1, -10, 0, 40)
@@ -756,10 +759,11 @@ function RLW_Library:CreateWindow(options)
             SelectedText.Position = UDim2.new(1, -90, 0, 0)
             SelectedText.Size = UDim2.new(0, 60, 0, 40)
             SelectedText.Font = Enum.Font.Ubuntu
-            SelectedText.Text = current
+            SelectedText.Text = isMulti and table.concat(current, ", ") or tostring(current)
             SelectedText.TextColor3 = Theme.Accent
             SelectedText.TextSize = 13
             SelectedText.TextXAlignment = Enum.TextXAlignment.Right
+            SelectedText.TextTruncate = Enum.TextTruncate.AtEnd
             
             local ArrowLabel = Instance.new("TextLabel", DropdownFrame)
             ArrowLabel.BackgroundTransparency = 1
@@ -796,24 +800,62 @@ function RLW_Library:CreateWindow(options)
             ListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
             
             local isOpen = false
+            local optionBtns = {}
             
             local Element = {}
             if opts.Flag then
                 Window.Flags[opts.Flag] = current
                 Window.Elements[opts.Flag] = Element
             end
+            
+            local function updateVisuals()
+                SelectedText.Text = isMulti and table.concat(current, ", ") or tostring(current)
+                if isMulti then
+                    for opt, btn in pairs(optionBtns) do
+                        if table.find(current, opt) then
+                            tween(btn, {TextColor3 = Theme.Accent}, 0.2)
+                        else
+                            tween(btn, {TextColor3 = Theme.TextDark}, 0.2)
+                        end
+                    end
+                else
+                    for opt, btn in pairs(optionBtns) do
+                        if current == opt then
+                            tween(btn, {TextColor3 = Theme.Accent}, 0.2)
+                        else
+                            tween(btn, {TextColor3 = Theme.TextDark}, 0.2)
+                        end
+                    end
+                end
+            end
 
             function Element:Set(optName)
-                current = tostring(optName)
-                SelectedText.Text = current
+                if isMulti then
+                    if type(optName) == "table" then
+                        current = optName
+                    else
+                        local idx = table.find(current, optName)
+                        if idx then
+                            table.remove(current, idx)
+                        else
+                            table.insert(current, optName)
+                        end
+                    end
+                else
+                    current = tostring(optName)
+                end
+                
+                updateVisuals()
+                
                 if opts.Flag then Window.Flags[opts.Flag] = current; Window:SaveConfiguration() end
-                if opts.Callback then opts.Callback({current}) end
+                if opts.Callback then opts.Callback(isMulti and current or {current}) end
             end
 
             local function refreshList()
                 for _, child in ipairs(ListContainer:GetChildren()) do
                     if child:IsA("TextButton") then child:Destroy() end
                 end
+                table.clear(optionBtns)
                 
                 for _, opt in ipairs(options) do
                     local optBtn = Instance.new("TextButton", ListContainer)
@@ -825,19 +867,37 @@ function RLW_Library:CreateWindow(options)
                     optBtn.TextSize = 13
                     Instance.new("UICorner", optBtn).CornerRadius = UDim.new(0, 4)
                     
-                    optBtn.MouseEnter:Connect(function() tween(optBtn, {BackgroundColor3 = Theme.ElementHover, TextColor3 = Theme.Text}, 0.2) end)
-                    optBtn.MouseLeave:Connect(function() tween(optBtn, {BackgroundColor3 = Theme.SidebarBG, TextColor3 = Theme.TextDark}, 0.2) end)
+                    optionBtns[opt] = optBtn
+                    
+                    optBtn.MouseEnter:Connect(function() 
+                        tween(optBtn, {BackgroundColor3 = Theme.ElementHover}, 0.2)
+                        if isMulti then
+                            if not table.find(current, opt) then tween(optBtn, {TextColor3 = Theme.Text}, 0.2) end
+                        else
+                            if current ~= opt then tween(optBtn, {TextColor3 = Theme.Text}, 0.2) end
+                        end
+                    end)
+                    optBtn.MouseLeave:Connect(function() 
+                        tween(optBtn, {BackgroundColor3 = Theme.SidebarBG}, 0.2)
+                        if isMulti then
+                            if not table.find(current, opt) then tween(optBtn, {TextColor3 = Theme.TextDark}, 0.2) end
+                        else
+                            if current ~= opt then tween(optBtn, {TextColor3 = Theme.TextDark}, 0.2) end
+                        end
+                    end)
                     
                     optBtn.MouseButton1Click:Connect(function()
                         Element:Set(opt)
-                        -- Close dropdown
-                        isOpen = false
-                        Sep.Visible = false
-                        ListContainer.Visible = false
-                        ArrowLabel.Text = "▼"
-                        DropdownFrame.Size = UDim2.new(1, -10, 0, 40)
+                        if not isMulti then
+                            isOpen = false
+                            Sep.Visible = false
+                            ListContainer.Visible = false
+                            ArrowLabel.Text = "▼"
+                            DropdownFrame.Size = UDim2.new(1, -10, 0, 40)
+                        end
                     end)
                 end
+                updateVisuals()
             end
             
             function Element:RefreshOptions(newOptions)
@@ -849,8 +909,12 @@ function RLW_Library:CreateWindow(options)
                 end
                 refreshList()
                 if #options > 0 then
-                    current = tostring(options[1])
-                    SelectedText.Text = current
+                    if isMulti then
+                        current = {tostring(options[1])}
+                    else
+                        current = tostring(options[1])
+                    end
+                    updateVisuals()
                     if opts.Flag then Window.Flags[opts.Flag] = current end
                 end
             end
