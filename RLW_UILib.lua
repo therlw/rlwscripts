@@ -60,6 +60,15 @@ function RLW_Library:CreateWindow(options)
     RLWGui.ResetOnSpawn = false
     RLWGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
+    -- Protect GUI (Anti-Cheat bypass & Hide from screenshot capture on executors)
+    pcall(function()
+        if protect_gui then
+            protect_gui(RLWGui)
+        elseif syn and syn.protect_gui then
+            syn.protect_gui(RLWGui)
+        end
+    end)
+
     if not pcall(function() RLWGui.Parent = CoreGui end) then
         RLWGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
     end
