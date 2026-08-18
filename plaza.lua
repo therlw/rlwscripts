@@ -131,9 +131,15 @@ local function AddSuffix(Amount)
     return (IsNegative and "-" or "")..("%.2f"):format(Amount / b):gsub("%.?0+$", "") .. (SuffixesLower[a] or "")
 end
 local function RemoveSuffix(Amount)
-	local a, Suffix = tostring(Amount):gsub("%a", ""), tostring(Amount):match("%a")	
+	local a, Suffix = Amount:gsub("%a", ""), Amount:match("%a")	
 	local b = table.find(SuffixesUpper, Suffix) or table.find(SuffixesLower, Suffix) or 0
-	return (tonumber(a) or 0) * math.pow(10, b * 3)
+	return tonumber(a) * math.pow(10, b * 3)
+end
+
+local function RemoveSuffix(Amount)
+	local Number, Suffix = Amount:gsub("%a", ""), Amount:match("%a")	
+	local Type = table.find(SuffixesUpper, Suffix) or table.find(SuffixesLower, Suffix) or 0
+	return tonumber(Number) * math.pow(10, Type * 3)
 end
 
 local UI = {}
@@ -271,10 +277,9 @@ local function ConvertNumerals(Roman)
     return Total
 end
 local function AddCommas(Amount)
-    local SuffixAdd = tostring(Amount or "")
+    local SuffixAdd = Amount
     while task.wait() do  
-        local a, b = string.gsub(SuffixAdd, "^(-?%d+)(%d%d%d)", '%1,%2')
-        SuffixAdd = a
+        SuffixAdd, b = string.gsub(SuffixAdd, "^(-?%d+)(%d%d%d)", '%1,%2')
         if (b == 0) then
             break
         end
@@ -291,7 +296,7 @@ Classes.Page = nil
 local ItemList = Classes
 local DirectoryClasses = {}
 for Name, Info in next, Classes do
-    local Continue = false
+    Continue = false
     for _, Class in next, NLibrary.Directory:GetChildren() do
         if tostring(Class):find(Name) then
             Continue = true
@@ -309,9 +314,9 @@ for Name, Info in next, Classes do
         DirectoryClasses[Name] = Name.."s"
     end
 end
-for Class, Info in next, Classes do
-    pcall(function()
-        for Item, Info in next, require(NLibrary.Directory[DirectoryClasses[Class]]) do
+    for Class, Info in next, Classes do
+        pcall(function()
+            for Item, Info in next, require(NLibrary.Directory[DirectoryClasses[Class]]) do
             if Info.DisplayName and type(Info.DisplayName) == "function" then
                 for i = Info.BaseTier, Info.MaxTier do
                     ItemList[Class][Info.DisplayName(i)] = 
@@ -327,12 +332,12 @@ for Class, Info in next, Classes do
             else
                 if Info.Tiers then
                     for i = 1, #Info.Tiers do
-                        local Display, Icon, Rarity, Power = nil, nil, nil, nil
+                        Display, Icon, Rarity, Power = nil
                         if Info.Tiers[i].Effect and Info.Tiers[i].Effect.Type.Tiers[i] then
                             if Info.Tiers[i].Effect.Type.Tiers[i].Name then
                                 Display = Info.Tiers[i].Effect.Type.Tiers[i].Name
                             else
-                                Display = (Info.DisplayName and type(Info.DisplayName) ~= "function" and Info.DisplayName) or (Info.name and type(Info.name) ~= "function" and Info.name) or (Info.Name and type(Info.Name) ~= "function" and Info.Name) or (Info.DisplayName and type(Info.DisplayName) == "function" and Info.DisplayName(i))
+                                Display = (Info.DisplayName and type(Info.Displayname) ~= "function" and Info.DisplayName) or (Info.name and type(Info.name) ~= "function" and Info.name) or (Info.Name and type(Info.Name) ~= "function" and Info.Name) or (Info.DisplayName and type(Info.DisplayName) == "function" and Info.DisplayName(i))
                                 if (not Display:find("%d") or not Display:find("(%u+)$")) and #Info.Tiers > 1 then
                                     Display = Display.." "..ConvertRoman(i)
                                 end
@@ -341,7 +346,7 @@ for Class, Info in next, Classes do
                             Rarity = Info.Tiers[i].Effect.Type.Tiers[i].Rarity
                             Power = Info.Tiers[i].Effect.Type.Tiers[i].Power
                         else
-                            Display = (Info.DisplayName and type(Info.DisplayName) ~= "function" and Info.DisplayName) or (Info.name and type(Info.name) ~= "function" and Info.name) or (Info.Name and type(Info.Name) ~= "function" and Info.Name) or (Info.DisplayName and type(Info.DisplayName) == "function" and Info.DisplayName(i))
+                            Display = (Info.DisplayName and type(Info.Displayname) ~= "function" and Info.DisplayName) or (Info.name and type(Info.name) ~= "function" and Info.name) or (Info.Name and type(Info.Name) ~= "function" and Info.Name) or (Info.DisplayName and type(Info.DisplayName) == "function" and Info.DisplayName(i))
                             if (not Display:find("%d") or not Display:find("(%u+)$")) and #Info.Tiers > 1 then
                                 Display = Display.." "..ConvertRoman(i)
                             end
@@ -358,16 +363,16 @@ for Class, Info in next, Classes do
                     end
                 else
                     if Info.instant_purchase then continue end
-                    local disp = (Info.DisplayName and type(Info.DisplayName) ~= "function" and Info.DisplayName) or (Info.name and type(Info.name) ~= "function" and Info.name) or (Info.Name and type(Info.Name) ~= "function" and Info.Name) or (Info.DisplayName and type(Info.DisplayName) == "function" and Info.DisplayName(1)) or Item
-                    ItemList[Class][disp] =
+                    ItemList[Class][(Info.DisplayName and type(Info.Displayname) ~= "function" and Info.DisplayName) or (Info.name and type(Info.name) ~= "function" and Info.name) or (Info.Name and type(Info.Name) ~= "function" and Info.Name) or (Info.DisplayName and type(Info.DisplayName) == "function" and Info.DisplayName(1))] =
                     {
                         ["ID"] = Item,
-                        ["Display"] = disp,
+                        ["Display"] = (Info.DisplayName and type(Info.Displayname) ~= "function" and Info.DisplayName) or (Info.name and type(Info.name) ~= "function" and Info.name) or (Info.Name and type(Info.Name) ~= "function" and Info.Name) or (Info.DisplayName and type(Info.DisplayName) == "function" and Info.DisplayName(1)),
                         ["Tier"] = Info.Tier,
                         ["Icon"] = Info.Icon or Info.thumbnail,
                         ["Power"] = Info.Power,
                         ["Rarity"] = Info.Rarity,
                     }
+
                 end
             end
         end
@@ -438,9 +443,8 @@ local function GrabIDs(PlaceId)
     }   
     return Save()
 end
-
 local function Serverhop(NotPlaza)
-    repeat task.wait() until (((os.time() - StartingTime) >= (UI["Teleport Delay"] or 3)) or NotPlaza) and #IDs >= 1
+    repeat task.wait() until (((os.time() - StartingTime) >= UI["Teleport Delay"]) or NotPlaza) and #IDs >= 1
     while task.wait() do
         local RandomServer = IDs[Random.new():NextInteger(1, #IDs)]
         if not FileSettings.LastJoinedServers then
@@ -461,7 +465,6 @@ local function Serverhop(NotPlaza)
 		task.wait(1.5)
     end
 end
-
 if not table.find({PS99.Normal, PS99.Pro, PETSGO.Normal, PETSGO.Pro}, game.PlaceId) then
     warn("[RLWSCRIPTS]: Incorrect Server, serverhopping...")
     while task.wait() do
@@ -472,7 +475,6 @@ if not table.find({PS99.Normal, PS99.Pro, PETSGO.Normal, PETSGO.Pro}, game.Place
     end
     return
 end
-
 task.spawn(function()
     if UI["Teleport Delay"] then
         while task.wait(UI["Teleport Delay"] + 120) and UI["Switch Servers"] and FileSettings.Sniper do
@@ -482,6 +484,9 @@ task.spawn(function()
         end
     end
 end)
+
+
+
 
 local function ValidateItem(BoothItem, WantedItem)
     if WantedItem.ID:find("All Huges") then
@@ -548,10 +553,10 @@ local function ValidateItem(BoothItem, WantedItem)
 end
 
 local function GenerateFindInfo(Name, Data)
-    local FindInfo = {}
+    local FindInfo = {Class, Rainbow, Golden, Shiny, Tier, ID, Display, AllTypes}
     FindInfo.ID = Name
     FindInfo.AllTypes = Data and Data.AllTypes and Data.AllTypes or nil
-    FindInfo.AllTiers = Data and Data.AllTiers and Data.AllTiers or nil
+    FindInfo.AllTiers = Data and Data.AllTiers and Datal.AllTiers or nil
     
     if not Name:find("Board") and not Name:find("Gem") then
         local RainbowPosition = Name:find("Rainbow")
@@ -574,16 +579,16 @@ local function GenerateFindInfo(Name, Data)
     FindInfo.Display = Name
     for Class, List in next, ItemList do
         if ItemList[Class][Name] then
-            local ItemData = ItemList[Class][Name]
+            Data = ItemList[Class][Name]
             FindInfo.Class = Class
-            FindInfo.ID = ItemData.ID
-            FindInfo.Icon = ItemData.Icon
+            FindInfo.ID = Data.ID
+            FindInfo.Icon = Data.Icon
             if Class ~= "Pet" and Class ~= "Hoverboard" and Class ~= "Card" and Class ~= "Fruit" then
                 FindInfo.Rainbow = nil
                 FindInfo.Golden = nil
                 FindInfo.Shiny = nil
-                if ItemData.Tier and not FindInfo.Tier then
-                    FindInfo.Tier = ItemData.Tier
+                if Data.Tier and not FindInfo.Tier then
+                    FindInfo.Tier = Data.Tier
                 end
             end
             break
@@ -592,20 +597,17 @@ local function GenerateFindInfo(Name, Data)
     return FindInfo
 end
 
+
 local function CalculatePercent(GlobalRAP, ItemPrice)
-    if not GlobalRAP or GlobalRAP == 0 or not ItemPrice then return 0 end
     local WholeValue = ((ItemPrice - GlobalRAP) / GlobalRAP) * 100
     WholeValue = math.floor(WholeValue * 2 + 0.5) / 2
     return WholeValue < 0 and math.abs(WholeValue) or WholeValue * -1
 end
 
 local function GetDiamonds(ReturnUID)
-    local save = PlayerSave.Get()
-    if save and save["Inventory"] and save["Inventory"].Currency then
-        for i,v in next, save["Inventory"].Currency do
-            if v.id == "Diamonds" then
-                return ReturnUID and i or (v._am or 0)
-            end
+    for i,v in next, PlayerSave.Get()["Inventory"].Currency do
+        if v.id == "Diamonds" then
+            return ReturnUID and i or (v._am or 0)
         end
     end
     return 0
@@ -683,6 +685,24 @@ local function FindItemsInBooth(Name, Class)
     return nil
 end
 
+local function IsSpecialCase(item, keyword)
+    local keywordParts = keyword:split(":")
+    local keywordValue = keywordParts[2] and keywordParts[2]:gsub(" ", "")
+
+    local SpecialCases = {
+        ["All Huges"] = item.IsHuge,
+        ["All Titanics"] = item.IsTitanic,
+        ["All Exclusives"] = item.IsExclusive,
+        ["All Items"] = true,
+        ["All Rarity"] = item.Rarity and item.Rarity:gsub(" ", "") == keywordValue,
+        ["All Class"] = item.Class and item.Class == keywordValue,
+        ["RAP Above"] = item.RAP and tonumber(item.RAP) >= tonumber(RemoveSuffix(keywordValue or "")),
+        ["Difficulty Above"] = item.Difficulty and tonumber(item.Difficulty) >= tonumber(RemoveSuffix(keywordValue or ""))
+    }
+
+    return SpecialCases[keywordParts[1]] or false
+end
+
 local function GetInventoryByClass(class)
     return Library.InventoryCmds.State().container._store._byType[class]
 end
@@ -750,7 +770,7 @@ local function FindItem(Data, ReturnAmount)
             if ItemInfo.Golden then
                 ItemInfo.Display = (ItemInfo.Display ~= "" and ItemInfo.Display .. " " or "") .. "Golden"
             end
-            ItemInfo.Display = (ItemInfo.Display ~= "" and ItemInfo.Display .. " " or "") .. (ItemInfo.ID or "")
+            ItemInfo.Display = (ItemInfo.Display ~= "" and ItemInfo.Display .. " " or "") .. ItemInfo.ID
 
             if ItemInfo.IsLocked or ItemInfo.NotTradeable or BlacklistedUIDs[UID] or not UID then
                 continue
@@ -771,18 +791,18 @@ local function FindItem(Data, ReturnAmount)
     return ReturnAmount and Count or nil
 end
 
+
 local Values = {}
 local function ReturnValue(Pet)
     if Values[Pet] then
         return RemoveSuffix(Values[Pet])
     end
-    local Search
     if table.find({PETSGO.Pro, PETSGO.Normal}, game.PlaceId) then
         Search = game:HttpGet("https://petsgovalues.com/details.php?Name="..Pet:gsub(" ", "+"))
     else
         Search = game:HttpGet("https://petsimulatorvalues.com/details.php?Name="..Pet:gsub(" ", "+"))
     end
-    local Value = Search:split('value</Span><Span class="float-right">')[2]
+    Value = Search:split('value</Span><Span class="float-right">')[2]
     if Value then
         Value = Value:split("</Span>")[1]
         if Value:find("%d") then
@@ -793,6 +813,9 @@ local function ReturnValue(Pet)
     end
     return nil
 end
+
+
+
 
 local function GetMailCost()
     if table.find({PETSGO.Pro, PETSGO.Normal}, game.PlaceId) then
@@ -844,25 +867,18 @@ task.spawn(function()
     end
 end)
 
--- ============================================================================
--- 🛡️ PATCHED NOTIFICATION FUNCTIONS (100% NIL-SAFE)
--- ============================================================================
 local function GlobalNotification(CurrentInfo, FindInfo, Percent)
-    local rarityObj = CurrentInfo.Rarity and Rarities[CurrentInfo.Rarity]
-    local Color = (rarityObj and rarityObj.Color) and tonumber("0x"..rarityObj.Color:ToHex()) or 0x00FF00
-    local itemRap = CurrentInfo.RAP or CurrentInfo.Cost or 0
-    local percentStr = (Percent and tostring(Percent).."% off") or "N/A"
-    local profit = (CurrentInfo.Bought * itemRap) - (CurrentInfo.Bought * CurrentInfo.Cost)
-
+    local Color = tonumber("0x"..Rarities[CurrentInfo.Rarity].Color:ToHex())
     local Description = {
-        "**<:Box:1239350602413375591> Received:** `"..tostring(CurrentInfo.Display or "Item")..(CurrentInfo.Difficulty and " (1/"..AddSuffix(CurrentInfo.Difficulty)..")" or "").." x"..tostring(CurrentInfo.Bought or 1).."`",
-        "**<:Diamond:1235403834969296896> Spent:** `"..AddSuffix((CurrentInfo.Bought or 1)*(CurrentInfo.Cost or 0))..((CurrentInfo.Amount or 1) > 1 and " ("..AddSuffix(CurrentInfo.Cost or 0).." per)`" or "`"),
-        "**<:Money:1295946554338705438> RAP:** `"..(CurrentInfo.RAP and AddSuffix(CurrentInfo.RAP) or "N/A").." ("..percentStr..")`",
-        "**<:Profit:1295945416273301576> Profit:** `"..AddSuffix(profit)..((CurrentInfo.Amount or 1) > 1 and " ("..AddSuffix(itemRap - (CurrentInfo.Cost or 0)).." per)`" or "`")
+        "**<:Box:1239350602413375591> Received:** `"..CurrentInfo.Display..(CurrentInfo.Difficulty and " (1/"..AddSuffix(CurrentInfo.Difficulty)..")" or "").." x"..CurrentInfo.Bought.."`",
+        "**<:Diamond:1235403834969296896> Spent:** `"..AddSuffix(CurrentInfo.Bought*CurrentInfo.Cost)..(CurrentInfo.Amount > 1 and " ("..AddSuffix(CurrentInfo.Cost).." per)`" or "`"),
+        "**<:Money:1295946554338705438> "..("RAP:** `"..AddSuffix(CurrentInfo.RAP).." ("..Percent.."% off)`"),
+        "**<:Profit:1295945416273301576> Profit:** `"..AddSuffix((CurrentInfo.Bought*CurrentInfo.RAP) - (CurrentInfo.Bought*CurrentInfo.Cost))..(CurrentInfo.Amount > 1 and " ("..AddSuffix(CurrentInfo.RAP-CurrentInfo.Cost).." per)`" or "`")
     }
 
     local Message = {
 		["username"] = "RLWSCRIPTS",
+        --["content"] = (tonumber(DiscordUserId) and "» <@"..tostring(DiscordUserId)..">" or ""),
         ["content"] = "",
         ["embeds"] = {
             {
@@ -874,7 +890,7 @@ local function GlobalNotification(CurrentInfo, FindInfo, Percent)
                     ["text"] = "powered by RLWSCRIPTS"
                 },
                 ["thumbnail"] = { 
-                    ["url"] = "https://biggamesapi.io/image/"..(CurrentInfo.Icon and Library.Functions.ParseAssetId(CurrentInfo.Icon) or "")
+                    ["url"] = "https://biggamesapi.io/image/"..Library.Functions.ParseAssetId(CurrentInfo.Icon)
                 },
             },
         },
@@ -882,24 +898,20 @@ local function GlobalNotification(CurrentInfo, FindInfo, Percent)
 end
 
 local function SniperNotification(CurrentInfo, FindInfo, Percent)
-    local rarityObj = CurrentInfo.Rarity and Rarities[CurrentInfo.Rarity]
-    local Color = (rarityObj and rarityObj.Color) and tonumber("0x"..rarityObj.Color:ToHex()) or 0x00FF00
-    local itemRap = CurrentInfo.RAP or CurrentInfo.Cost or 0
-    local percentStr = (Percent and tostring(Percent).."% off") or "N/A"
-    local profit = ((CurrentInfo.Bought or 1) * itemRap) - ((CurrentInfo.Bought or 1) * (CurrentInfo.Cost or 0))
-
+    local Color = tonumber("0x"..Rarities[CurrentInfo.Rarity].Color:ToHex())
     local Description = {
-        "**<:Box:1239350602413375591> Received:** `"..tostring(CurrentInfo.Display or "Item")..(CurrentInfo.Difficulty and " (1/"..AddSuffix(CurrentInfo.Difficulty)..")" or "").." x"..tostring(CurrentInfo.Amount or 1).."`",
-        "**<:Diamond:1235403834969296896> Spent:** `"..AddSuffix((CurrentInfo.Bought or 1)*(CurrentInfo.Cost or 0))..((CurrentInfo.Amount or 1) > 1 and " ("..AddSuffix(CurrentInfo.Cost or 0).." per)`" or "`"),
-        "**<:Money:1295946554338705438> RAP:** `"..(CurrentInfo.RAP and AddSuffix(CurrentInfo.RAP) or "N/A").." ("..percentStr..")`",
+        "**<:Box:1239350602413375591> Received:** `"..CurrentInfo.Display..(CurrentInfo.Difficulty and " (1/"..AddSuffix(CurrentInfo.Difficulty)..")" or "").." x"..CurrentInfo.Amount.."`",
+        "**<:Diamond:1235403834969296896> Spent:** `"..AddSuffix(CurrentInfo.Bought*CurrentInfo.Cost)..(CurrentInfo.Amount > 1 and " ("..AddSuffix(CurrentInfo.Cost).." per)`" or "`"),
+        "**<:Money:1295946554338705438> "..("RAP:** `"..AddSuffix(CurrentInfo.RAP).." ("..Percent.."% off)`"),
         "",
-        "**<:Misc:1236020543082463253> Inventory Count:** `"..AddCommas(FindItem(FindInfo, true) or 0).."`",
+        "**<:Misc:1236020543082463253> Inventory Count:** `"..AddCommas(FindItem(FindInfo, true)).."`",
         "**<:Bank:1295944894698754102> Diamonds Left:** `"..AddSuffix(GetDiamonds()).."`",
-        "**<:Profit:1295945416273301576> Profit Made:** `"..AddSuffix(profit)..((CurrentInfo.Amount or 1) > 1 and " ("..AddSuffix(itemRap - (CurrentInfo.Cost or 0)).." per)`" or "`")
+        "**<:Profit:1295945416273301576> Profit Made:** `"..AddSuffix((CurrentInfo.Bought*CurrentInfo.RAP) - (CurrentInfo.Bought*CurrentInfo.Cost))..(CurrentInfo.Amount > 1 and " ("..AddSuffix(CurrentInfo.RAP-CurrentInfo.Cost).." per)`" or "`")
     }
 
     local Message = {
 		["username"] = "RLWSCRIPTS",
+-- avatar removed
         ["embeds"] = {
             {
                 ["color"] = Color,
@@ -912,29 +924,26 @@ local function SniperNotification(CurrentInfo, FindInfo, Percent)
             },
         },
     }
-    if UI["URL"] and UI["URL"] ~= "" then
-        pcall(function()
-            request({
-                Url = UI["URL"],
-                Method = "POST",
-                Headers = {["Content-Type"] = "application/json"}, 
-                Body = HttpService:JSONEncode(Message)
-            })
-        end)
-    end
+    request({
+		Url = UI["URL"],
+		Method = "POST",
+		Headers = {["Content-Type"] = "application/json"}, 
+		Body = HttpService:JSONEncode(Message)
+	})
 end
 
 local function SellerNotification(CurrentInfo)
     local BoothCount, ItemCount = FindItemsInBooth(CurrentInfo.ID, CurrentInfo.Class)
     local Description = {
-        "**<:Box:1239350602413375591> Sold:** `"..tostring(CurrentInfo.Name).." x"..tostring(CurrentInfo.Amount).."`",
-        "**<:Diamond:1235403834969296896> Gained:** `"..AddSuffix(CurrentInfo.Spent)..((CurrentInfo.Amount or 1) > 1 and " ("..AddSuffix(CurrentInfo.Spent / CurrentInfo.Amount).." per)`" or "`"),
-        "**<:Booth:1239350605294604378> Booth Count:** `"..AddCommas(ItemCount or 0).."`",
+        "**<:Box:1239350602413375591> Sold:** `"..CurrentInfo.Name.." x"..CurrentInfo.Amount.."`",
+        "**<:Diamond:1235403834969296896> Gained:** `"..AddSuffix(CurrentInfo.Spent)..(CurrentInfo.Amount > 1 and " ("..AddSuffix(CurrentInfo.Spent / CurrentInfo.Amount).." per)`" or "`"),
+        "**<:Booth:1239350605294604378> Booth Count:** `"..AddCommas(ItemCount).."`",
         "**<:Bank:1295944894698754102> Current Diamonds:** `"..AddSuffix(GetDiamonds()).."`",
     }
 
     local Message = {
 		["username"] = "RLWSCRIPTS",
+-- avatar removed
         ["embeds"] = {
             {
                 ["color"] = 12035327,
@@ -945,28 +954,24 @@ local function SellerNotification(CurrentInfo)
                     ["text"] = "powered by RLWSCRIPTS"
                 },
                 ["thumbnail"] = { 
-                    ["url"] = "https://biggamesapi.io/image/"..(CurrentInfo.Icon and Library.Functions.ParseAssetId(CurrentInfo.Icon) or "")
+                    ["url"] = "https://biggamesapi.io/image/"..Library.Functions.ParseAssetId(CurrentInfo.Icon)
                 },
             },
         },
     }
-    if UI["URL"] and UI["URL"] ~= "" then
-        pcall(function()
-            request({
-                Url = UI["URL"],
-                Method = "POST",
-                Headers = {["Content-Type"] = "application/json"}, 
-                Body = HttpService:JSONEncode(Message)
-            })
-        end)
-    end
+	local thing = request({
+		Url = UI["URL"],
+		Method = "POST",
+		Headers = {["Content-Type"] = "application/json"}, 
+		Body = HttpService:JSONEncode(Message)
+	})
 end
 
 local TempRAP = {}
 local function ProcessItem(CurrentInfo, Data, Booth)
-    local FindInfo = Data.FindInfo
-    local Percent = nil
-    local Result = nil
+    FindInfo = Data.FindInfo
+    Percent = nil
+    Result = nil
     if CurrentInfo.RAP then
         if not Data.UseCosmicValues and not Data.DetectManipulation then
             Percent = CalculatePercent(CurrentInfo.RAP, CurrentInfo.Cost)
@@ -977,7 +982,7 @@ local function ProcessItem(CurrentInfo, Data, Booth)
                 CurrentInfo.Value = CosmicValue
                 Percent = CalculatePercent(CosmicValue, CurrentInfo.Cost)
             elseif not CosmicValue and CosmicValue ~= "nil" then
-                local ItemValue = ReturnValue(CurrentInfo.Display)
+                ItemValue = ReturnValue(CurrentInfo.Display)
                 if ItemValue then
                     CurrentInfo.Value = ItemValue
                     Percent = CalculatePercent(ItemValue, CurrentInfo.Cost)
@@ -998,7 +1003,6 @@ local function ProcessItem(CurrentInfo, Data, Booth)
                 Result = ManipulatedInfo.Result
                 TempRAP[CurrentInfo.Display] = Result
             else
-                local RAPData = nil
                 pcall(function()
                     RAPData = HttpService:JSONDecode(game:HttpGet("https://ps99rap.com/api/get/rap?id=" .. CurrentInfo.Display:lower():gsub(" ", "%%20"))).data
                 end)
@@ -1016,7 +1020,6 @@ local function ProcessItem(CurrentInfo, Data, Booth)
             Save()
         end
     end
-    local TempPercent
     if Percent and Percent < 0 then 
         TempPercent = math.abs(Percent).."% ABOVE RAP" 
     elseif Percent and Percent > 0 then
@@ -1024,16 +1027,18 @@ local function ProcessItem(CurrentInfo, Data, Booth)
     else
         TempPercent = "N/A%"
     end
-    print("[RLWSCRIPTS]: Found: " .. tostring(CurrentInfo.Display) .. " @ " .. TempPercent .. " (" .. tostring(CurrentInfo.Value or CurrentInfo.Cost) .. ") ".."("..tostring(Result)..")")
+    print("[RLWSCRIPTS]: Found: " .. CurrentInfo.Display .. " @ " .. TempPercent .. " (" .. tostring(CurrentInfo.Value or CurrentInfo.Cost) .. ") ".."("..tostring(Result)..")")
 
     local PriceData = {
         IsPercentage = type(Data.Price) == "string" and Data.Price:find("%%"),
         AboveRAP = type(Data.Price) == "string" and Data.Price:find("+"),
+        --NegativePrice = (type(Data.Price) == "number" and Data.Price < 0) or (type(Data.Price) == "string" and Data.Price:find("^%-")),
     }
     PriceData.RealPrice = tonumber(type(Data.Price) == "string" and (not PriceData.IsPercentage and RemoveSuffix(Data.Price) or Data.Price:gsub("%D", "")) or Data.Price)
 
     local HasEnoughDiamonds = GetDiamonds() >= CurrentInfo.Cost
     local IsValidPrice = false
+
 
     if PriceData.IsPercentage and type(Percent) == "number" then
         IsValidPrice = PriceData.AboveRAP and Percent >= tonumber("-" .. PriceData.RealPrice) or Percent >= PriceData.RealPrice
@@ -1048,19 +1053,17 @@ local function ProcessItem(CurrentInfo, Data, Booth)
         local CanBuyCount = math.floor(GetDiamonds() / CurrentInfo.Cost)
         local TrueBuyCount = math.min(CurrentInfo.Amount, CanBuyCount)
         if Data.InventoryLimit then
-            TrueBuyCount = math.min(TrueBuyCount, Data.InventoryLimit - (FindItem(CurrentInfo, true) or 0))
+            TrueBuyCount = math.min(TrueBuyCount, Data.InventoryLimit - FindItem(CurrentInfo, true))
         end
         if Data.MaxAmount then
             TrueBuyCount = math.min(TrueBuyCount, Data.MaxAmount)
         end
         if TrueBuyCount <= 0 then return end
-        warn("[RLWSCRIPTS]: Sniping: x" .. TrueBuyCount .. " " .. tostring(CurrentInfo.Display) .. ".")
+        warn("[RLWSCRIPTS]: Sniping: x" .. TrueBuyCount .. " " .. CurrentInfo.Display .. ".")
         HumanoidRootPart.CFrame = BoothsInteractive[Booth.BoothID]:WaitForChild("Interact", 7).CFrame * CFrame.new(0,-2, -6)
         task.wait(0.5)
 
-        -- 🛡️ Dynamic Authenticated LuaScanner Caller (PS99 Anticheat Safe)
-        local okScanner, LuaScanner = pcall(function() return require(game:GetService("ReplicatedStorage").Library.Modules.LuaScanner) end)
-        local callerObj = (okScanner and LuaScanner and LuaScanner.Create and LuaScanner.Create(-1)) or {
+        local Thing = {
             ["Caller"] = {
                 ["LineNumber"] = 532,
                 ["ParameterCount"] = 2,
@@ -1075,7 +1078,7 @@ local function ProcessItem(CurrentInfo, Data, Booth)
             }
         }
 
-        local Success = Library.Network.Invoke("Booths_RequestPurchase", Booth.PlayerID, {[CurrentInfo.UID] = TrueBuyCount}, callerObj)
+        local Success, Thing, Thing2, Thing3 = Library.Network.Invoke("Booths_RequestPurchase", Booth.PlayerID, {[CurrentInfo.UID] = TrueBuyCount}, Thing)
         if Success then
             CurrentInfo.Bought = TrueBuyCount
             GlobalNotification(CurrentInfo, FindInfo, Percent)
@@ -1085,7 +1088,6 @@ local function ProcessItem(CurrentInfo, Data, Booth)
         end
     end
 end
-
 local function ProcessBooth(Booth, Data)
     for BoothInfo, InfoValues in next, Booth do
         if BoothInfo ~= "Listings" then continue end
@@ -1123,15 +1125,16 @@ local function ProcessBooth(Booth, Data)
             if CurrentInfo.Tier then
                 CurrentInfo.Display = CurrentInfo.Display.." "..CurrentInfo.Tier
             end
-            for Name, ItemConfig in next, Settings.Sniper.Items do
+            for Name, Data in next, Settings.Sniper.Items do
                 if Name == "SearchTerminal" then continue end
-                local FindInfo = ItemConfig.FindInfo
-                if not FindInfo then
-                    FindInfo = GenerateFindInfo(Name, ItemConfig)
-                    ItemConfig.FindInfo = FindInfo
+                if not Data.FindInfo then
+                    FindInfo = GenerateFindInfo(Name, Data)
+                    Data.FindInfo = FindInfo
+                else
+                    FindInfo = Data.FindInfo
                 end
                 if ValidateItem(CurrentInfo, FindInfo) then
-                    ProcessItem(CurrentInfo, ItemConfig, Booth)
+                    ProcessItem(CurrentInfo, Data, Booth)
                 end
             end
         end
@@ -1140,7 +1143,7 @@ end
 
 local Servers = {}
 local function SearchTerminal(Class, Encoded, SearchQuery)
-    local FoundServer
+    local FoundServer;
     local Data = Encoded
     pcall(function()
         FoundServer = game.ReplicatedStorage.Network.TradingTerminal_Search:InvokeServer(Class, Data, nil, false) or nil
@@ -1150,7 +1153,7 @@ local function SearchTerminal(Class, Encoded, SearchQuery)
         local IsRainbow = SearchQuery.pt and SearchQuery.pt == 2 and "true" or "false"
         local IsShiny = SearchQuery.sh and SearchQuery.sh and "true" or "false"
         local HasTier = SearchQuery.tn and SearchQuery.tn and "true" or "false"
-        return warn("[RLWSCRIPTS]: Incorrect Item Data! Cannot search for item: "..tostring(SearchQuery.id), "| Class: "..tostring(Class).." | IsRainbow: "..IsRainbow.." | IsGolden: "..IsGolden.." | IsShiny: "..IsShiny.." | Tier: "..HasTier)
+        return warn("[RLWSCRIPTS]: Incorrect Item Data! Cannot search for item: "..SearchQuery.id, "| Class: "..Class.." | IsRainbow: "..IsRainbow.." | IsGolden: "..IsGolden.." | IsShiny: "..IsShiny.." | Tier: "..HasTier)
     end
     if type(FoundServer) == "table" and FoundServer["place_id"] and FoundServer["job_id"] then
         if (CanUsePro and table.find({PS99.Pro, PETSGO.Pro}, FoundServer["place_id"])) or (not UI["Only Pro"] and table.find({PS99.Normal, PETSGO.Normal}, FoundServer["place_id"])) then
@@ -1201,6 +1204,7 @@ task.spawn(function()
                     if type(Name) ~= "string" then continue end
                     local FindInfo = GenerateFindInfo(Name, Data)
                     if not FindInfo.Class then continue end
+                    --local SearchQuery = HttpService:JSONEncode({id = FindInfo.ID, pt = FindInfo.Golden and 1 or FindInfo.Rainbow and 2, sh = FindInfo.Shiny, tn = FindInfo.Tier})
 
                     local searchTable = {
                         id = FindInfo.ID,
@@ -1265,7 +1269,7 @@ task.spawn(function()
             if not FindInfo.Class then continue end
             if Data.InventoryLimit then
                 LimitCounts = LimitCounts + 1
-                if (FindItem(FindInfo, true) or 0) >= tonumber(Data.InventoryLimit) then
+                if FindItem(FindInfo, true) >= tonumber(Data.InventoryLimit) then
                     ReachedLimits = ReachedLimits + 1
                 end
             end
@@ -1273,11 +1277,10 @@ task.spawn(function()
         task.wait(1)
     end
 end)
-
 while task.wait() and Settings.Sniper and Settings.Sniper.Active and FileSettings.Sniper do
     for _, Users in next, Booths do
         for Username, Booth in next, Users do
-            local CanContinue = false
+            CanContinue = false
             pcall(function()
                 if Booth.Player and Booth.Player:IsInGroup(5060810) then 
                     CanContinue = true
@@ -1288,7 +1291,7 @@ while task.wait() and Settings.Sniper and Settings.Sniper.Active and FileSetting
         end
     end
     if UI["Switch Servers"] then
-        repeat task.wait() until (os.time() - StartingTime) >= (UI["Teleport Delay"] or 3)
+        repeat task.wait() until (os.time() - StartingTime) >= UI["Teleport Delay"]
         if #Servers >= 1 then
             local RandomPlace = Servers[math.random(1, #Servers)]
             if not FileSettings.Servers then
@@ -1315,6 +1318,52 @@ while task.wait() and Settings.Sniper and Settings.Sniper.Active and FileSetting
     end
     task.wait(1)
 end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 local LastUIDDs = {}
 if Settings.Seller and Settings.Seller.Active and FileSettings.Seller then
@@ -1386,6 +1435,7 @@ if Settings.Seller and Settings.Seller.Active and FileSettings.Seller then
     warn("[RLWSCRIPTS]: Booth was claimed, listing items...")   
 
     Library.Network.Fired("Booths: Add History"):Connect(function(Info)
+    --ReplicatedStorage.Network["Booths: Add History"].OnClientEvent:Connect(function(Info)
         local ItemCost = 0
         for Class, ClassTable in next, Info["Received"] do
             for UID, Items in ClassTable do
@@ -1396,7 +1446,7 @@ if Settings.Seller and Settings.Seller.Active and FileSettings.Seller then
         end
         for Class, ClassTable in next, Info["Given"] do
             for UID, Items in ClassTable do
-                warn("[RLWSCRIPTS]: "..(Items.id or "Item").." ("..tostring(UID)..") was sold!")
+                warn("[RLWSCRIPTS]: "..Items.id.." ("..UID..") was sold!")
                 if UI["URL"] and not table.find(LastUIDDs, UID) then
                     table.insert(LastUIDDs, UID)
 
@@ -1418,6 +1468,7 @@ if Settings.Seller and Settings.Seller.Active and FileSettings.Seller then
             end
         end
     end)
+
     
     local function ProcessItem(Name, Data)
         local FindInfo = GenerateFindInfo(Name, Data)
@@ -1428,7 +1479,10 @@ if Settings.Seller and Settings.Seller.Active and FileSettings.Seller then
             if UsedSlots >= MaxSlots then break end
 
             local UID, ItemData = FindItem(FindInfo)
-            local Amount = ItemData and ItemData.Amount or 1
+            Amount = ItemData and ItemData.Amount or 1
+            --[[if ItemData.IsExclusive and ItemData.Amount == 1 then
+                ItemData.Amount = FindItem(FindInfo, true)
+            end]]--
             if not UID then
                 break
             end
@@ -1449,21 +1503,21 @@ if Settings.Seller and Settings.Seller.Active and FileSettings.Seller then
                 if ItemData.Color then NewItem:SetColorVariant(ItemData.Color) end
                 if ItemData.Tier then NewItem:SetTier(ItemData.Tier) end
     
-                local RAP = (table.find({PS99.Normal, PS99.Pro}, game.PlaceId) and NewItem.GetDevRAP and NewItem:GetDevRAP()) or NewItem.GetRAP and NewItem:GetRAP()
+                RAP = (table.find({PS99.Normal, PS99.Pro}, game.PlaceId) and NewItem.GetDevRAP and NewItem:GetDevRAP()) or NewItem.GetRAP and NewItem:GetRAP()
                 if not RAP then 
                     table.insert(BlacklistedUIDs, UID)
                     continue
                 end
 
+
                 if Data and Data.DetectManipulation then
-                    local Result
+                    local Result;
                     local ManipulationData = FileSettings.DetectManipulation or {Time = os.time()}
                     local ManipulatedInfo = ManipulationData[ItemData.Display]
                     if ManipulatedInfo and ManipulatedInfo.RAP == RAP then
                         Result = ManipulatedInfo.Result
                         TempRAP[ItemData.Display] = Result
                     else
-                        local RAPData = nil
                         pcall(function()
                             RAPData = HttpService:JSONDecode(game:HttpGet("https://ps99rap.com/api/get/rap?id=" .. ItemData.Display:lower():gsub(" ", "%%20"))).data
                         end)
@@ -1484,6 +1538,8 @@ if Settings.Seller and Settings.Seller.Active and FileSettings.Seller then
                         continue
                     end                
                 end
+
+
 
                 if PriceData.NegativePrice then
                     PriceData.RealPrice = RAP + PriceData.RealPrice
@@ -1511,10 +1567,10 @@ if Settings.Seller and Settings.Seller.Active and FileSettings.Seller then
                 return
             end
             if PriceData.RealPrice <= 0 or not PriceData.RealPrice then
-                return print("[RLWSCRIPTS]: ERROR LISTING ITEM: ".. tostring(ItemData.ID), "("..tostring(ItemData.Class)..") for price: "..tostring(PriceData.RealPrice))
+                return print("[RLWSCRIPTS]: ERROR LISTING ITEM: ".. ItemData.ID, "("..ItemData.Class..") for price: "..tostring(PriceData.RealPrice))
             end
             local MaxAmount = table.find({PS99.Normal, PS99.Pro}, game.PlaceId) and 50000 or 5000
-            print("Attempting to list: ".. tostring(ItemData.ID), "("..tostring(ItemData.Class)..") for price: "..tostring(PriceData.RealPrice))
+            print("Attempting to list: ".. ItemData.ID, "("..ItemData.Class..") for price: "..tostring(PriceData.RealPrice))
             task.wait(math.random(3,9))
             local yessir = 0
             if ItemSlots and ItemSlots >= 1 and Amount ~= 1 then
