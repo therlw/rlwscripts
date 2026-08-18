@@ -427,7 +427,7 @@ local function GrabIDs(PlaceId)
     end
     if Site.data then
         for _,Server in next, Site.data do
-            if Server.maxPlayers > Server.playing and Server.id ~= game.JobId and Server.playing >= (FileSettings.Sniper and 5 or 15) then
+            if Server.maxPlayers > Server.playing and Server.id ~= game.JobId and Server.playing >= 20 then
                 table.insert(IDs, {PlaceID = PlaceId or game.PlaceId, JobID = Server.id})
             end
         end
@@ -477,8 +477,8 @@ if not table.find({PS99.Normal, PS99.Pro, PETSGO.Normal, PETSGO.Pro}, game.Place
 end
 task.spawn(function()
     if UI["Teleport Delay"] then
-        while task.wait(UI["Teleport Delay"] + 120) and UI["Switch Servers"] and FileSettings.Sniper do
-            warn("[RLWSCRIPTS]: +120s delay override, serverhopping...")
+        while task.wait(UI["Teleport Delay"] + 15) and UI["Switch Servers"] and FileSettings.Sniper do
+            warn("[RLWSCRIPTS]: +15s delay override, serverhopping...")
             GrabIDs()
             Serverhop()
         end
@@ -703,6 +703,111 @@ local function IsSpecialCase(item, keyword)
     return SpecialCases[keywordParts[1]] or false
 end
 
+local Values = {}
+local function ReturnValue(Pet)
+    if Values[Pet] then
+        return RemoveSuffix(Values[Pet])
+    end
+    local Search
+    if table.find({PETSGO.Pro, PETSGO.Normal}, game.PlaceId) then
+        Search = game:HttpGet("https://petsgovalues.com/details.php?Name="..Pet:gsub(" ", "+"))
+    else
+        Search = game:HttpGet("https://petsimulatorvalues.com/details.php?Name="..Pet:gsub(" ", "+"))
+    end
+    local Value = Search and Search:split('value</Span><Span class="float-right">')[2]
+    if Value then
+        Value = Value:split("</Span>")[1]
+        if Value:find("%d") then
+            Value = RemoveSuffix(Value)
+            Values[Pet] = Value
+            return Value
+        end 
+    end
+    return nil
+end
+
+local function GetItemRAP(item, itemData, className)
+    if not item and itemData and className then
+        pcall(function()
+            if Types and Types.From then
+                item = Types.From(className, itemData)
+            end
+        end)
+    end
+    if not item then return nil end
+
+    -- 1. Game client standard RAP (Item:GetRAP() -> RAPCmds.Get(item))
+    local s1, rap = pcall(function()
+        return item.GetRAP and item:GetRAP()
+    end)
+    if s1 and type(rap) == "number" and rap > 0 then
+        return rap
+    end
+
+    -- 2. Cosmic Values for Pets (built-in CosmicCmds client module)
+    local isPet = false
+    pcall(function()
+        isPet = (item.IsA and item:IsA("Pet")) or (item.Class and item.Class.Name == "Pet")
+    end)
+    if isPet then
+        local s_cosmic, cosmicVal = pcall(function()
+            local CosmicCmds = NLibrary and NLibrary.Client and NLibrary.Client:FindFirstChild("CosmicCmds") and require(NLibrary.Client.CosmicCmds)
+            if CosmicCmds and CosmicCmds.Get then
+                local v = CosmicCmds.Get(item)
+                if type(v) == "number" and v > 0 then return v end
+            end
+        end)
+        if s_cosmic and type(cosmicVal) == "number" and cosmicVal > 0 then
+            return cosmicVal
+        end
+    end
+
+    -- 3. Default RAP / Estimated Value (DropTable ComputeEstValue for Gifts, Lootboxes, etc.)
+    local s2, defRap = pcall(function()
+        return item.GetDefaultRAP and item:GetDefaultRAP()
+    end)
+    if s2 and type(defRap) == "number" and defRap > 0 then
+        return math.floor(defRap)
+    end
+
+    -- 4. Key crafting combinations (e.g. Fiesta Boss Key -> Upper + Lower Half)
+    local itemId = nil
+    pcall(function()
+        itemId = item.GetId and item:GetId() or (item._data and item._data.id)
+    end)
+    if itemId and not itemId:find("Half") then
+        local s_comb, combVal = pcall(function()
+            local upper = Types.From("Misc", {id = itemId .. " Upper Half"})
+            local lower = Types.From("Misc", {id = itemId .. " Lower Half"})
+            local uRap = upper and upper.GetRAP and upper:GetRAP()
+            local lRap = lower and lower.GetRAP and lower:GetRAP()
+            if uRap and lRap and uRap > 0 and lRap > 0 then
+                return uRap + lRap
+            end
+            return nil
+        end)
+        if s_comb and type(combVal) == "number" and combVal > 0 then
+            return combVal
+        end
+    end
+
+    -- 5. Fallback to ReturnValue / Web Value if available
+    local displayName = nil
+    pcall(function()
+        displayName = (item.GetName and item:GetName()) or (item.GetDisplayName and item:GetDisplayName()) or itemId
+    end)
+    if displayName then
+        local s_val, extVal = pcall(function()
+            return ReturnValue(displayName)
+        end)
+        if s_val and type(extVal) == "number" and extVal > 0 then
+            return extVal
+        end
+    end
+
+    return nil
+end
+
 local function GetInventoryByClass(class)
     return Library.InventoryCmds.State().container._store._byType[class]
 end
@@ -759,6 +864,7 @@ local function FindItem(Data, ReturnAmount)
                 Difficulty = ItemTable.GetDifficulty and ItemTable:GetDifficulty(),
                 Rarity = ItemTable.GetRarity and ItemTable:GetRarity()._id,
                 Display = "",
+                RAP = GetItemRAP(ItemTable, ItemTable._data, ItemTable.GetClass and ItemTable:GetClass() or ItemTable.Class and ItemTable.Class.Name or Data.Class or "Pet"),
             }
 
             if ItemInfo.Shiny then
@@ -790,32 +896,6 @@ local function FindItem(Data, ReturnAmount)
     end
     return ReturnAmount and Count or nil
 end
-
-
-local Values = {}
-local function ReturnValue(Pet)
-    if Values[Pet] then
-        return RemoveSuffix(Values[Pet])
-    end
-    if table.find({PETSGO.Pro, PETSGO.Normal}, game.PlaceId) then
-        Search = game:HttpGet("https://petsgovalues.com/details.php?Name="..Pet:gsub(" ", "+"))
-    else
-        Search = game:HttpGet("https://petsimulatorvalues.com/details.php?Name="..Pet:gsub(" ", "+"))
-    end
-    Value = Search:split('value</Span><Span class="float-right">')[2]
-    if Value then
-        Value = Value:split("</Span>")[1]
-        if Value:find("%d") then
-            Value = RemoveSuffix(Value)
-            Values[Pet] = Value
-            return Value
-        end 
-    end
-    return nil
-end
-
-
-
 
 local function GetMailCost()
     if table.find({PETSGO.Pro, PETSGO.Normal}, game.PlaceId) then
@@ -868,68 +948,74 @@ task.spawn(function()
 end)
 
 local function GlobalNotification(CurrentInfo, FindInfo, Percent)
-    local Color = tonumber("0x"..Rarities[CurrentInfo.Rarity].Color:ToHex())
-    local Description = {
-        "**<:Box:1239350602413375591> Received:** `"..CurrentInfo.Display..(CurrentInfo.Difficulty and " (1/"..AddSuffix(CurrentInfo.Difficulty)..")" or "").." x"..CurrentInfo.Bought.."`",
-        "**<:Diamond:1235403834969296896> Spent:** `"..AddSuffix(CurrentInfo.Bought*CurrentInfo.Cost)..(CurrentInfo.Amount > 1 and " ("..AddSuffix(CurrentInfo.Cost).." per)`" or "`"),
-        "**<:Money:1295946554338705438> "..("RAP:** `"..AddSuffix(CurrentInfo.RAP).." ("..Percent.."% off)`"),
-        "**<:Profit:1295945416273301576> Profit:** `"..AddSuffix((CurrentInfo.Bought*CurrentInfo.RAP) - (CurrentInfo.Bought*CurrentInfo.Cost))..(CurrentInfo.Amount > 1 and " ("..AddSuffix(CurrentInfo.RAP-CurrentInfo.Cost).." per)`" or "`")
-    }
+    pcall(function()
+        local Color = tonumber("0x"..((Rarities[CurrentInfo.Rarity] and Rarities[CurrentInfo.Rarity].Color:ToHex()) or "ffffff"))
+        local Description = {
+            "**<:Box:1239350602413375591> Received:** `"..tostring(CurrentInfo.Display)..(CurrentInfo.Difficulty and " (1/"..AddSuffix(CurrentInfo.Difficulty)..")" or "").." x"..tostring(CurrentInfo.Bought).."`",
+            "**<:Diamond:1235403834969296896> Spent:** `"..AddSuffix(CurrentInfo.Bought*CurrentInfo.Cost)..(CurrentInfo.Amount > 1 and " ("..AddSuffix(CurrentInfo.Cost).." per)`" or "`"),
+            "**<:Money:1295946554338705438> "..("RAP:** `"..AddSuffix(CurrentInfo.RAP).." ("..tostring(Percent).."% off)`"),
+            "**<:Profit:1295945416273301576> Profit:** `"..AddSuffix((CurrentInfo.Bought*(CurrentInfo.RAP or CurrentInfo.Cost)) - (CurrentInfo.Bought*CurrentInfo.Cost))..(CurrentInfo.Amount > 1 and " ("..AddSuffix((CurrentInfo.RAP or CurrentInfo.Cost)-CurrentInfo.Cost).." per)`" or "`")
+        }
 
-    local Message = {
-		["username"] = "RLWSCRIPTS",
-        --["content"] = (tonumber(DiscordUserId) and "» <@"..tostring(DiscordUserId)..">" or ""),
-        ["content"] = "",
-        ["embeds"] = {
-            {
-                ["color"] = Color,
-                ["title"] = (table.find({PS99.Normal, PS99.Pro}, game.PlaceId) and "(PS99)" or "(PETS GO)").." User has sniped an item!",
-                ["description"] = table.concat(Description, "\n"),
-                ["timestamp"] = DateTime.now():ToIsoDate(),
-                ["footer"] = {
-                    ["text"] = "powered by RLWSCRIPTS"
-                },
-                ["thumbnail"] = { 
-                    ["url"] = "https://biggamesapi.io/image/"..Library.Functions.ParseAssetId(CurrentInfo.Icon)
+        local Message = {
+            ["username"] = "RLWSCRIPTS",
+            ["content"] = "",
+            ["embeds"] = {
+                {
+                    ["color"] = Color,
+                    ["title"] = (table.find({PS99.Normal, PS99.Pro}, game.PlaceId) and "(PS99)" or "(PETS GO)").." User has sniped an item!",
+                    ["description"] = table.concat(Description, "\n"),
+                    ["timestamp"] = DateTime.now():ToIsoDate(),
+                    ["footer"] = {
+                        ["text"] = "powered by RLWSCRIPTS"
+                    },
+                    ["thumbnail"] = { 
+                        ["url"] = "https://biggamesapi.io/image/"..Library.Functions.ParseAssetId(CurrentInfo.Icon)
+                    },
                 },
             },
-        },
-    }
+        }
+    end)
 end
 
 local function SniperNotification(CurrentInfo, FindInfo, Percent)
-    local Color = tonumber("0x"..Rarities[CurrentInfo.Rarity].Color:ToHex())
-    local Description = {
-        "**<:Box:1239350602413375591> Received:** `"..CurrentInfo.Display..(CurrentInfo.Difficulty and " (1/"..AddSuffix(CurrentInfo.Difficulty)..")" or "").." x"..CurrentInfo.Amount.."`",
-        "**<:Diamond:1235403834969296896> Spent:** `"..AddSuffix(CurrentInfo.Bought*CurrentInfo.Cost)..(CurrentInfo.Amount > 1 and " ("..AddSuffix(CurrentInfo.Cost).." per)`" or "`"),
-        "**<:Money:1295946554338705438> "..("RAP:** `"..AddSuffix(CurrentInfo.RAP).." ("..Percent.."% off)`"),
-        "",
-        "**<:Misc:1236020543082463253> Inventory Count:** `"..AddCommas(FindItem(FindInfo, true)).."`",
-        "**<:Bank:1295944894698754102> Diamonds Left:** `"..AddSuffix(GetDiamonds()).."`",
-        "**<:Profit:1295945416273301576> Profit Made:** `"..AddSuffix((CurrentInfo.Bought*CurrentInfo.RAP) - (CurrentInfo.Bought*CurrentInfo.Cost))..(CurrentInfo.Amount > 1 and " ("..AddSuffix(CurrentInfo.RAP-CurrentInfo.Cost).." per)`" or "`")
-    }
+    pcall(function()
+        local Color = tonumber("0x"..((Rarities[CurrentInfo.Rarity] and Rarities[CurrentInfo.Rarity].Color:ToHex()) or "ffffff"))
+        local invCount = 0
+        pcall(function() invCount = FindItem(FindInfo, true) or 0 end)
+        local Description = {
+            "**<:Box:1239350602413375591> Received:** `"..tostring(CurrentInfo.Display)..(CurrentInfo.Difficulty and " (1/"..AddSuffix(CurrentInfo.Difficulty)..")" or "").." x"..tostring(CurrentInfo.Amount).."`",
+            "**<:Diamond:1235403834969296896> Spent:** `"..AddSuffix(CurrentInfo.Bought*CurrentInfo.Cost)..(CurrentInfo.Amount > 1 and " ("..AddSuffix(CurrentInfo.Cost).." per)`" or "`"),
+            "**<:Money:1295946554338705438> "..("RAP:** `"..AddSuffix(CurrentInfo.RAP).." ("..tostring(Percent).."% off)`"),
+            "",
+            "**<:Misc:1236020543082463253> Inventory Count:** `"..AddCommas(invCount).."`",
+            "**<:Bank:1295944894698754102> Diamonds Left:** `"..AddSuffix(GetDiamonds()).."`",
+            "**<:Profit:1295945416273301576> Profit Made:** `"..AddSuffix((CurrentInfo.Bought*(CurrentInfo.RAP or CurrentInfo.Cost)) - (CurrentInfo.Bought*CurrentInfo.Cost))..(CurrentInfo.Amount > 1 and " ("..AddSuffix((CurrentInfo.RAP or CurrentInfo.Cost)-CurrentInfo.Cost).." per)`" or "`")
+        }
 
-    local Message = {
-		["username"] = "RLWSCRIPTS",
--- avatar removed
-        ["embeds"] = {
-            {
-                ["color"] = Color,
-                ["title"] = "||"..LocalPlayer.Name.."|| has sniped an item!",
-                ["description"] = table.concat(Description, "\n"),
-                ["timestamp"] = DateTime.now():ToIsoDate(),
-                ["footer"] = {
-                    ["text"] = "powered by RLWSCRIPTS"
+        local Message = {
+            ["username"] = "RLWSCRIPTS",
+            ["embeds"] = {
+                {
+                    ["color"] = Color,
+                    ["title"] = "||"..LocalPlayer.Name.."|| has sniped an item!",
+                    ["description"] = table.concat(Description, "\n"),
+                    ["timestamp"] = DateTime.now():ToIsoDate(),
+                    ["footer"] = {
+                        ["text"] = "powered by RLWSCRIPTS"
+                    },
                 },
             },
-        },
-    }
-    request({
-		Url = UI["URL"],
-		Method = "POST",
-		Headers = {["Content-Type"] = "application/json"}, 
-		Body = HttpService:JSONEncode(Message)
-	})
+        }
+        if UI["URL"] and UI["URL"] ~= "" then
+            request({
+                Url = UI["URL"],
+                Method = "POST",
+                Headers = {["Content-Type"] = "application/json"}, 
+                Body = HttpService:JSONEncode(Message)
+            })
+        end
+    end)
 end
 
 local function SellerNotification(CurrentInfo)
@@ -969,20 +1055,21 @@ end
 
 local TempRAP = {}
 local function ProcessItem(CurrentInfo, Data, Booth)
-    FindInfo = Data.FindInfo
-    Percent = nil
-    Result = nil
+    local FindInfo = Data.FindInfo
+    local Percent = nil
+    local Result = nil
+    if CurrentInfo.RAP and CurrentInfo.Cost and CurrentInfo.RAP > 0 then
+        Percent = CalculatePercent(CurrentInfo.RAP, CurrentInfo.Cost)
+    end
     if CurrentInfo.RAP then
-        if not Data.UseCosmicValues and not Data.DetectManipulation then
-            Percent = CalculatePercent(CurrentInfo.RAP, CurrentInfo.Cost)
-        elseif Data.UseCosmicValues then
+        if Data.UseCosmicValues then
             local CosmicValues = FileSettings.UseCosmicValues or {Time = os.time()}
             local CosmicValue = CosmicValues[CurrentInfo.Display]
             if CosmicValue and CosmicValue ~= "nil" then
                 CurrentInfo.Value = CosmicValue
                 Percent = CalculatePercent(CosmicValue, CurrentInfo.Cost)
             elseif not CosmicValue and CosmicValue ~= "nil" then
-                ItemValue = ReturnValue(CurrentInfo.Display)
+                local ItemValue = ReturnValue(CurrentInfo.Display)
                 if ItemValue then
                     CurrentInfo.Value = ItemValue
                     Percent = CalculatePercent(ItemValue, CurrentInfo.Cost)
@@ -1003,6 +1090,7 @@ local function ProcessItem(CurrentInfo, Data, Booth)
                 Result = ManipulatedInfo.Result
                 TempRAP[CurrentInfo.Display] = Result
             else
+                local RAPData
                 pcall(function()
                     RAPData = HttpService:JSONDecode(game:HttpGet("https://ps99rap.com/api/get/rap?id=" .. CurrentInfo.Display:lower():gsub(" ", "%%20"))).data
                 end)
@@ -1016,18 +1104,17 @@ local function ProcessItem(CurrentInfo, Data, Booth)
                 ManipulationData.Time = os.time()
             end
             FileSettings.DetectManipulation = ManipulationData
-            Percent = (Result and Result ~= "Manipulated") and CalculatePercent(CurrentInfo.RAP, CurrentInfo.Cost) or nil
+            Percent = (Result and Result ~= "Manipulated") and CalculatePercent(CurrentInfo.RAP, CurrentInfo.Cost) or Percent
             Save()
         end
     end
+    local TempPercent = "N/A%"
     if Percent and Percent < 0 then 
         TempPercent = math.abs(Percent).."% ABOVE RAP" 
     elseif Percent and Percent > 0 then
         TempPercent = Percent.."% BELOW RAP" 
-    else
-        TempPercent = "N/A%"
     end
-    print("[RLWSCRIPTS]: Found: " .. CurrentInfo.Display .. " @ " .. TempPercent .. " (" .. tostring(CurrentInfo.Value or CurrentInfo.Cost) .. ") ".."("..tostring(Result)..")")
+    print("[RLWSCRIPTS]: Found: " .. CurrentInfo.Display .. " @ " .. TempPercent .. " (" .. tostring(CurrentInfo.Value or CurrentInfo.Cost) .. ") "..(Result and "("..tostring(Result)..")" or (CurrentInfo.RAP and "(RAP: " .. AddSuffix(CurrentInfo.RAP) .. ")" or "(nil)")))
 
     local PriceData = {
         IsPercentage = type(Data.Price) == "string" and Data.Price:find("%%"),
@@ -1046,19 +1133,22 @@ local function ProcessItem(CurrentInfo, Data, Booth)
         IsValidPrice = PriceData.RealPrice and PriceData.RealPrice - CurrentInfo.Cost >= 0
     end
     if Result == "Manipulated" then
-        return
+        return false
     end
 
     if HasEnoughDiamonds and IsValidPrice and (not Data.MaxPrice or Data.MaxPrice >= CurrentInfo.Cost) then
         local CanBuyCount = math.floor(GetDiamonds() / CurrentInfo.Cost)
         local TrueBuyCount = math.min(CurrentInfo.Amount, CanBuyCount)
         if Data.InventoryLimit then
-            TrueBuyCount = math.min(TrueBuyCount, Data.InventoryLimit - FindItem(CurrentInfo, true))
+            local currentInv = FindItem(CurrentInfo, true) or 0
+            local spaceLeft = tonumber(Data.InventoryLimit) - currentInv
+            if spaceLeft <= 0 then return false end
+            TrueBuyCount = math.min(TrueBuyCount, spaceLeft)
         end
         if Data.MaxAmount then
             TrueBuyCount = math.min(TrueBuyCount, Data.MaxAmount)
         end
-        if TrueBuyCount <= 0 then return end
+        if TrueBuyCount <= 0 then return false end
         warn("[RLWSCRIPTS]: Sniping: x" .. TrueBuyCount .. " " .. CurrentInfo.Display .. ".")
         HumanoidRootPart.CFrame = BoothsInteractive[Booth.BoothID]:WaitForChild("Interact", 7).CFrame * CFrame.new(0,-2, -6)
         task.wait(0.5)
@@ -1085,60 +1175,83 @@ local function ProcessItem(CurrentInfo, Data, Booth)
             if UI["URL"] then
                 SniperNotification(CurrentInfo, FindInfo, Percent)
             end
+            return true
         end
     end
+    return false
 end
 local function ProcessBooth(Booth, Data)
-    for BoothInfo, InfoValues in next, Booth do
-        if BoothInfo ~= "Listings" then continue end
-        for ItemUID, ItemInfo in next, InfoValues do
-            local ItemData = ItemInfo.Item._data
-            local CurrentInfo = {
-                UID = ItemUID,
-                ID = ItemData.id,
-                Display = ItemData.id,
-                Class = ItemInfo.Item.Class.Name,
-                Rainbow = ItemInfo.Item.IsRainbow and ItemInfo.Item:IsRainbow(),
-                Golden = ItemInfo.Item.IsGolden and ItemInfo.Item:IsGolden(),
-                Shiny = ItemInfo.Item.IsShiny and ItemInfo.Item:IsShiny(),
-                
-                Amount = ItemData["_am"] or 1,
-                Tier = ItemData["tn"],
-                Cost = ItemInfo.DiamondCost,
-                RAP = (table.find({PS99.Normal, PS99.Pro}, game.PlaceId) and ItemInfo.Item.GetDevRAP and ItemInfo.Item:GetDevRAP()) or ItemInfo.Item.GetRAP and ItemInfo.Item:GetRAP(), 
-                
-                IsHuge = ItemInfo.Item.IsHuge and ItemInfo.Item:IsHuge() or false,
-                IsTitanic = ItemInfo.Item.IsTitanic and ItemInfo.Item:IsTitanic() or false,
-                IsExclusive = ItemInfo.Item.GetRarity and ItemInfo.Item:GetRarity()._id == "Exclusive",
-                
-                Icon = ItemInfo.Item.GetIcon and ItemInfo.Item:GetIcon(),
-                Rarity = ItemInfo.Item.GetRarity and ItemInfo.Item:GetRarity()._id,
-            }
-            if CurrentInfo.Rainbow then
-                CurrentInfo.Display = "Rainbow "..CurrentInfo.Display
-            elseif CurrentInfo.Golden then
-                CurrentInfo.Display = "Golden "..CurrentInfo.Display
-            end
-            if CurrentInfo.Shiny then
-                CurrentInfo.Display = "Shiny "..CurrentInfo.Display
-            end
-            if CurrentInfo.Tier then
-                CurrentInfo.Display = CurrentInfo.Display.." "..CurrentInfo.Tier
-            end
-            for Name, Data in next, Settings.Sniper.Items do
-                if Name == "SearchTerminal" then continue end
-                if not Data.FindInfo then
-                    FindInfo = GenerateFindInfo(Name, Data)
-                    Data.FindInfo = FindInfo
-                else
-                    FindInfo = Data.FindInfo
+    local boughtAny = false
+    local maxPasses = 10
+    local pass = 0
+
+    while pass < maxPasses do
+        local boughtInPass = false
+        for BoothInfo, InfoValues in next, Booth do
+            if BoothInfo ~= "Listings" then continue end
+            for ItemUID, ItemInfo in next, InfoValues do
+                local ItemData = ItemInfo.Item and ItemInfo.Item._data
+                if not ItemData then continue end
+                local CurrentInfo = {
+                    UID = ItemUID,
+                    ID = ItemData.id,
+                    Display = ItemData.id,
+                    Class = ItemInfo.Item.Class and ItemInfo.Item.Class.Name or "Pet",
+                    Rainbow = ItemInfo.Item.IsRainbow and ItemInfo.Item:IsRainbow(),
+                    Golden = ItemInfo.Item.IsGolden and ItemInfo.Item:IsGolden(),
+                    Shiny = ItemInfo.Item.IsShiny and ItemInfo.Item:IsShiny(),
+                    
+                    Amount = ItemData["_am"] or 1,
+                    Tier = ItemData["tn"],
+                    Cost = ItemInfo.DiamondCost,
+                    RAP = GetItemRAP(ItemInfo.Item, ItemData, ItemInfo.Item.Class and ItemInfo.Item.Class.Name or "Pet"), 
+                    
+                    IsHuge = ItemInfo.Item.IsHuge and ItemInfo.Item:IsHuge() or false,
+                    IsTitanic = ItemInfo.Item.IsTitanic and ItemInfo.Item:IsTitanic() or false,
+                    IsExclusive = ItemInfo.Item.GetRarity and ItemInfo.Item:GetRarity()._id == "Exclusive",
+                    
+                    Icon = ItemInfo.Item.GetIcon and ItemInfo.Item:GetIcon(),
+                    Rarity = ItemInfo.Item.GetRarity and ItemInfo.Item:GetRarity()._id,
+                }
+                if CurrentInfo.Rainbow then
+                    CurrentInfo.Display = "Rainbow "..CurrentInfo.Display
+                elseif CurrentInfo.Golden then
+                    CurrentInfo.Display = "Golden "..CurrentInfo.Display
                 end
-                if ValidateItem(CurrentInfo, FindInfo) then
-                    ProcessItem(CurrentInfo, Data, Booth)
+                if CurrentInfo.Shiny then
+                    CurrentInfo.Display = "Shiny "..CurrentInfo.Display
                 end
+                if CurrentInfo.Tier then
+                    CurrentInfo.Display = CurrentInfo.Display.." "..CurrentInfo.Tier
+                end
+                for Name, Data in next, Settings.Sniper.Items do
+                    if Name == "SearchTerminal" then continue end
+                    local FindInfo
+                    if not Data.FindInfo then
+                        FindInfo = GenerateFindInfo(Name, Data)
+                        Data.FindInfo = FindInfo
+                    else
+                        FindInfo = Data.FindInfo
+                    end
+                    if ValidateItem(CurrentInfo, FindInfo) then
+                        local bought = ProcessItem(CurrentInfo, Data, Booth)
+                        if bought then
+                            boughtInPass = true
+                            boughtAny = true
+                            task.wait(0.3)
+                            break
+                        end
+                    end
+                end
+                if boughtInPass then break end
             end
         end
+        if not boughtInPass then
+            break
+        end
+        pass = pass + 1
     end
+    return boughtAny
 end
 
 local Servers = {}
@@ -1278,17 +1391,26 @@ task.spawn(function()
     end
 end)
 while task.wait() and Settings.Sniper and Settings.Sniper.Active and FileSettings.Sniper do
+    local serverBoughtAny = false
     for _, Users in next, Booths do
         for Username, Booth in next, Users do
-            CanContinue = false
+            local CanContinue = false
             pcall(function()
                 if Booth.Player and Booth.Player:IsInGroup(5060810) then 
                     CanContinue = true
                 end
             end)
             if CanContinue then continue end
-            ProcessBooth(Booth)
+            local bought = ProcessBooth(Booth)
+            if bought then
+                serverBoughtAny = true
+            end
         end
+    end
+    if serverBoughtAny then
+        StartingTime = os.time()
+        task.wait(0.5)
+        continue
     end
     if UI["Switch Servers"] then
         repeat task.wait() until (os.time() - StartingTime) >= UI["Teleport Delay"]
@@ -1496,14 +1618,22 @@ if Settings.Seller and Settings.Seller.Active and FileSettings.Seller then
             }
             PriceData.RealPrice = tonumber(type(Data.Price) == "string" and (not PriceData.IsPercentage and RemoveSuffix(Data.Price) or Data.Price:gsub("%D", "")) or Data.Price)
             if PriceData.IsPercentage or PriceData.AboveRAP or PriceData.NegativePrice then
-                local NewItem = Library.Items.Types[ItemData.Class](ItemData.ID)
-                if ItemData.Golden then NewItem:SetGolden() end
-                if ItemData.Rainbow then NewItem:SetRainbow() end
-                if ItemData.Shiny then NewItem:SetShiny(true) end
-                if ItemData.Color then NewItem:SetColorVariant(ItemData.Color) end
-                if ItemData.Tier then NewItem:SetTier(ItemData.Tier) end
+                local NewItem = (Types and Types.From and Types.From(ItemData.Class, {
+                    id = ItemData.ID,
+                    _am = ItemData.Amount,
+                    tn = ItemData.Tier,
+                    sh = ItemData.Shiny,
+                    pt = ItemData.Golden and 1 or (ItemData.Rainbow and 2 or 0)
+                })) or (Library and Library.Items and Library.Items.Types and Library.Items.Types[ItemData.Class] and Library.Items.Types[ItemData.Class](ItemData.ID))
+                if NewItem then
+                    if ItemData.Golden and NewItem.SetGolden then NewItem:SetGolden() end
+                    if ItemData.Rainbow and NewItem.SetRainbow then NewItem:SetRainbow() end
+                    if ItemData.Shiny and NewItem.SetShiny then NewItem:SetShiny(true) end
+                    if ItemData.Color and NewItem.SetColorVariant then NewItem:SetColorVariant(ItemData.Color) end
+                    if ItemData.Tier and NewItem.SetTier then NewItem:SetTier(ItemData.Tier) end
+                end
     
-                RAP = (table.find({PS99.Normal, PS99.Pro}, game.PlaceId) and NewItem.GetDevRAP and NewItem:GetDevRAP()) or NewItem.GetRAP and NewItem:GetRAP()
+                RAP = GetItemRAP(NewItem, ItemData, ItemData.Class)
                 if not RAP then 
                     table.insert(BlacklistedUIDs, UID)
                     continue
