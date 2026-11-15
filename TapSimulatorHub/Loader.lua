@@ -1,11 +1,12 @@
 -- Loader.lua
 -- Single Entry Point for TapSimulatorHub GitHub RAW Modular Architecture
 -- Usage:
---   loadstring(game:HttpGet("https://raw.githubusercontent.com/<USER>/<REPO>/main/Loader.lua"))()
+--   loadstring(game:HttpGet("https://raw.githubusercontent.com/therlw/rlwscripts/main/TapSimulatorHub/Loader.lua"))()
 
-local DEFAULT_GITHUB_OWNER = "YOUR_GITHUB_USERNAME"
-local DEFAULT_GITHUB_REPO = "TapSimulatorHub"
+local DEFAULT_GITHUB_OWNER = "therlw"
+local DEFAULT_GITHUB_REPO = "rlwscripts"
 local DEFAULT_BRANCH = "main"
+local DEFAULT_SUBPATH = "TapSimulatorHub/"
 
 local genFn = (type(getgenv) == "function") and getgenv or function() return _G end
 local genv = genFn()
@@ -14,7 +15,14 @@ local userCfg = (type(genv._RLW_LoaderConfig) == "table") and genv._RLW_LoaderCo
 local owner = userCfg.Owner or DEFAULT_GITHUB_OWNER
 local repo = userCfg.Repo or DEFAULT_GITHUB_REPO
 local branch = userCfg.Branch or DEFAULT_BRANCH
-local baseUrl = userCfg.BaseUrl or string.format("https://raw.githubusercontent.com/%s/%s/%s/", owner, repo, branch)
+local subPath = userCfg.SubPath
+if subPath == nil then
+    subPath = (userCfg.Owner == nil and userCfg.Repo == nil) and DEFAULT_SUBPATH or ""
+end
+if subPath ~= "" and string.sub(subPath, -1) ~= "/" then
+    subPath = subPath .. "/"
+end
+local baseUrl = userCfg.BaseUrl or string.format("https://raw.githubusercontent.com/%s/%s/%s/%s", owner, repo, branch, subPath)
 if string.sub(baseUrl, -1) ~= "/" then
     baseUrl = baseUrl .. "/"
 end

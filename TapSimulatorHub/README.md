@@ -7,24 +7,25 @@ Tekil monolit dosya olan `TapSimulatorHub.lua` dosyasının tüm algoritmaları,
 
 ## Tek Satır Kullanım (GitHub RAW Loader)
 
-Depoyu GitHub'a yükledikten sonra `Loader.lua` içindeki varsayılan repo bilgilerini güncelleyin veya çalışma zamanında `_RLW_LoaderConfig` ile geçersiz kılın:
+Depoyu GitHub'a yükledikten sonra tek satırla doğrudan çalıştırabilirsiniz (isteğe bağlı olarak çalışma zamanında `_RLW_LoaderConfig` ile özelleştirilebilir):
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/<KULLANICI>/<REPO>/main/Loader.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/therlw/rlwscripts/main/TapSimulatorHub/Loader.lua"))()
 ```
 
 ### İsteğe Bağlı Çalışma Zamanı Yapılandırması
 
 ```lua
 getgenv()._RLW_LoaderConfig = {
-    Owner = "KULLANICI_ADINIZ",
-    Repo = "TapSimulatorHub",
+    Owner = "therlw",
+    Repo = "rlwscripts",
     Branch = "main",
+    SubPath = "TapSimulatorHub/",
     CacheBust = false,       -- Geliştirme sırasında önbelleği aşmak için true yapılabilir
     UseMemoryCache = false,  -- Tekrar çalıştırmalarda indirilmiş kaynakları bellekten oku
     Retries = 3,             -- HTTP başarısızlıklarında yeniden deneme sayısı
 }
-loadstring(game:HttpGet("https://raw.githubusercontent.com/KULLANICI_ADINIZ/TapSimulatorHub/main/Loader.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/therlw/rlwscripts/main/TapSimulatorHub/Loader.lua"))()
 ```
 
 ---
