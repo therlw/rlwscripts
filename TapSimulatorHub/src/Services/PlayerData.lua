@@ -10,6 +10,30 @@ function PlayerData.Init(ctx)
     local ReplicatedStorage = ctx.Roblox.ReplicatedStorage
     local safeFire = ctx.Utils.safeFire
 
+    local requireSafe = ctx.Utils and ctx.Utils.requireSafe
+
+    local function getBoostFormula()
+        if Mod.BoostFormula then return Mod.BoostFormula end
+        if requireSafe then
+            Mod.BoostFormula = requireSafe(function() return ReplicatedStorage.Shared.Items.BoostFormula end)
+        else
+            local ok, m = pcall(function() return require(ReplicatedStorage.Shared.Items.BoostFormula) end)
+            if ok then Mod.BoostFormula = m end
+        end
+        return Mod.BoostFormula
+    end
+
+    local function getGlobalEventState()
+        if Mod.GlobalEventState then return Mod.GlobalEventState end
+        if requireSafe then
+            Mod.GlobalEventState = requireSafe(function() return ReplicatedStorage.Shared.Admin.GlobalEventState end)
+        else
+            local ok, m = pcall(function() return require(ReplicatedStorage.Shared.Admin.GlobalEventState) end)
+            if ok then Mod.GlobalEventState = m end
+        end
+        return Mod.GlobalEventState
+    end
+
     local function getPlayerData()
         if Mod.DataController and Mod.DataController.GetReplica then
             local ok, replica = pcall(function() return Mod.DataController:GetReplica() end)
@@ -20,17 +44,30 @@ function PlayerData.Init(ctx)
         return nil
     end
 
-    local function getCoins()
+    local function getCoinsForWorld(targetWorld)
         local data = getPlayerData()
         if not data then return 0 end
-        local curWorld = data.Progression and data.Progression.World
-        if curWorld == "TimeRift" and data.Currencies and data.Currencies.RiftCoins then
+        local world = targetWorld or (data.Progression and data.Progression.World)
+        if world == "TimeRift" and data.Currencies and data.Currencies.RiftCoins then
             return data.Currencies.RiftCoins
+        end
+        if world == "TimeRift" then
+            return 0
         end
         if data.Currencies then
             return data.Currencies.Coins or 0
         end
         return 0
+    end
+
+    local function getCoins()
+        return getCoinsForWorld(nil)
+    end
+
+    local function getCoinsForEgg(eggName)
+        local eggInfo = eggName and Mod.LaunchEggConfig and Mod.LaunchEggConfig[eggName]
+        local targetWorld = (eggInfo and eggInfo.World) or nil
+        return getCoinsForWorld(targetWorld)
     end
 
     local function getGems()
@@ -97,6 +134,22 @@ function PlayerData.Init(ctx)
         return false
     end
 
+    local function canUseX8Hatch()
+        if hasX8Gamepass() then return true end
+        local data = getPlayerData()
+        local bf = getBoostFormula()
+        if bf and bf.HasType and data then
+            local ok, hasBoost = pcall(bf.HasType, data, "OctoHatch")
+            if ok and hasBoost == true then return true end
+        end
+        local ge = getGlobalEventState()
+        if ge and ge.IsActive then
+            local ok, active = pcall(ge.IsActive, "OctoHatch")
+            if ok and active == true then return true end
+        end
+        return false
+    end
+
     local function getLiveHatchSpeed()
         local data = getPlayerData()
         if Mod.ProfileStats and data then
@@ -138,20 +191,26 @@ function PlayerData.Init(ctx)
     local A = ctx.API
     A.getPlayerData = getPlayerData
     A.getCoins = getCoins
+    A.getCoinsForWorld = getCoinsForWorld
+    A.getCoinsForEgg = getCoinsForEgg
     A.getGems = getGems
     A.getRebirthCount = getRebirthCount
     A.getPetStorageInfo = getPetStorageInfo
     A.hasX8Gamepass = hasX8Gamepass
+    A.canUseX8Hatch = canUseX8Hatch
     A.getLiveHatchSpeed = getLiveHatchSpeed
     A.getAutoHatchDelay = getAutoHatchDelay
     A.equipBestPets = equipBestPets
 
     PlayerData.GetData = getPlayerData
     PlayerData.GetCoins = getCoins
+    PlayerData.GetCoinsForWorld = getCoinsForWorld
+    PlayerData.GetCoinsForEgg = getCoinsForEgg
     PlayerData.GetGems = getGems
     PlayerData.GetRebirthCount = getRebirthCount
     PlayerData.GetPetStorageInfo = getPetStorageInfo
     PlayerData.HasX8Gamepass = hasX8Gamepass
+    PlayerData.CanUseX8Hatch = canUseX8Hatch
     PlayerData.GetLiveHatchSpeed = getLiveHatchSpeed
     PlayerData.GetAutoHatchDelay = getAutoHatchDelay
     PlayerData.EquipBestPets = equipBestPets
