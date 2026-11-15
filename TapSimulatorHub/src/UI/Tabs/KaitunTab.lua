@@ -83,6 +83,27 @@ function KaitunTab.Init(ctx)
     pcall(function()
         UI.KaitunVelocityText = UI.KaitunTab:CreateText({ name = "Coin Velocity Telemetry", text = "Predicted: Calculating... | Measured: Initializing..." })
     end)
+    pcall(function()
+        UI.KaitunTab:CreateButton({
+            name = "Run Shadow Audit (Old vs New - Read Only)",
+            description = "Safely runs Old vs Upgraded Kaitun math on your live account snapshot without triggering any in-game remotes",
+            callback = function()
+                if ctx.API.runShadowComparison then
+                    local ok, report = pcall(ctx.API.runShadowComparison)
+                    if ok and report then
+                        if ctx.API.updateKaitunDisplays then
+                            pcall(ctx.API.updateKaitunDisplays)
+                        end
+                        safeNotify({
+                            title = "Shadow Audit Complete",
+                            content = tostring(report.SummaryShort or "Evaluated cleanly"),
+                            duration = 6,
+                        })
+                    end
+                end
+            end
+        })
+    end)
 
     UI.KaitunTab:CreateSection({ name = "Decision Modules & Rules" })
 

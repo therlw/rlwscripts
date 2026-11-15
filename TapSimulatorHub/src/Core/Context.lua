@@ -80,6 +80,9 @@ function Context.New(opts)
             CompoundingDiscount = 0.70,
             ExecutionOverhead = 0.11,
             MaxRebirthSaveSec = 25,
+            DecisionLockSeconds = 10.0,
+            DecisionFlipMargin = 1.18,
+            PreRebirthSurplusRatio = 0.0,
         },
 
         -- Stage Detection Thresholds
@@ -88,6 +91,7 @@ function Context.New(opts)
             EarlyPowerLimit = 10000,
             MidPowerLimit = 5000000,
             EndgamePowerLimit = 100000,
+            EndgameRebirthLimit = 100000,
         },
 
         -- Collectibles, Machines & Events Delays
@@ -169,7 +173,10 @@ function Context.New(opts)
         CoinVelocity = 0,
         MeasuredVelocityStr = "Measuring...",
         VelocityDiffPct = nil,
+        CalibrationRatio = 1.0,
         LastEvaluatedIsland = nil,
+        LockedDecision = nil,
+        ShadowReport = nil,
         StrategyNote = "Standby: Turn on AI Kaitun to begin autonomous optimization",
         AllowHatch = true,
         AllowTripleHatch = true,

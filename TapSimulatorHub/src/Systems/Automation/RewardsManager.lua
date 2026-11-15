@@ -120,7 +120,7 @@ function RewardsManager.Init(ctx)
             end
         end
 
-        -- 2. Luck / Golden Potion: Use ONLY when actively hatching eggs
+        -- 2. Luck / Golden Potion: Evaluate independently while actively hatching eggs
         local hasLuckBoost = Mod.BoostFormula.HasType(data, "Luck")
         if not hasLuckBoost and isActivelyHatching then
             local luckPotionToUse = nil
@@ -130,8 +130,6 @@ function RewardsManager.Init(ctx)
                 luckPotionToUse = "Luck Potion I"
             elseif (boosts["Small Luck Potion"] or 0) > 0 then
                 luckPotionToUse = "Small Luck Potion"
-            elseif (boosts["Golden Potion"] or 0) > 0 and not Mod.BoostFormula.HasType(data, "GoldenHatch") then
-                luckPotionToUse = "Golden Potion"
             end
 
             if luckPotionToUse then
@@ -144,6 +142,18 @@ function RewardsManager.Init(ctx)
                 end)
                 return
             end
+        end
+
+        local hasGoldenBoost = Mod.BoostFormula.HasType(data, "GoldenHatch")
+        if not hasGoldenBoost and isActivelyHatching and (boosts["Golden Potion"] or 0) > 0 then
+            pcall(function()
+                Svc.BoostService.RF.Use:InvokeServer("Golden Potion")
+                safeNotify({
+                    title = "Potion Activated!",
+                    content = "Used Golden Potion for bonus Golden hatch chance!"
+                })
+            end)
+            return
         end
 
         -- 3. Gems Potion: Use when recently rebirthing

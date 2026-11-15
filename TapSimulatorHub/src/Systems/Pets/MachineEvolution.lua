@@ -137,14 +137,57 @@ function MachineEvolution.Init(ctx)
             end
         end
 
+        local CraftLockMod = Mod.CraftLock or (ctx.Utils.requireSafe and ctx.Utils.requireSafe(function() return ctx.Roblox.ReplicatedStorage.Shared.Pets.CraftLock end))
+        local CraftAllPlanMod = Mod.CraftAllPlan or (ctx.Utils.requireSafe and ctx.Utils.requireSafe(function() return ctx.Roblox.ReplicatedStorage.Shared.Pets.CraftAllPlan end))
+
         local owned = data.Pets.Owned or {}
         local equipped = data.Pets.Equipped or {}
-        local equippedSet = {}
-        for _, id in ipairs(equipped) do equippedSet[id] = true end
+        local keptSet = {}
+        for _, id in ipairs(equipped) do keptSet[id] = true end
+        if CraftAllPlanMod and type(CraftAllPlanMod.Kept) == "function" then
+            local okKept, kept = pcall(CraftAllPlanMod.Kept, data)
+            if okKept and type(kept) == "table" then
+                for id, isKept in pairs(kept) do
+                    if isKept then keptSet[id] = true end
+                end
+            end
+        end
+        if type(data.PetTeams) == "table" then
+            for _, team in pairs(data.PetTeams) do
+                if type(team) == "table" then
+                    local members = team.Pets or team.Ids or team
+                    if type(members) == "table" then
+                        for _, id in pairs(members) do
+                            if type(id) == "string" then keptSet[id] = true end
+                        end
+                    end
+                end
+            end
+        end
+        local okAttr, heldId = pcall(function() return LocalPlayer:GetAttribute("EnchantHeldPet") end)
+        if okAttr and heldId then keptSet[heldId] = true end
+
+        local function isCraftCandidate(id, p, targetTier)
+            if not p or p.Locked or p.Frozen or keptSet[id] then return false end
+            if p.Equip or p.Signature or p.LeaderboardSerial then return false end
+            if (p.Enchant and p.Enchant ~= "") or (p.Enchant2 and p.Enchant2 ~= "") then return false end
+            if p.Mutation and p.Mutation ~= "" then return false end
+            if p.Glitched == true or p.Tier == "Glitched" or p.Tier == "Rainbow" or p.Tier == "Shiny" then return false end
+            local rarityStr = tostring(p.Rarity or "")
+            if string.match(rarityStr, "^Secret") or rarityStr == "Limited" then return false end
+            if CraftLockMod and type(CraftLockMod.IsLocked) == "function" then
+                local okLock, locked = pcall(CraftLockMod.IsLocked, p)
+                if okLock and locked then return false end
+            end
+            if targetTier == "Normal" then
+                return (p.Tier == "Normal" or not p.Tier)
+            end
+            return p.Tier == targetTier
+        end
 
         local normalSpecies = {}
         for id, p in pairs(owned) do
-            if not p.Locked and not equippedSet[id] and (p.Tier == "Normal" or not p.Tier) then
+            if isCraftCandidate(id, p, "Normal") then
                 normalSpecies[p.Name] = normalSpecies[p.Name] or {}
                 table.insert(normalSpecies[p.Name], id)
             end
@@ -159,7 +202,7 @@ function MachineEvolution.Init(ctx)
 
         local goldenSpecies = {}
         for id, p in pairs(owned) do
-            if not p.Locked and not equippedSet[id] and p.Tier == "Golden" then
+            if isCraftCandidate(id, p, "Golden") then
                 goldenSpecies[p.Name] = goldenSpecies[p.Name] or {}
                 table.insert(goldenSpecies[p.Name], id)
             end
@@ -236,7 +279,7 @@ function MachineEvolution.Init(ctx)
         owned = data and data.Pets and data.Pets.Owned or {}
         goldenSpecies = {}
         for id, p in pairs(owned) do
-            if not p.Locked and not equippedSet[id] and p.Tier == "Golden" then
+            if isCraftCandidate(id, p, "Golden") then
                 goldenSpecies[p.Name] = goldenSpecies[p.Name] or {}
                 table.insert(goldenSpecies[p.Name], id)
             end

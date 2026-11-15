@@ -161,50 +161,66 @@ function IslandManager.Init(ctx)
         return nil
     end
 
-    local function getNextLockedIsland()
+    local function isIslandNameUnlocked(unlocked, name)
+        if not (unlocked and name) then return false end
+        if unlocked[name] == true then return true end
+        if type(unlocked) == "table" then
+            for _, val in pairs(unlocked) do
+                if val == name then
+                    return true
+                end
+            end
+        end
+        return false
+    end
+
+    local function getNextLockedIsland(worldOverride)
         local data = getPlayerData()
         if not (data and data.Progression and Mod.IslandConfig and Mod.IslandConfig.Islands) then
             return nil
         end
         local unlocked = data.Progression.UnlockedIslands or {}
-        local sorted = {}
-        for name, info in pairs(Mod.IslandConfig.Islands) do
-            table.insert(sorted, {
-                name = name,
-                order = info.Order or 0,
-                price = info.Price or 0,
-                portalName = info.PortalName or name
-            })
-        end
-        table.sort(sorted, function(a, b) return a.order < b.order end)
+        local unlockedWorlds = data.Progression.UnlockedWorlds or {}
+        local curWorld = data.Progression.World or "Main"
+        local scope = worldOverride or curWorld
 
-        for _, isl in ipairs(sorted) do
-            local isUnlocked = unlocked[isl.name] == true
-            if not isUnlocked and type(unlocked) == "table" then
-                for _, val in pairs(unlocked) do
-                    if val == isl.name then
-                        isUnlocked = true
-                        break
-                    end
+        local function findNextMainIsland()
+            local sorted = {}
+            for name, info in pairs(Mod.IslandConfig.Islands) do
+                table.insert(sorted, {
+                    name = name,
+                    order = info.Order or 0,
+                    price = info.Price or 0,
+                    portalName = info.PortalName or name,
+                    multiplier = info.Multiplier,
+                    world = "Main",
+                    isRift = false,
+                })
+            end
+            table.sort(sorted, function(a, b) return a.order < b.order end)
+            for _, isl in ipairs(sorted) do
+                if not isIslandNameUnlocked(unlocked, isl.name) then
+                    return isl
                 end
             end
-            if not isUnlocked then
-                return isl
+            if unlockedWorlds["TimeRift"] ~= true then
+                return {
+                    name = "World 2 (Time Rift)",
+                    order = 9,
+                    price = 2e19,
+                    portalName = "World2",
+                    isWorld2 = true,
+                    world = "Main",
+                    isRift = false,
+                }
             end
+            return nil
         end
 
-        local unlockedWorlds = data.Progression.UnlockedWorlds or {}
-        if unlockedWorlds["TimeRift"] ~= true then
-            return {
-                name = "World 2 (Time Rift)",
-                order = 9,
-                price = 2e19,
-                portalName = "World2",
-                isWorld2 = true
-            }
-        end
-
-        if Mod.RiftIslandConfig and Mod.RiftIslandConfig.Islands then
+        local function findNextRiftIsland()
+            if not (Mod.RiftIslandConfig and Mod.RiftIslandConfig.Islands) then
+                return nil
+            end
             local riftSorted = {}
             for name, info in pairs(Mod.RiftIslandConfig.Islands) do
                 table.insert(riftSorted, {
@@ -212,28 +228,27 @@ function IslandManager.Init(ctx)
                     order = (info.Order or 0) + 10,
                     price = info.Price or 0,
                     portalName = info.PortalName or name,
-                    isRift = true
+                    multiplier = info.Multiplier,
+                    isRift = true,
+                    world = "TimeRift",
                 })
             end
             table.sort(riftSorted, function(a, b) return a.order < b.order end)
-
             for _, isl in ipairs(riftSorted) do
-                local isUnlocked = unlocked[isl.name] == true
-                if not isUnlocked and type(unlocked) == "table" then
-                    for _, val in pairs(unlocked) do
-                        if val == isl.name then
-                            isUnlocked = true
-                            break
-                        end
-                    end
-                end
-                if not isUnlocked then
+                if not isIslandNameUnlocked(unlocked, isl.name) then
                     return isl
                 end
             end
+            return nil
         end
 
-        return nil
+        if scope == "TimeRift" then
+            return findNextRiftIsland()
+        elseif scope == "Main" then
+            return findNextMainIsland()
+        end
+
+        return findNextMainIsland() or findNextRiftIsland()
     end
 
     local function unlockIsland(isl)
