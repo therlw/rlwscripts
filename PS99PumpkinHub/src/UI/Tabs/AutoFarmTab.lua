@@ -67,7 +67,7 @@ function AutoFarmTab.Init(ctx)
     createBoundToggle(tab, {
         name = "Auto Efficient Farm (Fast Farm)",
         flag = "FarmAutoEfficient",
-        description = "Enables AutoFarm + spreads equipped pets across active breakables",
+        description = "Event-driven HP-clustered 1-shot targeting + instant Breakables_JoinPetBulk",
         value = Farm.AutoEfficientFarm,
     }, function() return Farm.AutoEfficientFarm end, function(v) Farm.AutoEfficientFarm = v end)
 

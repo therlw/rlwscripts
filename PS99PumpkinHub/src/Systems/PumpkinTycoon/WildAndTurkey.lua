@@ -21,6 +21,7 @@ function WildAndTurkey.Init(ctx)
     local WT = {
         _wasFightingTurkey = false,
         _lastAutoNetsAttemptAt = 0,
+        _lastTurkeyJoinAt = 0,
     }
 
     local TIER_BY_NAME = {
@@ -208,16 +209,34 @@ function WildAndTurkey.Init(ctx)
             end
         end
 
-        -- Dispatch all available pets onto Turkey
+        -- Dispatch all available pets onto Turkey + batched Breakables_JoinPetBulk for instant damage
         if M.PlayerPet and M.PlayerPet.GetByPlayer then
+            local turkeyBrk = uid and M.BreakableFrontend and M.BreakableFrontend.Get and M.BreakableFrontend.Get(uid) or nil
+            local joinedMap = type(turkeyBrk) == "table" and type(turkeyBrk.pets) == "table" and turkeyBrk.pets or nil
+            local turkeyBulk = {}
+            local shouldRetryJoin = os.clock() - WT._lastTurkeyJoinAt >= 0.35
+
             for _, pet in pairs(M.PlayerPet.GetByPlayer(LocalPlayer) or {}) do
+                if pet.AIHold == "FastFarm" then
+                    pet.AIHold = nil
+                end
                 local cur = pet.GetTarget and pet:GetTarget()
                 if cur ~= turkeyModel then
                     pcall(function()
                         if pet.SetAnchored then pet:SetAnchored(false) end
                         if pet.SetTarget then pet:SetTarget(turkeyModel) end
                     end)
+                    if pet.euid and uid then
+                        turkeyBulk[pet.euid] = uid
+                    end
+                elseif shouldRetryJoin and pet.euid and uid and (not joinedMap or joinedMap[pet.euid] ~= true) then
+                    turkeyBulk[pet.euid] = uid
                 end
+            end
+
+            if next(turkeyBulk) then
+                WT._lastTurkeyJoinAt = os.clock()
+                Net.NetworkFire("Breakables_JoinPetBulk", turkeyBulk)
             end
         end
 

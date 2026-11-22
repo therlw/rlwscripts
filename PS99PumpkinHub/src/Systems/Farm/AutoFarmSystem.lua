@@ -1,7 +1,7 @@
 -- src/Systems/Farm/AutoFarmSystem.lua
 -- Auto Farm Tab Backend:
 --   - Infinite Pet Speed (cpet PetSpeedMult broadcast + clean restore)
---   - Auto Efficient Farm (Fast Farm: native AutoFarmCmds + smart 1-pet-per-breakable distribution)
+--   - Auto Efficient Farm (Fast Farm: Event-driven HP-clustered 1-shot targeting + Breakables_JoinPetBulk)
 --   - Auto Collect Orbs (Orbs: Collect on live __THINGS.Orbs & Lootbags)
 --   - Auto Use Ultimate (Ultimates: Activate when charged)
 --   - Auto Teleport To Best Area & Auto Buy Next Area
@@ -23,9 +23,16 @@ function AutoFarmSystem.Init(ctx)
     local FarmSys = {
         _lastSpeedSyncAt = 0,
         _wasSpeedModified = false,
+        _fastFarmDirty = false,
         _lastFastFarmAt = 0,
+        _lastFastWatchdogAt = 0,
+        _wasFastFarmActive = false,
         _lastAfResetAt = 0,
         _lastZoneSig = nil,
+        _petAssignAt = {},
+        _zoneDmgRatios = {},
+        _ownsVip = false,
+        _lastVipCheckAt = 0,
         _lastOrbAt = 0,
         _lastUltAt = 0,
         _lastAreaAt = 0,
@@ -122,10 +129,110 @@ function AutoFarmSystem.Init(ctx)
         return nil
     end
 
+    local function releaseFastFarmHold(resetAI)
+        local PlayerPet = Net.Mod.PlayerPet
+        if PlayerPet and PlayerPet.GetByPlayer then
+            for _, pet in pairs(PlayerPet.GetByPlayer(LocalPlayer) or {}) do
+                if pet.AIHold == "FastFarm" then
+                    pet.AIHold = nil
+                end
+            end
+        end
+        table.clear(FarmSys._petAssignAt)
+        if resetAI then
+            Net.SignalFire("PetAI_Reset")
+        end
+    end
+
+    local function ownsVIPGamepass()
+        local now = os.clock()
+        if now - FarmSys._lastVipCheckAt < 5.0 then
+            return FarmSys._ownsVip
+        end
+        FarmSys._lastVipCheckAt = now
+        local M = Net.Mod
+        local vipId = M.Directory and M.Directory.Gamepasses and M.Directory.Gamepasses.VIP and M.Directory.Gamepasses.VIP.ProductId
+        if vipId and M.Gamepasses and M.Gamepasses.Owns then
+            local ok, res = pcall(M.Gamepasses.Owns, vipId)
+            FarmSys._ownsVip = (ok and res == true)
+        end
+        return FarmSys._ownsVip
+    end
+
+    local function recordPetHitRatio(uid, dmg, fromPet, userId)
+        if not fromPet or userId ~= LocalPlayer.UserId or type(dmg) ~= "number" or dmg <= 0 then
+            return
+        end
+        local BF = Net.Mod.BreakableFrontend
+        if not BF or not BF.Get then return end
+        local okGet, brk = pcall(BF.Get, uid)
+        if not okGet or type(brk) ~= "table" or type(brk.maxHealth) ~= "number" or brk.maxHealth <= 0 then
+            return
+        end
+
+        local ratio = math.clamp(dmg / brk.maxHealth, 0.02, 1.0)
+        local key = tostring(brk.areaID or brk.parentID or "?") .. "|" .. tostring(brk.class or "Normal")
+        local bucket = FarmSys._zoneDmgRatios[key]
+        if not bucket then
+            bucket = { list = {}, sum = 0 }
+            FarmSys._zoneDmgRatios[key] = bucket
+        end
+        table.insert(bucket.list, ratio)
+        bucket.sum = bucket.sum + ratio
+        if #bucket.list > 12 then
+            local old = table.remove(bucket.list, 1)
+            bucket.sum = bucket.sum - old
+        end
+    end
+
+    local function getAvgDamageRatio(areaOrParent, cls)
+        local key = tostring(areaOrParent or "?") .. "|" .. tostring(cls or "Normal")
+        local bucket = FarmSys._zoneDmgRatios[key]
+        if bucket and #bucket.list > 0 then
+            return math.clamp(bucket.sum / #bucket.list, 0.02, 1.0)
+        end
+        -- Default to PS99's 1/3 single-hit cap until the first Breakables_UpdateHealth sample calibrates the zone
+        return 0.334
+    end
+
+    local function getBreakableUID(brk, mapKey, model)
+        if type(brk) == "table" and brk.uid ~= nil then
+            return tostring(brk.uid)
+        end
+        if model then
+            local okAttr, attrUid = pcall(model.GetAttribute, model, "BreakableUID")
+            if okAttr and attrUid ~= nil then
+                return tostring(attrUid)
+            end
+        end
+        return mapKey ~= nil and tostring(mapKey) or nil
+    end
+
     local function stepEfficientFarm()
-        if not States.Farm.AutoEfficientFarm then return end
-        if os.clock() - FarmSys._lastFastFarmAt < 0.35 then return end
-        FarmSys._lastFastFarmAt = os.clock()
+        if not States.Farm.AutoEfficientFarm then
+            if FarmSys._wasFastFarmActive then
+                FarmSys._wasFastFarmActive = false
+                releaseFastFarmHold(true)
+            end
+            return
+        end
+
+        -- Yield control cleanly when actively fighting Turkey Boss on Turkey Island
+        if Net.IsInPumpkinTycoon and Net.IsInPumpkinTycoon() and Move and Move.IsOnTurkeyIsland and Move.IsOnTurkeyIsland() then
+            if FarmSys._wasFastFarmActive then
+                FarmSys._wasFastFarmActive = false
+                releaseFastFarmHold(false)
+            end
+            return
+        end
+
+        local now = os.clock()
+        if now - FarmSys._lastFastFarmAt < 0.045 then return end
+        if not FarmSys._fastFarmDirty and (now - FarmSys._lastFastWatchdogAt) < 0.25 then return end
+        FarmSys._lastFastFarmAt = now
+        FarmSys._lastFastWatchdogAt = now
+        FarmSys._fastFarmDirty = false
+        FarmSys._wasFastFarmActive = true
 
         local M = Net.Mod
         if not M.BreakableFrontend or not M.PlayerPet then return end
@@ -135,6 +242,7 @@ function AutoFarmSystem.Init(ctx)
         local inInst = M.InstancingCmds and M.InstancingCmds.IsInInstance and M.InstancingCmds.IsInInstance()
         local parentId = inInst and M.InstancingCmds.GetInstanceID() or (M.MapCmds and M.MapCmds.GetCurrentZone())
         local inDotted = M.MapCmds and M.MapCmds.IsInDottedBox and M.MapCmds.IsInDottedBox() == true
+        local curBreakZoneId = M.MapCmds and M.MapCmds.GetCurrentBreakZone and M.MapCmds.GetCurrentBreakZone()
         local activeZonePart = getActiveBreakZonePart(inInst, parentId, hrpPos)
 
         -- Refresh native AutoFarmCmds whenever player switches zone/world/instance/section
@@ -151,8 +259,8 @@ function AutoFarmSystem.Init(ctx)
                     local zoneMismatch = (activeZonePart ~= nil and afZone ~= nil and afZone ~= activeZonePart)
                     local distMismatch = (hrpPos ~= nil and afStart ~= nil and insideZone and Utils.flatDist(hrpPos, afStart) > 95)
 
-                    if (parentMismatch or zoneMismatch or distMismatch) and os.clock() - FarmSys._lastAfResetAt >= 1.2 then
-                        FarmSys._lastAfResetAt = os.clock()
+                    if (parentMismatch or zoneMismatch or distMismatch) and now - FarmSys._lastAfResetAt >= 1.2 then
+                        FarmSys._lastAfResetAt = now
                         if M.AutoFarmCmds.Disable then
                             M.AutoFarmCmds.Disable()
                         end
@@ -160,14 +268,14 @@ function AutoFarmSystem.Init(ctx)
                             M.AutoFarmCmds.Enable()
                         end
                     end
-                elseif insideZone and os.clock() - FarmSys._lastAfResetAt >= 0.8 then
-                    FarmSys._lastAfResetAt = os.clock()
+                elseif insideZone and now - FarmSys._lastAfResetAt >= 0.8 then
+                    FarmSys._lastAfResetAt = now
                     M.AutoFarmCmds.Enable()
                 end
             end)
         end
 
-        local zoneSig = tostring(parentId) .. "|" .. (activeZonePart and activeZonePart:GetFullName() or "none")
+        local zoneSig = tostring(parentId) .. "|" .. tostring(curBreakZoneId) .. "|" .. (activeZonePart and activeZonePart:GetFullName() or "none")
         local zoneChanged = (FarmSys._lastZoneSig ~= nil and FarmSys._lastZoneSig ~= zoneSig)
         FarmSys._lastZoneSig = zoneSig
 
@@ -182,42 +290,80 @@ function AutoFarmSystem.Init(ctx)
             end
         end
 
+        local pets = M.PlayerPet.GetByPlayer(LocalPlayer) or {}
+        local petList = {}
+        for _, pet in pairs(pets) do
+            table.insert(petList, pet)
+        end
+        local totalPets = #petList
+        if totalPets == 0 then return end
+
+        local ownsVip = ownsVIPGamepass()
+        local keepBelow = (inInst and States.PumpkinTycoon.AutoKeepPumpkins and M.AutoBreak and M.AutoBreak.Below and M.AutoBreak.Below()) or 0
+
         local candidates = {}
-        local candidateSet = {}
+        local candidateByUid = {}
+        local candidateByModel = {}
         local getter = inInst and M.BreakableFrontend.AllByInstanceAndClass or M.BreakableFrontend.AllByZoneAndClass
         if getter then
             for _, cls in ipairs({ "Chest", "Normal" }) do
                 local ok, pool = (inInst and pcall(getter, cls) or pcall(getter, parentId, cls))
                 if ok and type(pool) == "table" then
-                    for _, brk in pairs(pool) do
-                        local model, ca, _, bPos, disabled = Utils.unpackBreakable(brk)
-                        if model and model.Parent and not disabled then
+                    for mapKey, brk in pairs(pool) do
+                        local model, ca, dir, bPos, disabled = Utils.unpackBreakable(brk)
+                        local uid = getBreakableUID(brk, mapKey, model)
+                        local hp = (type(brk) == "table" and tonumber(brk.health)) or 1
+                        if model and model.Parent and uid and not disabled and hp > 0 then
                             local manual = model:GetAttribute("ManualDamage") == true
-                            local bParentId = model:GetAttribute("ParentID")
+                            local bParentId = (type(brk) == "table" and brk.parentID) or model:GetAttribute("ParentID")
                             local parentOk = (not parentId) or (bParentId == nil) or (bParentId == parentId)
 
+                            -- Respect VIP & Owner locks just like PS99 PetAI
+                            local vipBlocked = (not ownsVip) and ((dir and dir.VIPBreakable == true) or model:GetAttribute("VIPBreakable") == true)
+                            local modOwner = (type(brk) == "table" and type(brk.modifier) == "table" and brk.modifier.Owner) or nil
+                            local ownerBlocked = (modOwner ~= nil and modOwner ~= LocalPlayer.Name)
+
                             -- Scope breakables to active section/zone and own island
+                            local bAreaId = (type(brk) == "table" and brk.areaID) or nil
+                            local petsAnywhere = model:GetAttribute("PetsAnywhere") == true
                             local inActiveArea = true
                             local checkPos = bPos or Utils.getInstancePos(model)
-                            if activeZonePart and checkPos then
-                                inActiveArea = isPointNearZonePart(activeZonePart, checkPos, 10)
-                            elseif inInst and plotCF and plotSize and checkPos and M.PT_Types and M.PT_Types.OnIsland then
-                                local okOn, resOn = pcall(M.PT_Types.OnIsland, plotCF, plotSize, checkPos)
-                                if okOn then inActiveArea = resOn == true end
+                            if not petsAnywhere then
+                                if inInst and curBreakZoneId and bAreaId then
+                                    inActiveArea = (bAreaId == curBreakZoneId)
+                                elseif activeZonePart and checkPos then
+                                    inActiveArea = isPointNearZonePart(activeZonePart, checkPos, 10)
+                                elseif inInst and plotCF and plotSize and checkPos and M.PT_Types and M.PT_Types.OnIsland then
+                                    local okOn, resOn = pcall(M.PT_Types.OnIsland, plotCF, plotSize, checkPos)
+                                    if okOn then inActiveArea = resOn == true end
+                                end
                             end
 
                             -- Skip kept pumpkins inside PumpkinTycoon
                             local keptPumpkin = false
-                            if inInst and type(ca) == "table" and type(ca.PumpkinPedestal) == "number" and States.PumpkinTycoon.AutoKeepPumpkins then
-                                local below = M.AutoBreak and M.AutoBreak.Below and M.AutoBreak.Below() or 0
-                                if below > 0 and type(ca.PumpkinRung) == "number" and ca.PumpkinRung >= below then
+                            if inInst and type(ca) == "table" and type(ca.PumpkinPedestal) == "number" and keepBelow > 0 then
+                                if type(ca.PumpkinRung) == "number" and ca.PumpkinRung >= keepBelow then
                                     keptPumpkin = true
                                 end
                             end
 
-                            if parentOk and inActiveArea and not manual and not keptPumpkin then
-                                table.insert(candidates, model)
-                                candidateSet[model] = true
+                            if parentOk and inActiveArea and not manual and not vipBlocked and not ownerBlocked and not keptPumpkin then
+                                local maxHp = math.max(hp, (type(brk) == "table" and tonumber(brk.maxHealth)) or hp)
+                                local avgRatio = getAvgDamageRatio(bAreaId or bParentId or parentId, cls)
+                                local estSingleDmg = math.max(1, maxHp * avgRatio)
+                                local need = math.clamp(math.ceil(hp / estSingleDmg), 1, totalPets)
+
+                                local entry = {
+                                    uid = uid,
+                                    model = model,
+                                    hp = hp,
+                                    maxHp = maxHp,
+                                    need = need,
+                                    petsTable = type(brk) == "table" and type(brk.pets) == "table" and brk.pets or nil,
+                                }
+                                table.insert(candidates, entry)
+                                candidateByUid[uid] = entry
+                                candidateByModel[model] = entry
                             end
                         end
                     end
@@ -225,13 +371,10 @@ function AutoFarmSystem.Init(ctx)
             end
         end
 
-        local pets = M.PlayerPet.GetByPlayer(LocalPlayer) or {}
-        if not next(pets) then return end
-
-        -- If no valid breakables found yet after zone transition, release stale old-zone pet targets
+        -- If no valid breakables found yet after zone transition, release stale old-zone pet targets cleanly
         if #candidates == 0 then
             if zoneChanged then
-                for _, pet in pairs(pets) do
+                for _, pet in ipairs(petList) do
                     if pet.AIHold == nil or pet.AIHold == "FastFarm" then
                         local curT = pet.GetTarget and pet:GetTarget()
                         if typeof(curT) == "Instance" and curT ~= LocalPlayer.Character then
@@ -246,39 +389,72 @@ function AutoFarmSystem.Init(ctx)
             return
         end
 
-        -- Spread unassigned/retreating/stale-zone pets round-robin across current zone breakables
-        local takenModels = {}
+        -- Claim FastFarm AIHold and separate busy (already hitting valid live breakable) vs free pets
+        local busyTaken = {}
         local freePets = {}
-        for _, pet in pairs(pets) do
+        local bulkJoin = {}
+
+        for _, pet in ipairs(petList) do
             if pet.AIHold == nil or pet.AIHold == "FastFarm" then
+                pet.AIHold = "FastFarm"
                 local curT = pet.GetTarget and pet:GetTarget()
-                if typeof(curT) == "Instance" and curT.Parent and curT:GetAttribute("DisableDamage") ~= true and candidateSet[curT] then
-                    takenModels[curT] = (takenModels[curT] or 0) + 1
+                local targetEntry = typeof(curT) == "Instance" and candidateByModel[curT] or nil
+                if targetEntry then
+                    busyTaken[targetEntry.uid] = (busyTaken[targetEntry.uid] or 0) + 1
+                    -- Retry Breakables_JoinPetBulk if server has not yet registered pet on this breakable
+                    local serverJoined = targetEntry.petsTable and targetEntry.petsTable[pet.euid] == true
+                    if not serverJoined and now - (FarmSys._petAssignAt[pet.euid] or 0) >= 0.28 then
+                        bulkJoin[pet.euid] = targetEntry.uid
+                        FarmSys._petAssignAt[pet.euid] = now
+                    end
                 else
                     table.insert(freePets, pet)
                 end
             end
         end
 
+        -- Cluster freed pets to saturate 1-shot kill requirements (deficit > 0) before spilling extras
         if #freePets > 0 then
-            table.sort(candidates, function(a, b)
-                return (takenModels[a] or 0) < (takenModels[b] or 0)
-            end)
-            local idx = 1
             for _, pet in ipairs(freePets) do
-                local mdl = candidates[idx]
-                idx = (idx % #candidates) + 1
-                pcall(function()
-                    if pet.SetAnchored then pet:SetAnchored(false) end
-                    if pet.SetTarget then pet:SetTarget(mdl) end
-                end)
+                local picked = nil
+                local bestScore = math.huge
+                for _, c in ipairs(candidates) do
+                    local assigned = busyTaken[c.uid] or 0
+                    local deficit = c.need - assigned
+                    local score
+                    if deficit > 0 then
+                        score = deficit * 1000 + math.min(999, c.hp * 0.0001)
+                    else
+                        score = 100000 + assigned * 100 + math.min(99, c.hp * 0.0001)
+                    end
+                    if score < bestScore then
+                        bestScore = score
+                        picked = c
+                    end
+                end
+
+                if picked then
+                    busyTaken[picked.uid] = (busyTaken[picked.uid] or 0) + 1
+                    pcall(function()
+                        if pet.SetAnchored then pet:SetAnchored(false) end
+                        if pet.SetTarget then pet:SetTarget(picked.model) end
+                    end)
+                    if pet.euid then
+                        bulkJoin[pet.euid] = picked.uid
+                        FarmSys._petAssignAt[pet.euid] = now
+                    end
+                end
             end
+        end
+
+        if next(bulkJoin) then
+            Net.NetworkFire("Breakables_JoinPetBulk", bulkJoin)
         end
     end
 
     local function stepCollectOrbs()
         if not States.Farm.AutoCollectOrbs then return end
-        if os.clock() - FarmSys._lastOrbAt < 0.35 then return end
+        if os.clock() - FarmSys._lastOrbAt < 0.20 then return end
         FarmSys._lastOrbAt = os.clock()
 
         local things = workspace:FindFirstChild("__THINGS")
@@ -522,9 +698,50 @@ function AutoFarmSystem.Init(ctx)
     end
 
     function AutoFarmSystem.Start()
-        Lifecycle.SpawnLoop("AutoFarmWorker", 0.35, function()
+        local M = Net.Mod
+        local BF = M.BreakableFrontend
+        if BF then
+            if BF.Destroyed and BF.Destroyed.Connect then
+                Lifecycle.TrackConnection(BF.Destroyed:Connect(function()
+                    FarmSys._fastFarmDirty = true
+                end))
+            end
+            if BF.Created and BF.Created.Connect then
+                Lifecycle.TrackConnection(BF.Created:Connect(function()
+                    FarmSys._fastFarmDirty = true
+                end))
+            end
+        end
+
+        if M.Network and M.Network.Fired then
+            local sigDmg = M.Network.Fired("Breakables_UpdateHealth")
+            if sigDmg and sigDmg.Connect then
+                Lifecycle.TrackConnection(sigDmg:Connect(function(batch)
+                    if type(batch) ~= "table" then return end
+                    for _, row in pairs(batch) do
+                        if type(row) == "table" then
+                            recordPetHitRatio(row[1], row[3], row[4], row[5])
+                        end
+                    end
+                    FarmSys._fastFarmDirty = true
+                end))
+            end
+        end
+
+        local RunService = ctx.Roblox.RunService
+        if RunService and RunService.Heartbeat then
+            Lifecycle.TrackConnection(RunService.Heartbeat:Connect(function()
+                if States.Farm.AutoEfficientFarm or FarmSys._wasFastFarmActive then
+                    local ok, err = pcall(stepEfficientFarm)
+                    if not ok and Utils and Utils.debugWarn then
+                        Utils.debugWarn("FastFarm", err)
+                    end
+                end
+            end))
+        end
+
+        Lifecycle.SpawnLoop("AutoFarmWorker", 0.20, function()
             syncPetSpeed()
-            stepEfficientFarm()
             stepCollectOrbs()
             stepUseUltimate()
             stepAreasAndWorlds()
@@ -534,6 +751,10 @@ function AutoFarmSystem.Init(ctx)
         Lifecycle.RegisterCleanup(function()
             States.Farm.InfinitePetSpeed = false
             syncPetSpeed()
+            if FarmSys._wasFastFarmActive then
+                FarmSys._wasFastFarmActive = false
+                releaseFastFarmHold(true)
+            end
         end)
     end
 

@@ -37,6 +37,7 @@ function NetworkBridge.Init(ctx)
         BoostCmds = safeReq(Client, "BoostCmds"),
         EnchantCmds = safeReq(Client, "EnchantCmds"),
         FlyingCmds = safeReq(Client, "FlyingCmds"),
+        Gamepasses = safeReq(Client, "Gamepasses"),
         PlayerPet = safeReq(Client, "PlayerPet"),
         InventoryCmds = safeReq(Client, "InventoryCmds"),
         ZoneCmds = safeReq(Client, "ZoneCmds"),
