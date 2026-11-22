@@ -1,10 +1,10 @@
 -- src/Systems/PumpkinTycoon/TycoonProgression.lua
 -- Handles:
 --   - Auto Buy Pumpkin Tycoon Buttons (Zones 1..8 incl. Part 2 Pine Woods / Maple Creek / Golden Ridge)
---   - Auto Claim Island Completion Reward (BT_Settle)
---   - Auto Rebirth Pumpkin Tycoon (EW_Renew)
---   - Auto Buy Selected Pumpkin Upgrades (OQ_Advance, includes Part 2 upgrade tiers)
---   - Auto Open Flannel Gifts (YR_Hydrate)
+--   - Auto Claim Island Completion Reward (Plot NET.Complete)
+--   - Auto Rebirth Pumpkin Tycoon (Plot NET.Rebirth)
+--   - Auto Buy Selected Pumpkin Upgrades (Plot NET.UpgradeBuy, includes Part 2 upgrade tiers)
+--   - Auto Open Flannel Gifts (PumpkinTycoonCmds.Gift.Open)
 
 local TycoonProgression = {}
 
@@ -123,7 +123,7 @@ function TycoonProgression.Init(ctx)
         local buttonsState = Net.PlotSave(M.PT_Types.VAR.Buttons)
         if type(buttonsState) ~= "table" then return false end
 
-        -- 1. Check Auto Claim Island Reward (BT_Settle)
+        -- 1. Check Auto Claim Island Reward (Plot NET.Complete)
         if PT.AutoClaimIslandReward then
             local ownP2 = Net.OwnPlotPart2()
             local okComp, _, _, ratio = pcall(M.Util_Buttons.CompleteProgress, buttonsState, ownP2)
@@ -145,7 +145,7 @@ function TycoonProgression.Init(ctx)
             end
         end
 
-        -- 2. Check Auto Buy Buttons (NZ_Commit)
+        -- 2. Check Auto Buy Buttons (Plot NET.Buy)
         if not PT.AutoBuyButtons then return false end
         if os.clock() - Cooldowns.LastButtonAt < CONFIG.ButtonCooldown then return false end
 

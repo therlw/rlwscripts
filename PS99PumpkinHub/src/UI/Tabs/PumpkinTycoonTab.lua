@@ -65,7 +65,7 @@ function PumpkinTycoonTab.Init(ctx)
     createBoundToggle(tab, {
         name = "Auto Claim Island Completion Reward",
         flag = "PTAutoIslandReward",
-        description = "Automatically claims Flannel Gifts at 100% completion (BT_Settle)",
+        description = "Automatically claims Flannel Gifts at 100% completion",
         value = PT.AutoClaimIslandReward,
     }, function() return PT.AutoClaimIslandReward end, function(v) PT.AutoClaimIslandReward = v end)
 
@@ -141,7 +141,7 @@ function PumpkinTycoonTab.Init(ctx)
     createBoundToggle(tab, {
         name = "Auto Hunt Wild Pets",
         flag = "PTAutoHuntWild",
-        description = "Syncs game Auto Hunt rules safely (LF_Pursue)",
+        description = "Syncs game Auto Hunt rules safely via Plot Auto Hunt",
         value = PT.AutoHuntWildPets,
     }, function() return PT.AutoHuntWildPets end, function(v) PT.AutoHuntWildPets = v end)
 
@@ -167,7 +167,7 @@ function PumpkinTycoonTab.Init(ctx)
     createBoundToggle(tab, {
         name = "Auto Catch Wild Pets",
         flag = "PTAutoCatchWild",
-        description = "Moves within 150 studs and throws nets directly at wild pets (RU_Ensnare)",
+        description = "Moves within 150 studs and throws nets directly at wild pets",
         value = PT.AutoCatchWildPets,
     }, function() return PT.AutoCatchWildPets end, function(v) PT.AutoCatchWildPets = v end)
 
@@ -194,7 +194,7 @@ function PumpkinTycoonTab.Init(ctx)
     createBoundToggle(tab, {
         name = "Auto Buy Pet Nets",
         flag = "PTAutoBuyNets",
-        description = "Enables game Auto Buy Nets (GN_Restock) and buys selected nets in Pet Net Store",
+        description = "Enables game Auto Buy Nets and buys selected nets in Pet Net Store",
         value = PT.AutoBuyPetNets,
     }, function() return PT.AutoBuyPetNets end, function(v) PT.AutoBuyPetNets = v end)
 
@@ -241,7 +241,7 @@ function PumpkinTycoonTab.Init(ctx)
     createBoundToggle(tab, {
         name = "Auto Buy Merchant Pumpkins",
         flag = "PTAutoBuyMerchant",
-        description = "Reworked: uses game Auto Merchant (HM_Sustain) or Selected Bands",
+        description = "Reworked: uses game Auto Merchant or Selected Bands",
         value = PT.AutoBuyMerchantPumpkins,
     }, function() return PT.AutoBuyMerchantPumpkins end, function(v) PT.AutoBuyMerchantPumpkins = v end)
 
@@ -263,7 +263,7 @@ function PumpkinTycoonTab.Init(ctx)
     createBoundToggle(tab, {
         name = "Auto Plant Merchant Pumpkins",
         flag = "PTAutoPlant",
-        description = "Enables auto planting (JD_Prefer) and plants leftover stock on free pedestals",
+        description = "Enables auto planting and plants leftover stock on free pedestals",
         value = PT.AutoPlantMerchantPumpkins,
     }, function() return PT.AutoPlantMerchantPumpkins end, function(v) PT.AutoPlantMerchantPumpkins = v end)
 
@@ -273,7 +273,7 @@ function PumpkinTycoonTab.Init(ctx)
     createBoundToggle(tab, {
         name = "Auto Buy Selected Pumpkin Upgrades",
         flag = "PTAutoBuyUpgrades",
-        description = "Includes Part 2 upgrade tiers using Pumpkin Tokens (OQ_Advance)",
+        description = "Includes Part 2 upgrade tiers using Pumpkin Tokens",
         value = PT.AutoBuyUpgrades,
     }, function() return PT.AutoBuyUpgrades end, function(v) PT.AutoBuyUpgrades = v end)
 
@@ -292,7 +292,7 @@ function PumpkinTycoonTab.Init(ctx)
     createBoundToggle(tab, {
         name = "Auto Buy Selected Hot Cocoa Boosts",
         flag = "PTAutoBuyCocoa",
-        description = "Buys time at Cocoa Stand within 20 studs (VB_Extend)",
+        description = "Buys time at Cocoa Stand within 20 studs",
         value = PT.AutoBuyCocoaBoosts,
     }, function() return PT.AutoBuyCocoaBoosts end, function(v) PT.AutoBuyCocoaBoosts = v end)
 

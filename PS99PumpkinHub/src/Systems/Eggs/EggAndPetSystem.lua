@@ -191,7 +191,7 @@ function EggAndPetSystem.Init(ctx)
             local scriptEnv = resolveEggFrontendEnv()
 
             -- Pure client-side skip: no-op visual renderers inside Egg Opening Frontend's own env
-            -- so PS99's own script natively executes SM_Unmask + CompletedHatching without our script sending remotes.
+            -- so PS99's own script natively finishes hatching & unhiding without our script sending remotes.
             if scriptEnv then
                 if not EggSys._origAnimFns then
                     EggSys._origAnimFns = {
@@ -248,7 +248,7 @@ function EggAndPetSystem.Init(ctx)
                         end
                     end
                     if #uids > 0 then
-                        Net.NetworkFire("SM_Unmask", uids)
+                        Net.NetworkFire("Pets_ClearHidden", uids)
                     end
                     Net.SignalFire("CompletedHatching", eggName, uids)
                 end)

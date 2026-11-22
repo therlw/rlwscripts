@@ -2,11 +2,11 @@
 -- Handles:
 --   - Auto Teleport to Best Pumpkin Egg / Area (Zones 1..8 incl. Part 2)
 --   - Auto Buy Nearest Pumpkin Egg (with Intelligent Coin Saving)
---   - Auto Keep Pumpkins (QW_Policy)
+--   - Auto Keep Pumpkins (Plot NET.SetAutoBreak)
 --   - Auto Break Pumpkins (pets break all unkept island pumpkins without player movement)
---   - Auto Buy Merchant Pumpkins (Reworked: uses game HM_Sustain Auto Merchant OR Selected Bands)
---   - Auto Plant Merchant Pumpkins (JD_Prefer + XC_Allocate)
---   - Auto Buy Selected Hot Cocoa Boosts (VB_Extend)
+--   - Auto Buy Merchant Pumpkins (Reworked: uses game Plot NET.SetAutoMerchant OR Selected Bands)
+--   - Auto Plant Merchant Pumpkins (Plot NET.SetAutoPlace + NET.PlaceStock)
+--   - Auto Buy Selected Hot Cocoa Boosts (Plot NET.CocoaBuyTime)
 --   - Auto Use Selected Pumpkin Boosts (Consumables_Consume, Tier III first!)
 
 local PumpkinEconomy = {}
@@ -431,7 +431,7 @@ function PumpkinEconomy.Init(ctx)
             end
         end
 
-        -- 2. Auto Plant Merchant Pumpkins (JD_Prefer + XC_Allocate)
+        -- 2. Auto Plant Merchant Pumpkins (Plot NET.SetAutoPlace + NET.PlaceStock)
         if PT.AutoPlantMerchantPumpkins and M.Stock then
             if os.clock() - Econ._lastAutoPlaceAttemptAt >= 3.0 then
                 local isAutoPlaceOn = M.Stock.AutoPlaceOn and M.Stock.AutoPlaceOn() == true

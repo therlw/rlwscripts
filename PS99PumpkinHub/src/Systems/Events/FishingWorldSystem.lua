@@ -1,8 +1,8 @@
 -- src/Systems/Events/FishingWorldSystem.lua
 -- Fishing World Tab Backend ("FishingEvent"):
 --   - Auto Buy Nearest Fishing Event Egg
---   - Auto Event Fishing (Game KM_Switch Autofish + water cast NV_Probe / WT_Resolve)
---   - Auto Sell Event Fish (EB_Redeem)
+--   - Auto Event Fishing (Game FishingEvent_ToggleAutofish + water LocalCast)
+--   - Auto Sell Event Fish (FishingEvent_Sell)
 --   - Auto Buy Next Event Rod Merchant (EventRodMerchant_Purchase)
 --   - Auto Use Event Fishing Scrolls (Luck / Speed / XP)
 --   - Auto Use Bucket Of Chum
@@ -92,7 +92,7 @@ function FishingWorldSystem.Init(ctx)
         end
 
         if count > 0 then
-            local ok = Net.NetworkInvoke("EB_Redeem", sellPayload)
+            local ok = Net.NetworkInvoke("FishingEvent_Sell", sellPayload)
             if ok then
                 ctx.Runtime.Status.Fishing = string.format("Sold %d Event Fish!", count)
             end
@@ -219,7 +219,7 @@ function FishingWorldSystem.Init(ctx)
         if string.find(mode, "Game Autofish", 1, true) and save and save.FishingEventAutofish ~= true then
             if os.clock() - Fish._lastAutofishSyncAt >= 3.0 then
                 Fish._lastAutofishSyncAt = os.clock()
-                Net.NetworkFire("KM_Switch")
+                Net.NetworkFire("FishingEvent_ToggleAutofish")
                 ctx.Runtime.Status.Fishing = "Enabled Game Event Autofish"
             end
         end

@@ -33,7 +33,7 @@ function MailboxTab.Init(ctx)
     createBoundToggle(tab, {
         name = "Auto Claim Mailbox",
         flag = "MailAutoClaim",
-        description = "Loads inbox and claims incoming gifts via RD_Ingest",
+        description = "Loads inbox and claims incoming gifts via Mailbox: Claim All",
         value = Mail.AutoClaimMailbox,
     }, function() return Mail.AutoClaimMailbox end, function(v) Mail.AutoClaimMailbox = v end)
 
@@ -42,7 +42,7 @@ function MailboxTab.Init(ctx)
     createBoundToggle(tab, {
         name = "Auto Mail Pets",
         flag = "MailAutoSend",
-        description = "Sends unlocked, unfavorited & unequipped pets matching filter via EF_Relay",
+        description = "Sends unlocked, unfavorited & unequipped pets matching filter via Mailbox: Send",
         value = Mail.AutoMailPets,
     }, function() return Mail.AutoMailPets end, function(v) Mail.AutoMailPets = v end)
 

@@ -1,10 +1,10 @@
 -- src/Systems/PumpkinTycoon/WildAndTurkey.lua
 -- Handles:
---   - Auto Hunt Wild Pets (LF_Pursue)
---   - Auto Catch Wild Pets (RU_Ensnare within ThrowReach + ThrowSeconds)
---   - Auto Buy Pet Nets (GN_Restock + Merchant_RequestPurchase PetNetStore)
+--   - Auto Hunt Wild Pets (Plot NET.SetHunt)
+--   - Auto Catch Wild Pets (Plot NET.CatchWild within ThrowReach + ThrowSeconds)
+--   - Auto Buy Pet Nets (Plot NET.SetAutoNets + Merchant_RequestPurchase PetNetStore)
 --   - Auto Fight Turkey (Cannon / Cross + TurkeyArena reach + Pets + AutoTap coordinate)
---   - Auto Catch Rare Pet Spawns (PV_Glimpse with best net on Huge/Titanic/Gargantuan sighting)
+--   - Auto Catch Rare Pet Spawns (Plot NET.CatchSighting with best net on Huge/Titanic/Gargantuan sighting)
 
 local WildAndTurkey = {}
 
@@ -266,7 +266,7 @@ function WildAndTurkey.Init(ctx)
 
         local mode = PT.BuyPetNetsMode or "Game Auto Nets + Shop"
 
-        -- 1. Toggle game's own Auto Buy Nets (GN_Restock)
+        -- 1. Toggle game's own Auto Buy Nets (Plot NET.SetAutoNets)
         if string.find(mode, "Game Auto Nets", 1, true) then
             if M.Store.AutoOn and not M.Store.AutoOn() and os.clock() - WT._lastAutoNetsAttemptAt >= 3.0 then
                 WT._lastAutoNetsAttemptAt = os.clock()

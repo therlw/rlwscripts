@@ -1,8 +1,8 @@
 -- src/Systems/Social/MailboxSystem.lua
 -- Mailbox Tab Backend:
---   - Open/Close Mailbox Gui (Signal "Mailbox: Show" / TabController)
---   - Auto Claim Mailbox (YS_Load -> RD_Ingest)
---   - Auto Mail Pets (EF_Relay with rarity/lock/favorite filters & rate limiting)
+--   - Open/Close Mailbox Gui (TabController "MailboxMachine" + Signal "Mailbox: Show")
+--   - Auto Claim Mailbox ("Mailbox: Request" -> "Mailbox: Claim All")
+--   - Auto Mail Pets ("Mailbox: Send" with rarity/lock/favorite filters & rate limiting)
 
 local MailboxSystem = {}
 
@@ -19,12 +19,19 @@ function MailboxSystem.Init(ctx)
 
     function Mail.ToggleGui()
         local TC = Net.Mod.TabController
-        if TC and TC.IsOpen and TC.CloseTab and TC.IsOpen("Mailbox") then
-            TC.CloseTab("Mailbox")
-            return false
+        if TC and TC.IsOpen and TC.CloseTab and TC.OpenTab then
+            local okOpenCheck, isOpen = pcall(TC.IsOpen, "MailboxMachine")
+            if okOpenCheck and isOpen then
+                pcall(TC.CloseTab, "MailboxMachine")
+                return false
+            end
+            local okOpen = pcall(TC.OpenTab, "MailboxMachine")
+            if okOpen then
+                pcall(Net.SignalFire, "Mailbox: Show", "Gifts")
+                return true
+            end
         end
-        Net.SignalFire("Mailbox: Show", "Gifts")
-        return true
+        return false
     end
 
     local function stepAutoClaimMailbox()
@@ -32,19 +39,12 @@ function MailboxSystem.Init(ctx)
         if os.clock() - Mail._lastClaimAt < 6.0 then return end
         Mail._lastClaimAt = os.clock()
 
-        local okLoad, inboxData = Net.NetworkInvoke("YS_Load")
+        local okLoad, inboxData = Net.NetworkInvoke("Mailbox: Request")
         if okLoad and type(inboxData) == "table" and type(inboxData.Inbox) == "table" and #inboxData.Inbox > 0 then
-            local uuids = {}
-            for _, entry in ipairs(inboxData.Inbox) do
-                if type(entry) == "table" and entry.uuid then
-                    table.insert(uuids, entry.uuid)
-                end
-            end
-            if #uuids > 0 then
-                local ok = Net.NetworkInvoke("RD_Ingest", uuids)
-                if ok then
-                    ctx.Runtime.Status.Mailbox = string.format("Claimed %d Mailbox items!", #uuids)
-                end
+            local count = #inboxData.Inbox
+            local ok = Net.NetworkInvoke("Mailbox: Claim All")
+            if ok then
+                ctx.Runtime.Status.Mailbox = string.format("Claimed %d Mailbox items!", count)
             end
         end
     end
@@ -90,7 +90,7 @@ function MailboxSystem.Init(ctx)
                 if not locked and not fav and matchesFilter(item, filterMode) then
                     Mail._lastSendAt = os.clock()
                     local amt = (item.GetAmount and item:GetAmount()) or 1
-                    local ok, reason = Net.NetworkInvoke("EF_Relay", target, msg, "Pet", uid, amt)
+                    local ok, reason = Net.NetworkInvoke("Mailbox: Send", target, msg, "Pet", uid, amt)
                     if ok then
                         ctx.Runtime.Telemetry.PetsMailed = ctx.Runtime.Telemetry.PetsMailed + amt
                         ctx.Runtime.Status.Mailbox = string.format("Mailed %dx %s to %s", amt, tostring(item:GetId()), target)

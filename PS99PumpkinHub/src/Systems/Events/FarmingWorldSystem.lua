@@ -3,11 +3,11 @@
 --   - Auto Buy Farm Egg & Farm Supply
 --   - Auto Place Farm Egg & Auto Harvest Farm Egg
 --   - Auto Feed Farm Pets & Auto Sell Farm Pets
---   - Auto Craft Items/Pets (PetCraftingMachines / FJ_Merge)
+--   - Auto Craft Items/Pets (PetCraftingMachines / PetCraftingMachine_Craft)
 --   - Auto Claim Farm Storage (Farming_ClaimStorage)
 --   - Auto Claim & Auto Complete Farming Quest Rewards
 --   - Auto Buy Farm Pet Slot & Farm Storage Slot
---   - Auto Mail Pixel Rainbow Items (EF_Relay)
+--   - Auto Mail Pixel Rainbow Items (Mailbox: Send)
 
 local FarmingWorldSystem = {}
 
@@ -227,7 +227,7 @@ function FarmingWorldSystem.Init(ctx)
                 for mId, mDir in pairs(craftDir) do
                     if type(mDir) == "table" and type(mDir.Recipes) == "table" and (tostring(mId):find("Farm") or tostring(mId):find("Pixel")) then
                         for rIdx, _ in ipairs(mDir.Recipes) do
-                            local ok = Net.NetworkInvoke("FJ_Merge", mId, rIdx, 1, { pt = 0, shiny = false })
+                            local ok = Net.NetworkInvoke("PetCraftingMachine_Craft", mId, rIdx, 1, { pt = 0, shiny = false })
                             if ok then
                                 ctx.Runtime.Status.Farming = "Crafted recipe #" .. tostring(rIdx)
                                 return
@@ -249,7 +249,7 @@ function FarmingWorldSystem.Init(ctx)
                         if id:find("Pixel Rainbow", 1, true) and not (item.IsLocked and item:IsLocked()) then
                             local cls = item.Class and item.Class.Name or "Misc"
                             local amt = (item.GetAmount and item:GetAmount()) or 1
-                            local ok = Net.NetworkInvoke("EF_Relay", target, "Pixel Rainbow Item", cls, uid, amt)
+                            local ok = Net.NetworkInvoke("Mailbox: Send", target, "Pixel Rainbow Item", cls, uid, amt)
                             if ok then
                                 ctx.Runtime.Status.Farming = "Mailed " .. id .. " to " .. target
                                 return
