@@ -40,10 +40,13 @@ function HubExports.Init(ctx)
 end
 
 function HubExports.Start(ctx)
+    if ctx.Optimizer and ctx.Optimizer.ApplyAll then
+        pcall(ctx.Optimizer.ApplyAll)
+    end
     if ctx.UI and ctx.UI.safeNotify then
         ctx.UI.safeNotify({
-            title = "PS99 Pumpkin Tycoon Hub",
-            content = "Loaded Part 2 + Audited Turing/FFlag safe systems cleanly!",
+            title = "PS99 Hub (Current Event + Worlds)",
+            content = "Loaded Current Event, Main, Auto Farm, Egg, Automatic, Fishing, Farming, Mailbox, Optimization & Webhook!",
         })
     end
 end

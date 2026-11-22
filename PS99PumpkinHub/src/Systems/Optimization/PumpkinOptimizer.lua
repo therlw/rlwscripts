@@ -173,9 +173,13 @@ function PumpkinOptimizer.Init(ctx)
         local target = enable == true
         if target == Optimizer.Enabled then return end
         Optimizer.Enabled = target
+        ctx.States.PumpkinTycoon.OptimizePumpkinTycoon = target
+        ctx.States.Optimization.OptimizePumpkinTycoon = target
 
         if not target then
-            Optimizer.RestoreAll()
+            if not ctx.States.Optimization.OptimizeGame then
+                Optimizer.RestoreAll()
+            end
             return
         end
 
@@ -209,6 +213,210 @@ function PumpkinOptimizer.Init(ctx)
         end
     end
 
+    -- General Optimization Tab states & reversible handlers
+    Optimizer._brkConns = {}
+    Optimizer._brkSaved = {}
+    Optimizer._petConns = {}
+    Optimizer._origConfetti = nil
+    Optimizer._gameConns = {}
+    Optimizer._gameSaved = {}
+
+    local function hideBreakableModel(model)
+        if not ctx.States.Optimization.DisableBreakablesModel then return end
+        if typeof(model) ~= "Instance" or not model.Parent then return end
+        for _, d in ipairs(model:GetDescendants()) do
+            if d:IsA("BasePart") then
+                if not Optimizer._brkSaved[d] then Optimizer._brkSaved[d] = {} end
+                if Optimizer._brkSaved[d].LocalTransparencyModifier == nil then
+                    Optimizer._brkSaved[d].LocalTransparencyModifier = d.LocalTransparencyModifier
+                end
+                if Optimizer._brkSaved[d].CastShadow == nil then
+                    Optimizer._brkSaved[d].CastShadow = d.CastShadow
+                end
+                d.LocalTransparencyModifier = 1
+                d.CastShadow = false
+            elseif d:IsA("ParticleEmitter") or d:IsA("Trail") or d:IsA("Beam") or d:IsA("PointLight") or d:IsA("BillboardGui") or d:IsA("SurfaceGui") then
+                if not Optimizer._brkSaved[d] then Optimizer._brkSaved[d] = {} end
+                if Optimizer._brkSaved[d].Enabled == nil then
+                    Optimizer._brkSaved[d].Enabled = d.Enabled
+                end
+                pcall(function() d.Enabled = false end)
+            elseif d:IsA("Decal") or d:IsA("Texture") then
+                if not Optimizer._brkSaved[d] then Optimizer._brkSaved[d] = {} end
+                if Optimizer._brkSaved[d].Transparency == nil then
+                    Optimizer._brkSaved[d].Transparency = d.Transparency
+                end
+                d.Transparency = 1
+            end
+        end
+    end
+
+    function Optimizer.SetDisableBreakablesModel(enable)
+        local target = enable == true
+        ctx.States.Optimization.DisableBreakablesModel = target
+        for _, c in ipairs(Optimizer._brkConns) do pcall(function() c:Disconnect() end) end
+        table.clear(Optimizer._brkConns)
+
+        local folder = workspace:FindFirstChild("__THINGS") and workspace.__THINGS:FindFirstChild("Breakables")
+        if not target then
+            for inst, props in pairs(Optimizer._brkSaved) do
+                if inst and inst.Parent then
+                    for p, v in pairs(props) do
+                        pcall(function() inst[p] = v end)
+                    end
+                end
+            end
+            table.clear(Optimizer._brkSaved)
+            return
+        end
+
+        if folder then
+            for _, m in ipairs(folder:GetChildren()) do
+                hideBreakableModel(m)
+            end
+            table.insert(Optimizer._brkConns, Lifecycle.TrackConnection(folder.ChildAdded:Connect(function(m)
+                task.defer(hideBreakableModel, m)
+            end)))
+        end
+    end
+
+    function Optimizer.SetDisablePetsRendering(enable)
+        local target = enable == true
+        ctx.States.Optimization.DisablePetsRendering = target
+        for _, c in ipairs(Optimizer._petConns) do pcall(function() c:Disconnect() end) end
+        table.clear(Optimizer._petConns)
+
+        local PlayerPet = Net.Mod.PlayerPet
+        local function applyPetVis(petObj, visible)
+            pcall(function()
+                if petObj and petObj.cpet and petObj.cpet.SetVisible then
+                    petObj.cpet:SetVisible(visible)
+                end
+            end)
+        end
+
+        if PlayerPet and PlayerPet.GetByPlayer then
+            for _, plr in ipairs(ctx.Roblox.Players:GetPlayers()) do
+                for _, pet in pairs(PlayerPet.GetByPlayer(plr) or {}) do
+                    applyPetVis(pet, not target)
+                end
+            end
+            if target and PlayerPet.Created then
+                table.insert(Optimizer._petConns, Lifecycle.TrackConnection(PlayerPet.Created:Connect(function(petObj)
+                    if ctx.States.Optimization.DisablePetsRendering then
+                        task.defer(applyPetVis, petObj, false)
+                    end
+                end)))
+            end
+        end
+
+        local petsFolder = workspace:FindFirstChild("__THINGS") and workspace.__THINGS:FindFirstChild("Pets")
+        if petsFolder then
+            for _, d in ipairs(petsFolder:GetDescendants()) do
+                if d:IsA("BasePart") then
+                    pcall(function() d.LocalTransparencyModifier = target and 1 or 0 end)
+                elseif d:IsA("ParticleEmitter") or d:IsA("Trail") then
+                    pcall(function() d.Enabled = not target end)
+                end
+            end
+        end
+    end
+
+    function Optimizer.SetDisableConfettiRendering(enable)
+        local target = enable == true
+        ctx.States.Optimization.DisableConfettiRendering = target
+        local GUIFX = Net.Mod.GUIFX
+        if type(GUIFX) == "table" and type(GUIFX.Confetti) == "table" then
+            if target then
+                if not Optimizer._origConfetti and type(GUIFX.Confetti.Play) == "function" then
+                    Optimizer._origConfetti = GUIFX.Confetti.Play
+                end
+                GUIFX.Confetti.Play = function() end
+            elseif Optimizer._origConfetti then
+                GUIFX.Confetti.Play = Optimizer._origConfetti
+                Optimizer._origConfetti = nil
+            end
+        end
+    end
+
+    function Optimizer.SetOptimizeGame(enable)
+        local target = enable == true
+        ctx.States.Optimization.OptimizeGame = target
+        for _, c in ipairs(Optimizer._gameConns) do pcall(function() c:Disconnect() end) end
+        table.clear(Optimizer._gameConns)
+
+        if not target then
+            for inst, props in pairs(Optimizer._gameSaved) do
+                if inst and inst.Parent then
+                    for p, v in pairs(props) do
+                        pcall(function() inst[p] = v end)
+                    end
+                end
+            end
+            table.clear(Optimizer._gameSaved)
+            return
+        end
+
+        local function gSave(inst, prop, val)
+            if not inst then return end
+            local r = Optimizer._gameSaved[inst]
+            if not r then
+                r = {}
+                Optimizer._gameSaved[inst] = r
+            end
+            if r[prop] == nil then
+                local ok, old = pcall(function() return inst[prop] end)
+                if ok then r[prop] = old else return end
+            end
+            pcall(function() inst[prop] = val end)
+        end
+
+        gSave(Lighting, "GlobalShadows", false)
+        gSave(Lighting, "FogEnd", 1e9)
+        for _, eff in ipairs(Lighting:GetChildren()) do
+            if eff:IsA("PostEffect") or eff:IsA("Atmosphere") then
+                gSave(eff, "Enabled", false)
+            end
+        end
+
+        local terrain = workspace:FindFirstChildOfClass("Terrain")
+        if terrain then
+            gSave(terrain, "WaterWaveSize", 0)
+            gSave(terrain, "WaterReflectance", 0)
+            gSave(terrain, "WaterTransparency", 0)
+            gSave(terrain, "Decoration", false)
+        end
+
+        local debris = workspace:FindFirstChild("__DEBRIS")
+        if debris then
+            for _, ch in ipairs(debris:GetChildren()) do
+                if ch:IsA("ParticleEmitter") or ch:IsA("BasePart") then
+                    pcall(function() ch:Destroy() end)
+                end
+            end
+            table.insert(Optimizer._gameConns, Lifecycle.TrackConnection(debris.ChildAdded:Connect(function(ch)
+                if ctx.States.Optimization.OptimizeGame then
+                    task.defer(function()
+                        if ch.Parent and (ch:IsA("ParticleEmitter") or ch.Name:find("Orb") == nil) then
+                            if ch.Name:find("Flash") or ch.Name:find("Confetti") or ch:IsA("ParticleEmitter") then
+                                pcall(function() ch:Destroy() end)
+                            end
+                        end
+                    end)
+                end
+            end)))
+        end
+    end
+
+    function Optimizer.ApplyAll()
+        local Opt = ctx.States.Optimization
+        Optimizer.SetEnabled(Opt.OptimizePumpkinTycoon or ctx.States.PumpkinTycoon.OptimizePumpkinTycoon)
+        Optimizer.SetDisableBreakablesModel(Opt.DisableBreakablesModel)
+        Optimizer.SetDisablePetsRendering(Opt.DisablePetsRendering)
+        Optimizer.SetDisableConfettiRendering(Opt.DisableConfettiRendering)
+        Optimizer.SetOptimizeGame(Opt.OptimizeGame)
+    end
+
     function PumpkinOptimizer.Start()
         Lifecycle.SpawnLoop("PumpkinOptimizerSweep", 2.0, function()
             if Optimizer.Enabled then
@@ -217,6 +425,10 @@ function PumpkinOptimizer.Init(ctx)
         end)
         Lifecycle.RegisterCleanup(function()
             Optimizer.SetEnabled(false)
+            Optimizer.SetDisableBreakablesModel(false)
+            Optimizer.SetDisablePetsRendering(false)
+            Optimizer.SetDisableConfettiRendering(false)
+            Optimizer.SetOptimizeGame(false)
         end)
     end
 

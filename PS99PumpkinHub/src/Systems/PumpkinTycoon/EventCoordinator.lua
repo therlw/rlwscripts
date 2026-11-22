@@ -60,7 +60,7 @@ function EventCoordinator.Init(ctx)
             Econ.TryMerchantAndPlant()
             Econ.TrySyncKeepRule()
             Econ.TryAutoBreakPumpkins()
-            if Econ.TryTeleportBestEgg() then return end
+            Econ.TryTeleportBestEgg()
             Econ.TryBuyNearestEgg()
         end
     end
@@ -97,16 +97,23 @@ function EventCoordinator.Init(ctx)
 
         Lifecycle.SpawnLoop("PumpkinStatusUpdater", 0.75, function()
             local UI = ctx.UI
-            if UI and UI.PumpkinStatusText and UI.PumpkinStatusText.Set then
-                pcall(function()
-                    UI.PumpkinStatusText:Set(Coordinator.FormatStatusSummary())
-                end)
+            if not UI then return end
+            local st = ctx.Runtime.Status
+            local te = ctx.Runtime.Telemetry
+            local function safeSet(el, txt)
+                if el and el.Set then
+                    pcall(function() el:Set(txt) end)
+                end
             end
-            if UI and UI.FarmStatusText and UI.FarmStatusText.Set then
-                pcall(function()
-                    UI.FarmStatusText:Set(string.format("%s | Taps: %d", tostring(ctx.Runtime.Status.Farm), ctx.Runtime.Telemetry.TurkeyHits))
-                end)
-            end
+            safeSet(UI.PumpkinStatusText, Coordinator.FormatStatusSummary())
+            safeSet(UI.FarmStatusText, string.format("%s | Taps: %d", tostring(st.Farm), te.TurkeyHits))
+            safeSet(UI.MainStatusText, tostring(st.Main))
+            safeSet(UI.EggStatusText, tostring(st.Egg))
+            safeSet(UI.AutomaticStatusText, tostring(st.Automatic))
+            safeSet(UI.FishingStatusText, string.format("%s | Casts: %d", tostring(st.Fishing), te.FishCaught))
+            safeSet(UI.FarmingStatusText, tostring(st.Farming))
+            safeSet(UI.MailboxStatusText, string.format("%s | Sent: %d", tostring(st.Mailbox), te.PetsMailed))
+            safeSet(UI.WebhookStatusText, string.format("%s | Sent: %d", tostring(st.Webhook), te.WebhooksSent))
         end)
     end
 

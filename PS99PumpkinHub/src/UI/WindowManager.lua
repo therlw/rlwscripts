@@ -205,10 +205,32 @@ function WindowManager.Init(ctx)
         return kb
     end
 
+    local function createBoundInput(tab, opts, getter, setter, extraCb)
+        local el = tab:CreateInput({
+            name = opts.name,
+            flag = opts.flag,
+            description = opts.description,
+            placeholder = opts.placeholder or "Enter text...",
+            value = tostring(opts.value or ""),
+            clearOnFocus = opts.clearOnFocus == true,
+            forgetState = true,
+            callback = function(val)
+                setter(tostring(val or ""))
+                if extraCb then extraCb(tostring(val or "")) end
+                ConfigManager:MarkDirty()
+            end,
+        })
+        if opts.flag then
+            ConfigManager:Bind(opts.flag, el, getter, setter)
+        end
+        return el
+    end
+
     ctx.UI.safeNotify = safeNotify
     ctx.UI.createBoundToggle = createBoundToggle
     ctx.UI.createBoundDropdown = createBoundDropdown
     ctx.UI.createBoundSlider = createBoundSlider
+    ctx.UI.createBoundInput = createBoundInput
     ctx.UI.bindHotkeyElement = bindHotkeyElement
 
     return WindowManager

@@ -21,6 +21,20 @@ function ConfigManagerModule.Init(ctx)
         _saveScheduled = false,
     }
 
+    local STATE_SECTIONS = {
+        "Movement",
+        "Main",
+        "PumpkinTycoon",
+        "Farm",
+        "Egg",
+        "Automatic",
+        "FishingWorld",
+        "FarmingWorld",
+        "Mailbox",
+        "Optimization",
+        "Webhook",
+    }
+
     local DEFAULT_SNAPSHOT = {
         CONFIG = {
             Notifications = deepCopyTable(CONFIG.Notifications),
@@ -28,10 +42,10 @@ function ConfigManagerModule.Init(ctx)
             Persistence = deepCopyTable(CONFIG.Persistence),
             Hotkeys = deepCopyTable(CONFIG.Hotkeys),
         },
-        Movement = deepCopyTable(States.Movement),
-        PumpkinTycoon = deepCopyTable(States.PumpkinTycoon),
-        Farm = deepCopyTable(States.Farm),
     }
+    for _, sec in ipairs(STATE_SECTIONS) do
+        DEFAULT_SNAPSHOT[sec] = deepCopyTable(States[sec])
+    end
 
     local function fsWrite(filePath, content)
         if type(writefile) ~= "function" then
@@ -88,8 +102,8 @@ function ConfigManagerModule.Init(ctx)
     end
 
     function ConfigManager:ExportSnapshot()
-        return {
-            Version = 1,
+        local snap = {
+            Version = 2,
             SavedAt = os.time(),
             CONFIG = {
                 Notifications = deepCopyTable(CONFIG.Notifications),
@@ -97,10 +111,11 @@ function ConfigManagerModule.Init(ctx)
                 Persistence = deepCopyTable(CONFIG.Persistence),
                 Hotkeys = deepCopyTable(CONFIG.Hotkeys),
             },
-            Movement = deepCopyTable(States.Movement),
-            PumpkinTycoon = deepCopyTable(States.PumpkinTycoon),
-            Farm = deepCopyTable(States.Farm),
         }
+        for _, sec in ipairs(STATE_SECTIONS) do
+            snap[sec] = deepCopyTable(States[sec])
+        end
+        return snap
     end
 
     function ConfigManager:ApplySnapshot(snap)
@@ -110,15 +125,22 @@ function ConfigManagerModule.Init(ctx)
         self._applying = true
         pcall(function()
             if snap.CONFIG then applyMergedTable(CONFIG, snap.CONFIG) end
-            if snap.Movement then applyMergedTable(States.Movement, snap.Movement) end
-            if snap.PumpkinTycoon then applyMergedTable(States.PumpkinTycoon, snap.PumpkinTycoon) end
-            if snap.Farm then applyMergedTable(States.Farm, snap.Farm) end
+            for _, sec in ipairs(STATE_SECTIONS) do
+                if snap[sec] and States[sec] then
+                    applyMergedTable(States[sec], snap[sec])
+                end
+            end
         end)
         self:SyncUI()
         self._applying = false
 
-        if ctx.Optimizer and ctx.Optimizer.SetEnabled then
-            pcall(ctx.Optimizer.SetEnabled, States.PumpkinTycoon.OptimizePumpkinTycoon == true)
+        if ctx.Optimizer then
+            if ctx.Optimizer.SetEnabled then
+                pcall(ctx.Optimizer.SetEnabled, States.PumpkinTycoon.OptimizePumpkinTycoon == true)
+            end
+            if ctx.Optimizer.ApplyAll then
+                pcall(ctx.Optimizer.ApplyAll)
+            end
         end
         return true
     end

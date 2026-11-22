@@ -75,6 +75,16 @@ function Context.New(opts)
             WalkTimeout = 18,
         },
 
+        Main = {
+            AutoClaimFreeGifts = false,
+            AutoClaimRankRewards = false, -- Rank Rewards only (no Auto Rank Quests)
+            AutoClaimForeverPack = false,
+            AutoPopBalloons = false,
+            AutoLeaveStairway = false,
+            AutoTreehouseMerchant = false,
+            AutoCrystalKeyCastle = false,
+        },
+
         PumpkinTycoon = {
             -- Performance / Lag optimization
             OptimizePumpkinTycoon = false,
@@ -89,19 +99,19 @@ function Context.New(opts)
             AutoTeleportBestEgg = false,
             AutoBuyNearestEgg = false,
             SmartCoinSaving = true,
-            CoinSavingLookaheadButtons = 2, -- Save coins when next N zone/cheap button is close
+            CoinSavingLookaheadButtons = 2,
             EggHatchAmount = "Max", -- "Max" or "1", "3", "10", "50"
 
             -- Pumpkins Keep / Break
             AutoKeepPumpkins = false,
-            KeepRarityRule = "Epic", -- "Off","Basic","Uncommon","Rare","Epic","Legendary","Mythical","Exotic","Secret"
+            KeepRarityRule = "Epic",
             AutoBreakPumpkins = false,
 
             -- Merchant & Planting Pumpkins
-            AutoBuyMerchantPumpkins = false, -- Uses game's HM_Sustain Auto Merchant
-            AutoBuyMerchantMode = "Game Auto Merchant", -- "Game Auto Merchant" or "Selected Bands"
+            AutoBuyMerchantPumpkins = false,
+            AutoBuyMerchantMode = "Game Auto Merchant",
             SelectedMerchantBands = { "LegendaryPlus", "MythicalPlus", "ExoticPlus" },
-            AutoPlantMerchantPumpkins = false, -- Uses game's JD_Prefer + manual XC_Allocate fallback
+            AutoPlantMerchantPumpkins = false,
 
             -- Upgrades & Cocoa & Boosts & Gifts
             AutoBuyUpgrades = false,
@@ -124,29 +134,132 @@ function Context.New(opts)
 
             -- Wild Pets, Pet Nets, Turkey Boss & Rare Sightings
             AutoHuntWildPets = false,
-            HuntMinTier = "Rare", -- "Any", "Uncommon", "Rare", "Epic", "Huge"
+            HuntMinTier = "Rare",
             HuntVariantsOnly = false,
             HuntUltraOnHuges = true,
 
             AutoCatchWildPets = false,
-            CatchWildMinTier = "Epic", -- "Any", "Uncommon", "Rare", "Epic", "Huge"
+            CatchWildMinTier = "Epic",
             CatchWildVariantsOnly = false,
-            CatchWildNetPreference = "Best Available", -- "Best Available", "Pet Net Only", "Ultra For Huge+"
+            CatchWildNetPreference = "Best Available",
 
-            AutoBuyPetNets = false, -- Game's GN_Restock Auto Buy Nets + optional store purchase
-            BuyPetNetsMode = "Game Auto Nets + Shop", -- "Game Auto Nets", "Shop Selected Only", "Game Auto Nets + Shop"
+            AutoBuyPetNets = false,
+            BuyPetNetsMode = "Game Auto Nets + Shop",
             SelectedNetOffers = { "Pet Net", "Ultra Pet Net" },
 
             AutoFightTurkey = false,
             ReturnHomeAfterTurkey = true,
-            AutoCatchRareSpawns = false, -- Throws best net at Huge/Titanic/Gargantuan after Turkey
+            AutoCatchRareSpawns = false,
             CatchRareTiers = { "Huge", "Titanic", "Gargantuan" },
         },
 
         Farm = {
             AutoTap = false,
-            TapTargetMode = "Best / Turkey Priority", -- "Best / Turkey Priority", "Nearest Allowed", "Pumpkin Only"
-            TapRateScale = 1.0, -- 0.5..1.0 of legit Swift Taps speed cap
+            TapTargetMode = "Best / Turkey Priority",
+            TapRateScale = 1.0,
+            InfinitePetSpeed = false,
+            PetSpeedMult = 25,
+            AutoEfficientFarm = false,
+            AutoCollectOrbs = false,
+            AutoUseUltimate = false,
+            AutoTeleportBestArea = false,
+            AutoBuyNextArea = false,
+            AutoCompleteGateQuest = false,
+            AutoAreaQuest = false,
+            AutoRebirth = false,
+            AutoTeleportBestWorld = false,
+            AutoUseMiscItems = false,
+            AutoUseSprinkler = false,
+            AutoUseTNTCrate = false,
+            AutoBuyPetEquipSlots = false,
+            AutoBuyEggBundleSlots = false,
+        },
+
+        Egg = {
+            AutoBuyEgg = false,
+            TargetEggMode = "Best Unlocked", -- "Best Unlocked", "Nearest Unlocked", or explicit egg name
+            SelectedEggName = "Best Unlocked",
+            HatchAmount = "Max",
+            GoldenHatch = false,
+            ChargedHatch = false,
+            StayInBreakableZone = true,
+            DisableEggAnimation = false,
+            AutoMakeGold = false,
+            AutoMakeRainbow = false,
+            AutoFusePets = false,
+            FuseMinCount = 12,
+            AutoCharmPets = false,
+            PreferredCharms = { "Royalty", "Overload", "Glittering", "Strength", "Agility", "TNT", "Coins", "Criticals" },
+        },
+
+        Automatic = {
+            AutoBuyBoosts = false,
+            AutoBuyWingsUpgrades = false,
+            AutoEatFruits = false,
+            EatShinyFruits = true,
+            AutoUseToys = false,
+            AutoUsePotions = false,
+            PotionMinTier = 1,
+            AutoOpenGifts = false,
+            AutoOpenLootboxes = false,
+            AutoCombineKeys = false,
+            AutoOpenChests = false,
+            AutoSpinWheels = false,
+            AutoUpgradeFruits = false,
+            AutoUpgradePotions = false,
+            AutoUpgradeEnchants = false,
+        },
+
+        FishingWorld = {
+            AutoBuyNearestEgg = false,
+            EggAmount = "Max",
+            AutoEventFishing = false,
+            FishingMode = "Game Autofish + Cast", -- "Game Autofish", "Auto Cast & Reel", "Game Autofish + Cast"
+            AutoSellEventFish = false,
+            AutoBuyNextRod = false,
+            AutoUseScrolls = false,
+            SelectedScrolls = { "Fishing Luck Scroll", "Fishing Speed Scroll", "Fishing XP Scroll" },
+            AutoUseBucketOfChum = false,
+        },
+
+        FarmingWorld = {
+            AutoBuyFarmEgg = false,
+            AutoPlaceFarmEgg = false,
+            AutoHarvestFarmEgg = false,
+            AutoBuyFarmSupply = false,
+            AutoFeedFarmPets = false,
+            AutoSellFarmPets = false,
+            AutoCraftItemsPets = false,
+            AutoClaimFarmStorage = false,
+            AutoClaimFarmingQuestRewards = false,
+            AutoCompleteFarmingQuest = false,
+            AutoBuyFarmPetSlot = false,
+            AutoBuyFarmStorageSlot = false,
+            AutoMailPixelRainbowItems = false,
+            PixelMailUsername = "",
+        },
+
+        Mailbox = {
+            AutoClaimMailbox = false,
+            AutoMailPets = false,
+            MailUsername = "",
+            MailRarityFilter = "Exclusive / Huge+", -- "All Unlocked", "Mythical+", "Exclusive / Huge+", "Huge / Titanic+"
+            MailMessage = "PS99 Hub Mail",
+        },
+
+        Optimization = {
+            OptimizePumpkinTycoon = false,
+            DisableBreakablesModel = false,
+            DisablePetsRendering = false,
+            DisableConfettiRendering = false,
+            OptimizeGame = false,
+        },
+
+        Webhook = {
+            Url = "",
+            NotifyTitanic = true,
+            NotifyHuge = true,
+            NotifyExclusive = false,
         },
     }
 
@@ -156,6 +269,13 @@ function Context.New(opts)
             Event = "Waiting inside Pumpkin Patch Tycoon...",
             Movement = "Idle",
             Farm = "Auto Tap idle",
+            Main = "Main features idle",
+            Egg = "Egg & Pet machines idle",
+            Automatic = "Automatic consumables idle",
+            Fishing = "Fishing Event idle",
+            Farming = "Farming World idle",
+            Mailbox = "Mailbox idle",
+            Webhook = "Webhook listener active",
         },
         Cooldowns = {
             LastButtonAt = 0,
@@ -180,6 +300,9 @@ function Context.New(opts)
             RareAttempts = 0,
             TurkeyHits = 0,
             CoinSaveReason = "None",
+            WebhooksSent = 0,
+            PetsMailed = 0,
+            FishCaught = 0,
         },
         ActiveButtonIds = {},
         RayfieldUnload = nil,

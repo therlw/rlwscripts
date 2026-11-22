@@ -1,5 +1,5 @@
 -- src/UI/Tabs/PumpkinTycoonTab.lua
--- Current Event Tab: "Pumpkin Tycoon" (Part 1 & Part 2 Complete Suite, Halloween Games omitted)
+-- Current Event Tab: "Current Event" (Pumpkin Tycoon Part 1 & Part 2 Suite, Halloween Games omitted)
 
 local PumpkinTycoonTab = {}
 
@@ -13,7 +13,7 @@ function PumpkinTycoonTab.Init(ctx)
     local createBoundDropdown = UI.createBoundDropdown
     local createBoundSlider = UI.createBoundSlider
 
-    local tab = Window:CreateTab({ name = "Pumpkin Tycoon", icon = 93364949241311 })
+    local tab = Window:CreateTab({ name = "Current Event", icon = 93364949241311 })
     UI.PumpkinTycoonTab = tab
 
     tab:CreateSection({ name = "Live Event Status" })
@@ -82,7 +82,7 @@ function PumpkinTycoonTab.Init(ctx)
     createBoundToggle(tab, {
         name = "Auto Teleport to Best Pumpkin Egg/Area",
         flag = "PTAutoTPBestEgg",
-        description = "Moves to highest unlocked Pumpkin Egg including Pine Woods, Maple Creek & Golden Ridge",
+        description = "Stands inside BreakableZone on the edge closest to best unlocked Egg (Zones 1-8)",
         value = PT.AutoTeleportBestEgg,
     }, function() return PT.AutoTeleportBestEgg end, function(v) PT.AutoTeleportBestEgg = v end)
 

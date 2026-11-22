@@ -128,6 +128,41 @@ function PumpkinEconomy.Init(ctx)
         return nearest
     end
 
+    --- Computes the closest spot INSIDE the nearest unlocked BreakableZone part to `targetEgg.pos`,
+    --- staying within egg hatch range so pets continue breaking breakables continuously while hatching.
+    local function resolveEggStandPosition(targetEgg)
+        if not targetEgg or not targetEgg.pos then
+            return nil, 12, false
+        end
+        local dir = targetEgg.egg and targetEgg.egg._dir or {}
+        local rawRange = tonumber(dir.hatchRange or dir.HatchRange) or 30
+        local maxHatch = math.min(27, math.max(12, rawRange - 3))
+        local bzParts = Net.GetPumpkinBreakZoneParts()
+        local standInZone, withinHatch = Utils.computeBreakableZoneStandPos(targetEgg.pos, bzParts, maxHatch, 3.0)
+        if standInZone and withinHatch then
+            return standInZone, maxHatch, true
+        end
+        return targetEgg.pos + Vector3.new(0, 0, 6), 12, false
+    end
+
+    local function isAtEggBreakableSpot(hrpPos, targetEgg, standPos, maxHatch, usesBreakZone)
+        if not hrpPos or not targetEgg or not targetEgg.pos then
+            return false
+        end
+        if Utils.flatDist(hrpPos, targetEgg.pos) > maxHatch then
+            return false
+        end
+        if not usesBreakZone then
+            return Utils.flatDist(hrpPos, standPos) <= 10
+        end
+        for _, part in ipairs(Net.GetPumpkinBreakZoneParts()) do
+            if Utils.isPointInZonePart(part, hrpPos) then
+                return true
+            end
+        end
+        return Utils.flatDist(hrpPos, standPos) <= 5
+    end
+
     function Econ.TryTeleportBestEgg()
         local PT = States.PumpkinTycoon
         if not PT.AutoTeleportBestEgg or not Net.IsInPumpkinTycoon() then return false end
@@ -137,8 +172,9 @@ function PumpkinEconomy.Init(ctx)
         local best = Econ.GetBestUnlockedEgg()
         if not best or not best.pos then return false end
 
+        local standPos, maxHatch, usesZone = resolveEggStandPosition(best)
         local _, hrp = Utils.getCharacterParts()
-        if hrp and Utils.flatDist(hrp.Position, best.pos) <= 13 then
+        if hrp and isAtEggBreakableSpot(hrp.Position, best, standPos, maxHatch, usesZone) then
             return false
         end
 
@@ -146,12 +182,11 @@ function PumpkinEconomy.Init(ctx)
         if Move.IsOnTurkeyIsland() then
             Move.ReturnToOwnIsland()
         end
-        local standPos = best.pos + Vector3.new(0, 0, 6)
-        local ok = Move.MoveTo(standPos, 9, 3.0, function()
+        local ok = Move.MoveTo(standPos, usesZone and 3.8 or 9, 3.0, function()
             return not States.PumpkinTycoon.AutoTeleportBestEgg
         end)
         if ok then
-            ctx.Runtime.Status.Event = "At Best Egg: " .. best.eggName
+            ctx.Runtime.Status.Event = "At Best Egg (" .. (usesZone and "in BreakableZone" or "near pad") .. "): " .. best.eggName
         end
         return ok
     end
@@ -211,9 +246,10 @@ function PumpkinEconomy.Init(ctx)
         if Move.IsOnTurkeyIsland() then
             Move.ReturnToOwnIsland()
         end
+        local standPos, maxHatch, usesZone = resolveEggStandPosition(target)
         local _, hrp = Utils.getCharacterParts()
-        if not hrp or Utils.flatDist(hrp.Position, target.pos) > 14 then
-            local arrived = Move.MoveTo(target.pos + Vector3.new(0, 0, 6), 12, 3.0, function()
+        if not hrp or not isAtEggBreakableSpot(hrp.Position, target, standPos, maxHatch, usesZone) then
+            local arrived = Move.MoveTo(standPos, usesZone and 3.8 or 10, 3.0, function()
                 return not States.PumpkinTycoon.AutoBuyNearestEgg
             end)
             if not arrived then return false end
@@ -398,8 +434,8 @@ function PumpkinEconomy.Init(ctx)
         -- 2. Auto Plant Merchant Pumpkins (JD_Prefer + XC_Allocate)
         if PT.AutoPlantMerchantPumpkins and M.Stock then
             if os.clock() - Econ._lastAutoPlaceAttemptAt >= 3.0 then
-                local isNext = Net.PlotSave("StockAutoPlace") ~= false
-                if not isNext then
+                local isAutoPlaceOn = M.Stock.AutoPlaceOn and M.Stock.AutoPlaceOn() == true
+                if not isAutoPlaceOn then
                     Econ._lastAutoPlaceAttemptAt = os.clock()
                     Net.PlotInvoke(NET.SetAutoPlace, true)
                 end
@@ -488,11 +524,9 @@ function PumpkinEconomy.Init(ctx)
                     local paused = (M.BoostCmds.IsTierPaused and M.BoostCmds.IsTierPaused(boostId)) == true
 
                     if timer > 6 then
-                        -- Higher tier is currently active!
-                        if tier == 3 then
-                            hasHigherActive = true
-                            break
-                        end
+                        -- Any equal or higher tier currently active: stop before falling back to lower tiers
+                        hasHigherActive = true
+                        break
                     elseif not hasHigherActive and not paused then
                         local found = nil
                         pcall(function()

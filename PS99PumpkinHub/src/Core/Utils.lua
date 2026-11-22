@@ -156,6 +156,82 @@ function Utils.Init(ctx)
         return model, ca, dir, pos, disabled
     end
 
+    local function isPointInZonePart(part, pos)
+        if not part or not part:IsA("BasePart") or not pos then return false end
+        local localPos = part.CFrame:PointToObjectSpace(pos)
+        local half = part.Size * 0.5
+        return math.abs(localPos.X) <= half.X and math.abs(localPos.Z) <= half.Z and math.abs(localPos.Y) <= half.Y + 100
+    end
+
+    --- Computes a stand position STRICTLY INSIDE the nearest BreakableZone part, on the edge closest to eggPos
+    --- (so pets continue attacking zone breakables while the player remains within egg hatch range).
+    local function computeBreakableZoneStandPos(eggPos, zoneParts, maxHatchRange, innerMargin)
+        if not eggPos or type(zoneParts) ~= "table" or #zoneParts == 0 then
+            return nil, false, nil
+        end
+        local margin = tonumber(innerMargin) or 3.0
+        local maxRange = tonumber(maxHatchRange) or 28
+        local bestPos = nil
+        local bestDist = math.huge
+        local bestPart = nil
+
+        for _, part in ipairs(zoneParts) do
+            if typeof(part) == "Instance" and part:IsA("BasePart") and part.Parent then
+                local localEgg = part.CFrame:PointToObjectSpace(eggPos)
+                local halfX = math.max(0, part.Size.X * 0.5 - margin)
+                local halfZ = math.max(0, part.Size.Z * 0.5 - margin)
+                local clampedLocal = Vector3.new(
+                    math.clamp(localEgg.X, -halfX, halfX),
+                    0,
+                    math.clamp(localEgg.Z, -halfZ, halfZ)
+                )
+                local worldInside = part.CFrame:PointToWorldSpace(clampedLocal)
+                local stand = Vector3.new(worldInside.X, eggPos.Y, worldInside.Z)
+                local d = flatDist(stand, eggPos)
+                if d < bestDist then
+                    bestDist = d
+                    bestPos = stand
+                    bestPart = part
+                end
+            end
+        end
+
+        if bestPos and bestDist <= maxRange then
+            return bestPos, true, bestPart
+        end
+        return bestPos, false, bestPart
+    end
+
+    local function postWebhook(url, payloadTbl)
+        if type(url) ~= "string" or not string.match(url, "^https?://") then
+            return false, "invalid url"
+        end
+        local reqFn = (type(request) == "function" and request)
+            or (type(http_request) == "function" and http_request)
+            or (type(http) == "table" and type(http.request) == "function" and http.request)
+            or (type(syn) == "table" and type(syn.request) == "function" and syn.request)
+        if not reqFn then
+            return false, "no http request fn"
+        end
+        local okEnc, body = pcall(function()
+            return ctx.Roblox.HttpService:JSONEncode(payloadTbl)
+        end)
+        if not okEnc or type(body) ~= "string" then
+            return false, "encode failed"
+        end
+        local okReq, resp = pcall(reqFn, {
+            Url = url,
+            Method = "POST",
+            Headers = { ["Content-Type"] = "application/json" },
+            Body = body,
+        })
+        if not okReq then
+            return false, tostring(resp)
+        end
+        local code = (type(resp) == "table" and tonumber(resp.StatusCode)) or 200
+        return code >= 200 and code < 300, code
+    end
+
     local function fsEnsureFolder(folderPath)
         pcall(function()
             if type(isfolder) == "function" and type(makefolder) == "function" then
@@ -178,6 +254,9 @@ function Utils.Init(ctx)
     Utils.dist3D = dist3D
     Utils.getInstancePos = getInstancePos
     Utils.unpackBreakable = unpackBreakable
+    Utils.isPointInZonePart = isPointInZonePart
+    Utils.computeBreakableZoneStandPos = computeBreakableZoneStandPos
+    Utils.postWebhook = postWebhook
     Utils.fsEnsureFolder = fsEnsureFolder
 
     ctx.Utils = Utils

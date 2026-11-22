@@ -38,14 +38,59 @@ function NetworkBridge.Init(ctx)
         EnchantCmds = safeReq(Client, "EnchantCmds"),
         FlyingCmds = safeReq(Client, "FlyingCmds"),
         PlayerPet = safeReq(Client, "PlayerPet"),
+        InventoryCmds = safeReq(Client, "InventoryCmds"),
+        ZoneCmds = safeReq(Client, "ZoneCmds"),
+        RebirthCmds = safeReq(Client, "RebirthCmds"),
+        RankCmds = safeReq(Client, "RankCmds"),
+        QuestCmds = safeReq(Client, "QuestCmds"),
+        AutoFarmCmds = safeReq(Client, "AutoFarmCmds"),
+        OrbCmds = safeReq(Client, "OrbCmds"),
+        UltimateCmds = safeReq(Client, "UltimateCmds"),
+        PotionCmds = safeReq(Client, "PotionCmds"),
+        FruitCmds = safeReq(Client, "FruitCmds"),
+        SprinklerCmds = safeReq(Client, "SprinklerCmds"),
+        LootboxCmds = safeReq(Client, "LootboxCmds"),
+        SpinnyWheelCmds = safeReq(Client, "SpinnyWheelCmds"),
+        UpgradeCmds = safeReq(Client, "UpgradeCmds"),
+        EventUpgradeCmds = safeReq(Client, "EventUpgradeCmds"),
+        BoostExchangeCmds = safeReq(Client, "BoostExchangeCmds"),
+        ForeverPackCmds = safeReq(Client, "ForeverPackCmds"),
+        TeleportMapCmds = safeReq(Client, "TeleportMapCmds"),
+        EventFishingCmds = safeReq(Client, "EventFishingCmds"),
+        FarmHoldCmds = safeReq(Client, "FarmHoldCmds"),
+        PlotCmds = safeReq(Client, "PlotCmds"),
+        PetCmds = safeReq(Client, "PetCmds"),
+        PetEquipCmds = safeReq(Client, "PetEquipCmds"),
+        CharmCmds = safeReq(Client, "CharmCmds"),
+        SettingsCmds = safeReq(Client, "SettingsCmds"),
+        GUIFX = safeReq(Client, "GUIFX"),
+        GUI = safeReq(Client, "GUI"),
+        TabController = safeReq(Client, "TabController"),
         Signal = safeReq(Library, "Signal"),
         Directory = safeReq(Library, "Directory"),
+        Types = Types,
         CalcEggPricePlayer = safeReq(Balancing, "CalcEggPricePlayer"),
+        Balancing = Balancing,
         BoostTierFamilies = safeReq(Util, "BoostTierFamilies"),
         TapTargetPolicy = safeReq(Util, "TapTargetPolicy"),
+        AutoFarmReach = safeReq(Util, "AutoFarmReach"),
+        ZonesUtil = safeReq(Util, "ZonesUtil"),
+        WorldsUtil = safeReq(Util, "WorldsUtil"),
+        EventFishingUtil = safeReq(Util, "EventFishingUtil"),
         MiscItem = safeReq(Items, "MiscItem"),
         ConsumableItem = safeReq(Items, "ConsumableItem"),
         LootboxItem = safeReq(Items, "LootboxItem"),
+        PetItem = safeReq(Items, "PetItem"),
+        FruitItem = safeReq(Items, "FruitItem"),
+        PotionItem = safeReq(Items, "PotionItem"),
+        EnchantItem = safeReq(Items, "EnchantItem"),
+        CharmItem = safeReq(Items, "CharmItem"),
+        CatchItem = safeReq(Items, "CatchItem"),
+        WorkerItem = safeReq(Items, "WorkerItem"),
+        EggFarmItem = safeReq(Items, "EggFarmItem"),
+        CurrencyItem = safeReq(Items, "CurrencyItem"),
+        PetUtil = safeReq(Util, "PetUtil"),
+        FarmingTypes = safeReq(Types, "Farming"),
 
         -- Pumpkin Tycoon specific modules
         PT = safeReq(Client, "PumpkinTycoonCmds"),
@@ -275,6 +320,56 @@ function NetworkBridge.Init(ctx)
         local instances = things and things:FindFirstChild("Instances")
         local pt = instances and instances:FindFirstChild((M.PT_Types and M.PT_Types.INSTANCE_ID) or "PumpkinTycoon")
         return pt and pt:FindFirstChild("PumpkinTycoonShared") or nil
+    end
+
+    function Net.GetSave()
+        if not M.Save or not M.Save.Get then return nil end
+        local ok, s = pcall(M.Save.Get)
+        return ok and type(s) == "table" and s or nil
+    end
+
+    function Net.GetClientPlot(dirId)
+        local ClientPlot = nil
+        local ptFolder = RS.Library.Client:FindFirstChild("PlotCmds")
+        local okReq, mod = pcall(function()
+            return ptFolder and ptFolder:FindFirstChild("ClientPlot") and require(ptFolder.ClientPlot)
+        end)
+        if okReq and type(mod) == "table" then
+            ClientPlot = mod
+        elseif M.PlotCmds then
+            ClientPlot = M.PlotCmds
+        end
+        if not ClientPlot or not ClientPlot.GetAll then return nil end
+        local okAll, list = pcall(ClientPlot.GetAll)
+        if not okAll or type(list) ~= "table" then return nil end
+        local lp = ctx.Roblox.LocalPlayer
+        for _, p in pairs(list) do
+            if (not p.IsDestroyed or not p:IsDestroyed()) and p.GetOwner and p:GetOwner() == lp then
+                if not dirId or (p.GetDirectory and p:GetDirectory() and p:GetDirectory()._id == dirId) then
+                    return p
+                end
+            end
+        end
+        return nil
+    end
+
+    function Net.GetPumpkinBreakZoneParts()
+        local plotModel = Net.GetPlotModel()
+        local parts = {}
+        local sections = plotModel and plotModel:FindFirstChild("Sections")
+        if sections then
+            for _, sec in ipairs(sections:GetChildren()) do
+                local bz = sec:FindFirstChild("BREAK_ZONES")
+                if bz then
+                    for _, part in ipairs(bz:GetChildren()) do
+                        if part:IsA("BasePart") then
+                            table.insert(parts, part)
+                        end
+                    end
+                end
+            end
+        end
+        return parts
     end
 
     ctx.Net = Net

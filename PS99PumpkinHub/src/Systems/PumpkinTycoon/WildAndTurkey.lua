@@ -278,7 +278,7 @@ function WildAndTurkey.Init(ctx)
             for _, offer in ipairs(shelf.offers) do
                 if (offer.left or 0) > 0 and wantedSet[offer.item] and coins >= (offer.price or math.huge) then
                     local padPos = Move.FindMachinePad("PetNetStore")
-                    if padPos and Move.GetMode() == "Legit Walk" then
+                    if padPos then
                         Move.ReturnToOwnIsland()
                         Move.MoveTo(padPos, 17, 3.0)
                     end
