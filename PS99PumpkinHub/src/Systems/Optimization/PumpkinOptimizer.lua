@@ -190,7 +190,7 @@ function PumpkinOptimizer.Init(ctx)
             end
         end
         for _, d in ipairs(inst:GetDescendants()) do
-            if d:IsA("TouchTransmitter") or d:IsA("ClickDetector") or d:IsA("ProximityPrompt") then
+            if d:IsA("TouchTransmitter") or d:IsA("ClickDetector") or d:IsA("ProximityPrompt") or d:IsA("LayerCollector") then
                 return true
             end
         end
@@ -393,9 +393,9 @@ function PumpkinOptimizer.Init(ctx)
 
     local function hasGameTag(inst)
         if not inst then return false end
-        if #CollectionService:GetTags(inst) > 0 then return true end
+        if #CollectionService:GetTags(inst) > 0 or inst:IsA("LayerCollector") then return true end
         for _, d in ipairs(inst:GetDescendants()) do
-            if #CollectionService:GetTags(d) > 0 then return true end
+            if #CollectionService:GetTags(d) > 0 or d:IsA("LayerCollector") then return true end
         end
         return false
     end
