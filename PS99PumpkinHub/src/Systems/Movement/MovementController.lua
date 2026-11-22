@@ -92,7 +92,8 @@ function MovementController.Init(ctx)
             end
             local unit = flatVec.Unit
             local right = Vector3.new(-unit.Z, 0, unit.X)
-            local reach = 4.8
+            local backStart = -unit * 0.7
+            local reach = 5.2
             local rootToFloor = (curHum.HipHeight or 2.2) + (curHrp.Size.Y * 0.5)
             local groundY = curHrp.Position.Y - rootToFloor
 
@@ -103,7 +104,7 @@ function MovementController.Init(ctx)
             local sawStepOrLow = false
             local sawHeadBlock = false
             for _, lat in ipairs({ 0, -1.25, 1.25 }) do
-                local latOff = right * lat
+                local latOff = (right * lat) + backStart
                 local lowOrigin = Vector3.new(curHrp.Position.X, groundY + 0.65, curHrp.Position.Z) + latOff
                 local shinOrigin = Vector3.new(curHrp.Position.X, groundY + 1.55, curHrp.Position.Z) + latOff
                 local waistOrigin = Vector3.new(curHrp.Position.X, groundY + 2.85, curHrp.Position.Z) + latOff
@@ -199,7 +200,7 @@ function MovementController.Init(ctx)
             AgentHeight = 5,
             AgentCanJump = true,
             AgentCanClimb = true,
-            WaypointSpacing = 5,
+            WaypointSpacing = 7,
         })
 
         local okPath = pcall(function()
@@ -210,9 +211,10 @@ function MovementController.Init(ctx)
         local timeoutAt = os.clock() + (States.Movement.WalkTimeout or 18)
         local waypoints = (okPath and path.Status == Enum.PathStatus.Success) and path:GetWaypoints() or {}
 
-        -- Fast straight hop-walk when short path has an excessive detour (e.g. stepping onto a nearby deck)
-        if flatTotal <= 75 and (#waypoints == 0 or (#waypoints * 5) > math.max(50, flatTotal * 2.2)) then
-            local directHit, aborted = driveSegment(targetPos, math.max(3.2, math.min(reqDist, 4.5)), math.min(5.0, math.max(1.5, timeoutAt - os.clock())), false, 4)
+        -- Fast straight hop-walk only when path failed or detours >3x on open low-ledge terrain
+        local _, tallAtStart = probeAhead(hrp, hum, targetPos)
+        if not tallAtStart and flatTotal <= 75 and (#waypoints == 0 or (#waypoints * 7) > math.max(60, flatTotal * 3.0)) then
+            local directHit, aborted = driveSegment(targetPos, math.max(3.2, math.min(reqDist, 4.5)), math.min(4.5, math.max(1.5, timeoutAt - os.clock())), false, 3)
             if directHit or Utils.flatDist((select(2, Utils.getCharacterParts()) or hrp).Position, targetPos) <= reqDist then
                 arrived = true
             elseif aborted then
@@ -227,7 +229,7 @@ function MovementController.Init(ctx)
                 local wp = waypoints[idx]
                 local hitFinal, aborted = driveSegment(
                     wp.Position,
-                    3.6,
+                    4.4,
                     math.min(2.4, math.max(0.4, timeoutAt - os.clock())),
                     wp.Action == Enum.PathWaypointAction.Jump
                 )
