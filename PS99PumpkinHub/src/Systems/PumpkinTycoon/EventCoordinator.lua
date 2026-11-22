@@ -135,6 +135,8 @@ function EventCoordinator.Init(ctx)
         if oCnt then return string.format("Açıldı: %sx %s", oCnt, oId) end
         local rebN = s:match("^Completed Pumpkin Tycoon Rebirth #(.+)$")
         if rebN then return "Etkinlik Rebirth #" .. rebN .. " tamamlandı!" end
+        local rCur, rMax = s:match("^Rebirth target reached %((%d+) / (%d+)%)$")
+        if rCur then return string.format("Hedef Rebirth'e ulaşıldı (%s/%s)", rCur, rMax) end
         local thNet, thPet, thOut = s:match("^Threw (.+) at (.+) %((.+)%)$")
         if thNet then return string.format("%s hedefine %s atıldı (%s)", thPet, thNet, thOut) end
         local thNet2, thPet2 = s:match("^Threw (.+) at (.+)!$")
@@ -177,14 +179,18 @@ function EventCoordinator.Init(ctx)
     function Coordinator.FormatStatusSummary()
         local coins = Net.GetPumpkinCoins()
         local tokens = Net.GetPumpkinTokens()
+        local rebs = Net.GetPumpkinRebirths()
+        local maxReb = tonumber(ctx.States.PumpkinTycoon.MaxRebirths) or 0
+        local rebTxt = (maxReb > 0) and string.format("%d/%d", rebs, maxReb) or tostring(rebs)
         local pNets = Net.GetMiscCount("Pet Net")
         local uNets = Net.GetMiscCount("Ultra Pet Net")
         local te = ctx.Runtime.Telemetry
         local part2Txt = Net.OwnPlotPart2() and "Bölüm 2 Açık" or "Bölüm 1"
 
         return string.format(
-            "%s | Coin: %s | Token: %s | Ağ: %d (Ultra: %d)\nİşlem: %s\nCoin Tasarrufu: %s | Buton: %d | Yumurta: %d | Nadir: %d",
+            "%s | Rebirth: %s | Coin: %s | Token: %s | Ağ: %d (Ultra: %d)\nİşlem: %s\nCoin Tasarrufu: %s | Buton: %d | Yumurta: %d | Nadir: %d",
             part2Txt,
+            rebTxt,
             Utils.formatCompact(coins),
             Utils.formatCompact(tokens),
             pNets,

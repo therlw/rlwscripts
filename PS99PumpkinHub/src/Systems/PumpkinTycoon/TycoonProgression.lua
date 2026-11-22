@@ -196,6 +196,15 @@ function TycoonProgression.Init(ctx)
         local okP, _, _, ratio = pcall(M.Util_Buttons.RebirthProgress, buttonsState)
         if not okP or type(ratio) ~= "number" or ratio < 1 then return false end
 
+        local maxTarget = tonumber(PT.MaxRebirths) or 0
+        if maxTarget > 0 then
+            local currentRebirths = Net.GetPumpkinRebirths()
+            if currentRebirths >= maxTarget then
+                ctx.Runtime.Status.Event = string.format("Rebirth target reached (%d / %d)", currentRebirths, maxTarget)
+                return false
+            end
+        end
+
         Move.ReturnToOwnIsland()
         local plotModel = Net.GetPlotModel()
         local interact = plotModel and plotModel:FindFirstChild("Interactable")

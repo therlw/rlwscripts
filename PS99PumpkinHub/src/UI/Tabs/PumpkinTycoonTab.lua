@@ -123,6 +123,33 @@ function PumpkinTycoonTab.Init(ctx)
         PT.AutoRebirth = (v == true)
     end)
 
+    UI.createBoundDropdown(Tab, {
+        name = "Rebirth Limiti",
+        flag = "PTMaxRebirths",
+        options = { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "15", "20" },
+        labels = {
+            ["0"] = "Sınırsız (Durma)",
+            ["1"] = "Rebirth 1'de Kal",
+            ["2"] = "Rebirth 2'de Kal",
+            ["3"] = "Rebirth 3'te Kal (Şans Max)",
+            ["4"] = "Rebirth 4'te Kal",
+            ["5"] = "Rebirth 5'te Kal",
+            ["6"] = "Rebirth 6'da Kal",
+            ["7"] = "Rebirth 7'de Kal",
+            ["8"] = "Rebirth 8'de Kal",
+            ["9"] = "Rebirth 9'da Kal",
+            ["10"] = "Rebirth 10'da Kal",
+            ["15"] = "Rebirth 15'te Kal",
+            ["20"] = "Rebirth 20'de Kal (Bonus Max)",
+        },
+        value = tostring(PT.MaxRebirths or "0"),
+        description = "Seçilen Rebirth sayısına ulaşınca Oto Rebirth durur (3: Şans Max, 20: Bonus Max)",
+    }, function()
+        return tostring(PT.MaxRebirths or "0")
+    end, function(v)
+        PT.MaxRebirths = tostring(v or "0")
+    end)
+
     UI.createBoundToggle(Tab, {
         name = "En İyi Yumurtaya Işınlan",
         flag = "PTAutoTPBestEgg",

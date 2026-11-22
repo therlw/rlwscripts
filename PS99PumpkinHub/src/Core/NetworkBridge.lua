@@ -298,6 +298,12 @@ function NetworkBridge.Init(ctx)
         return 0
     end
 
+    function Net.GetPumpkinRebirths()
+        local varKey = (M.PT_Types and M.PT_Types.VAR and M.PT_Types.VAR.Rebirths) or "Rebirths"
+        local val = Net.PlotSave(varKey)
+        return math.max(0, math.floor(tonumber(val) or 0))
+    end
+
     function Net.GetMiscCount(itemId)
         if not M.MiscItem then return 0 end
         local ok, c = pcall(function()
