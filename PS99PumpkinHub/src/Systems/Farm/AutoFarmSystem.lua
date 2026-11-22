@@ -344,18 +344,20 @@ function AutoFarmSystem.Init(ctx)
                                 end
                             end
 
-                            -- Skip kept/locked pedestal pumpkins inside PumpkinTycoon; optionally include unkept pedestals when AutoBreakPumpkins is ON
+                            -- Skip kept/locked pedestal pumpkins inside PumpkinTycoon; include unkept pedestals when AutoBreakPumpkins is ON
                             local keptPumpkin = false
                             local isUnkeptPedestal = false
                             if inInst and type(ca) == "table" and type(ca.PumpkinPedestal) == "number" then
                                 local pedLocked = M.AutoBreak and M.AutoBreak.Locked and M.AutoBreak.Locked(ca.PumpkinPedestal)
                                 local keptByRule = keepBelow > 0 and type(ca.PumpkinRung) == "number" and ca.PumpkinRung >= keepBelow
-                                if pedLocked or keptByRule then
+                                if pedLocked or keptByRule or not States.PumpkinTycoon.AutoBreakPumpkins then
                                     keptPumpkin = true
-                                elseif States.PumpkinTycoon.AutoBreakPumpkins and plotCF and plotSize and checkPos and M.PT_Types and M.PT_Types.OnIsland then
+                                elseif plotCF and plotSize and checkPos and M.PT_Types and M.PT_Types.OnIsland then
                                     local okOn, resOn = pcall(M.PT_Types.OnIsland, plotCF, plotSize, checkPos)
                                     if okOn and resOn == true then
                                         isUnkeptPedestal = true
+                                    else
+                                        keptPumpkin = true
                                     end
                                 end
                             end
@@ -373,6 +375,7 @@ function AutoFarmSystem.Init(ctx)
                                     hp = hp,
                                     maxHp = maxHp,
                                     need = need,
+                                    isPedestal = isUnkeptPedestal,
                                     petsTable = type(brk) == "table" and type(brk.pets) == "table" and brk.pets or nil,
                                 }
                                 table.insert(candidates, entry)
@@ -406,6 +409,7 @@ function AutoFarmSystem.Init(ctx)
         -- Claim FastFarm AIHold and separate busy (already hitting valid live breakable) vs free pets
         local busyTaken = {}
         local freePets = {}
+        local nonPedestalBusy = {}
         local bulkJoin = {}
 
         for _, pet in ipairs(petList) do
@@ -415,6 +419,9 @@ function AutoFarmSystem.Init(ctx)
                 local targetEntry = typeof(curT) == "Instance" and candidateByModel[curT] or nil
                 if targetEntry then
                     busyTaken[targetEntry.uid] = (busyTaken[targetEntry.uid] or 0) + 1
+                    if not targetEntry.isPedestal then
+                        table.insert(nonPedestalBusy, { pet = pet, entry = targetEntry })
+                    end
                     -- Retry Breakables_JoinPetBulk if server has not yet registered pet on this breakable
                     local serverJoined = targetEntry.petsTable and targetEntry.petsTable[pet.euid] == true
                     if not serverJoined and now - (FarmSys._petAssignAt[pet.euid] or 0) >= 0.28 then
@@ -427,7 +434,41 @@ function AutoFarmSystem.Init(ctx)
             end
         end
 
-        -- Cluster freed pets to saturate 1-shot kill requirements (deficit > 0) before spilling extras
+        -- Preempt non-pedestal busy pets if unkept pedestal pumpkins still lack pets so they break immediately
+        local totalPedDeficit = 0
+        for _, c in ipairs(candidates) do
+            if c.isPedestal then
+                local deficit = c.need - (busyTaken[c.uid] or 0)
+                if deficit > 0 then
+                    totalPedDeficit = totalPedDeficit + deficit
+                end
+            end
+        end
+        if totalPedDeficit > #freePets and #nonPedestalBusy > 0 then
+            table.sort(nonPedestalBusy, function(a, b)
+                local aExcess = (busyTaken[a.entry.uid] or 0) - a.entry.need
+                local bExcess = (busyTaken[b.entry.uid] or 0) - b.entry.need
+                if (aExcess > 0) ~= (bExcess > 0) then
+                    return aExcess > 0
+                end
+                local aRatio = a.entry.hp / math.max(1, a.entry.maxHp)
+                local bRatio = b.entry.hp / math.max(1, b.entry.maxHp)
+                return aRatio > bRatio
+            end)
+            local pulled = 0
+            local needPull = totalPedDeficit - #freePets
+            for _, item in ipairs(nonPedestalBusy) do
+                if pulled >= needPull then break end
+                busyTaken[item.entry.uid] = math.max(0, (busyTaken[item.entry.uid] or 1) - 1)
+                if item.pet.euid then
+                    bulkJoin[item.pet.euid] = nil
+                end
+                table.insert(freePets, item.pet)
+                pulled = pulled + 1
+            end
+        end
+
+        -- Cluster freed pets: Tier-0 on unkept pedestal pumpkins, then saturate Zone 1-shot kills before spilling extras
         if #freePets > 0 then
             for _, pet in ipairs(freePets) do
                 local picked = nil
@@ -436,7 +477,13 @@ function AutoFarmSystem.Init(ctx)
                     local assigned = busyTaken[c.uid] or 0
                     local deficit = c.need - assigned
                     local score
-                    if deficit > 0 then
+                    if c.isPedestal then
+                        if deficit > 0 then
+                            score = -100000 + deficit * 100 + assigned * 10 + math.min(99, c.hp * 0.000001)
+                        else
+                            score = 50000 + assigned * 100 + math.min(99, c.hp * 0.000001)
+                        end
+                    elseif deficit > 0 then
                         score = deficit * 1000 + math.min(999, c.hp * 0.0001)
                     else
                         score = 100000 + assigned * 100 + math.min(99, c.hp * 0.0001)
