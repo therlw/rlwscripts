@@ -27,6 +27,7 @@ function PumpkinEconomy.Init(ctx)
         _lastKeepAttemptAt = 0,
         _lastAutoBreakAt = 0,
         _lastCocoaTripAt = 0,
+        _lastCocoaFailedAt = 0,
     }
 
     local LADDER_INDEX_BY_NAME = {}
@@ -460,8 +461,10 @@ function PumpkinEconomy.Init(ctx)
     function Econ.TryBuyCocoaBoosts()
         local PT = States.PumpkinTycoon
         if not PT.AutoBuyCocoaBoosts or not Net.IsInPumpkinTycoon() then return false end
-        if os.clock() - Cooldowns.LastCocoaBuyAt < CONFIG.CocoaPurchaseCooldown then return false end
-        if os.clock() - Econ._lastCocoaTripAt < 45 then return false end
+        local now = os.clock()
+        if now - Cooldowns.LastCocoaBuyAt < CONFIG.CocoaPurchaseCooldown then return false end
+        if now - Econ._lastCocoaTripAt < 45 then return false end
+        if now - Econ._lastCocoaFailedAt < 3.0 then return false end
 
         local M = Net.Mod
         if not M.Cocoa or not M.Cocoa.Unlocked or not M.Cocoa.Unlocked() then return false end
@@ -519,15 +522,16 @@ function PumpkinEconomy.Init(ctx)
         end)
 
         local range = Net.GetNumberFFlag("PumpkinTycoon_CocoaRange", CONFIG.DefaultCocoaRange)
+        local standRadius = math.min(10, math.max(4, range - 6))
         local padPos = Move.FindMachinePad(M.Util_Cocoa.MACHINE or "PumpkinTycoonCocoaStand")
         if not padPos then return false end
 
         Move.ReturnToOwnIsland()
-        if not Move.MoveTo(padPos, math.max(5, range - 3), 3.0) then
+        if not Move.MoveTo(padPos, standRadius, 3.0) then
+            Econ._lastCocoaFailedAt = os.clock()
             return false
         end
 
-        Econ._lastCocoaTripAt = os.clock()
         local boughtSummary = {}
         local remainingNeedCount = #lowList
 
@@ -545,10 +549,27 @@ function PumpkinEconomy.Init(ctx)
                 local cost = (okQ and type(quote) == "table" and quote.cost) or math.huge
                 if okQ and type(quote) == "table" and not quote.reason and minutes >= 1 and liveCoins >= cost then
                     Cooldowns.LastCocoaBuyAt = os.clock()
-                    local ok = Net.PlotInvoke(M.PT_Types.NET.CocoaBuyTime, entry.key, minutes)
+                    local ok, reason = false, nil
+                    for attempt = 1, 3 do
+                        ok, reason = Net.PlotInvoke(M.PT_Types.NET.CocoaBuyTime, entry.key, minutes)
+                        if ok then
+                            break
+                        end
+                        local rStr = type(reason) == "string" and string.lower(reason) or ""
+                        if string.find(rStr, "walk", 1, true) or string.find(rStr, "closer", 1, true) or string.find(rStr, "far", 1, true) then
+                            if attempt < 3 then
+                                Move.MoveTo(padPos, standRadius, 3.0)
+                                task.wait(0.26)
+                            end
+                        else
+                            break
+                        end
+                    end
                     if ok then
                         table.insert(boughtSummary, string.format("%s +%dm", entry.axis, minutes))
                         task.wait(0.25)
+                    elseif reason then
+                        Utils.debugWarn("CocoaBuyTime", reason)
                     end
                 end
             end
@@ -556,9 +577,11 @@ function PumpkinEconomy.Init(ctx)
         end
 
         if #boughtSummary > 0 then
+            Econ._lastCocoaTripAt = os.clock()
             ctx.Runtime.Status.Event = "Cocoa Refilled: " .. table.concat(boughtSummary, ", ")
             return true
         end
+        Econ._lastCocoaFailedAt = os.clock()
         return false
     end
 

@@ -32,12 +32,21 @@ function MovementController.Init(ctx)
         if not char or not hrp or not targetPos then
             return false
         end
+        local movedDist = (hrp.Position - targetPos).Magnitude
         local offset = yOffset or 3.2
         local dest = CFrame.new(targetPos + Vector3.new(0, offset, 0))
         hrp.AssemblyLinearVelocity = Vector3.zero
         hrp.AssemblyAngularVelocity = Vector3.zero
         char:PivotTo(dest)
         hrp.AssemblyLinearVelocity = Vector3.zero
+        -- Allow Roblox physics replication to propagate new CFrame to the server before remote proximity checks run
+        if movedDist > 6 then
+            task.wait(0.24)
+            local _, curHrp = Utils.getCharacterParts()
+            if curHrp then
+                curHrp.AssemblyLinearVelocity = Vector3.zero
+            end
+        end
         return true
     end
 
