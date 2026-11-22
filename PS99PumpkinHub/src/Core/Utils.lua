@@ -106,6 +106,56 @@ function Utils.Init(ctx)
         return bp and bp.Position or nil
     end
 
+    local function safeTableField(tbl, key)
+        local v = rawget(tbl, key)
+        if v ~= nil or getmetatable(tbl) == nil then
+            return v
+        end
+        local ok, mv = pcall(function()
+            return tbl[key]
+        end)
+        return ok and mv or nil
+    end
+
+    --- Safely unpacks a BreakableFrontend entry or raw Breakable Model without triggering Instance __index errors.
+    local function unpackBreakable(brk)
+        if brk == nil then
+            return nil, nil, nil, nil, false
+        end
+        if typeof(brk) == "Instance" then
+            local disabled = false
+            pcall(function()
+                disabled = brk:GetAttribute("DisableDamage") == true
+            end)
+            return brk, nil, nil, getInstancePos(brk), disabled
+        end
+        if type(brk) ~= "table" then
+            return nil, nil, nil, nil, false
+        end
+
+        local rawModel = safeTableField(brk, "model")
+        local model = (typeof(rawModel) == "Instance") and rawModel or nil
+
+        local rawCA = safeTableField(brk, "clientAttributes")
+        local ca = (type(rawCA) == "table") and rawCA or nil
+
+        local rawDir = safeTableField(brk, "dir") or safeTableField(brk, "directory")
+        local dir = (type(rawDir) == "table") and rawDir or nil
+
+        local rawPos = safeTableField(brk, "position")
+        local pos = (typeof(rawPos) == "Vector3") and rawPos or getInstancePos(model)
+
+        local disabled = (safeTableField(brk, "disableDamage") == true)
+        if not disabled and model then
+            local okAttr, attrVal = pcall(model.GetAttribute, model, "DisableDamage")
+            if okAttr and attrVal == true then
+                disabled = true
+            end
+        end
+
+        return model, ca, dir, pos, disabled
+    end
+
     local function fsEnsureFolder(folderPath)
         pcall(function()
             if type(isfolder) == "function" and type(makefolder) == "function" then
@@ -127,6 +177,7 @@ function Utils.Init(ctx)
     Utils.flatDist = flatDist
     Utils.dist3D = dist3D
     Utils.getInstancePos = getInstancePos
+    Utils.unpackBreakable = unpackBreakable
     Utils.fsEnsureFolder = fsEnsureFolder
 
     ctx.Utils = Utils

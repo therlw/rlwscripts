@@ -146,12 +146,9 @@ function WildAndTurkey.Init(ctx)
             local ok, tbl = pcall(M.BreakableFrontend.AllByInstanceAndClass, cls)
             if ok and type(tbl) == "table" then
                 for uid, brk in pairs(tbl) do
-                    local ca = type(brk) == "table" and brk.clientAttributes or nil
-                    local model = type(brk) == "table" and brk.model or (typeof(brk) == "Instance" and brk or nil)
-                    if type(ca) == "table" and ca.PumpkinTurkey == true and model and model.Parent then
-                        if brk.disableDamage ~= true and model:GetAttribute("DisableDamage") ~= true then
-                            return uid, model
-                        end
+                    local model, ca, _, _, disabled = Utils.unpackBreakable(brk)
+                    if type(ca) == "table" and ca.PumpkinTurkey == true and model and model.Parent and not disabled then
+                        return uid, model
                     end
                 end
             end

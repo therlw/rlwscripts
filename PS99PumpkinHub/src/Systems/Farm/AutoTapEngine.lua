@@ -38,10 +38,9 @@ function AutoTapEngine.Init(ctx)
         return 1 / math.max(1, cps * scale)
     end
 
-    local function isBreakableTapAllowed(brk, model, hrpPos, maxDist)
-        if type(brk) ~= "table" or not model or not model.Parent then return false, math.huge end
-        local dir = brk.dir or brk.directory or {}
-        if dir.NoTapping or brk.disableDamage == true or model:GetAttribute("DisableDamage") == true then
+    local function isBreakableTapAllowed(model, ca, dir, pos, disabled, hrpPos, maxDist)
+        if not model or not model.Parent then return false, math.huge end
+        if (type(dir) == "table" and dir.NoTapping) or disabled then
             return false, math.huge
         end
 
@@ -50,7 +49,6 @@ function AutoTapEngine.Init(ctx)
             return false, math.huge
         end
 
-        local ca = brk.clientAttributes
         local isTurkey = (type(ca) == "table" and ca.PumpkinTurkey == true)
         local isPumpkin = (type(ca) == "table" and type(ca.PumpkinPedestal) == "number")
         local mode = States.Farm.TapTargetMode
@@ -59,7 +57,6 @@ function AutoTapEngine.Init(ctx)
             return false, math.huge
         end
 
-        local pos = brk.position or Utils.getInstancePos(model)
         if not pos then return false, math.huge end
 
         local flat = Utils.flatDist(hrpPos, pos)
@@ -119,10 +116,9 @@ function AutoTapEngine.Init(ctx)
         local nearestDist = math.huge
 
         for uid, brk in pairs(pool) do
-            local model = brk.model
-            local okAllowed, dist = isBreakableTapAllowed(brk, model, hrp.Position, maxDist)
+            local model, ca, dir, pos, disabled = Utils.unpackBreakable(brk)
+            local okAllowed, dist = isBreakableTapAllowed(model, ca, dir, pos, disabled, hrp.Position, maxDist)
             if okAllowed then
-                local ca = brk.clientAttributes
                 if States.Farm.TapTargetMode == "Best / Turkey Priority" and type(ca) == "table" and ca.PumpkinTurkey == true then
                     priorityTurkey = uid
                     break
