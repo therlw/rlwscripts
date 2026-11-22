@@ -467,31 +467,54 @@ function PumpkinEconomy.Init(ctx)
 
         local tankSec = M.Util_Cocoa.TankSeconds and M.Util_Cocoa.TankSeconds() or (720 * 60)
         local stepMin = M.Util_Cocoa.StepMinutes and M.Util_Cocoa.StepMinutes() or 10
+        local minRoomMin = math.min(math.max(1, stepMin), math.max(1, math.floor(tankSec / 60)))
         local coins = Net.GetPumpkinCoins()
 
-        for _, axis in ipairs(PT.SelectedCocoaBoosts or {}) do
+        -- Pick the selected axis with the LOWEST remaining tank time first so full tanks never starve empty ones,
+        -- and quote using affordable minutes (Quote arg #3 is minutes, NOT coins) with at least stepMin missing.
+        local best = nil
+        for orderIdx, axis in ipairs(PT.SelectedCocoaBoosts or {}) do
             local key = COCOA_KEY_MAP[axis]
-            if key then
+            local offer = key and M.Util_Cocoa.Offer and M.Util_Cocoa.Offer(key)
+            if key and offer then
                 local rem = (M.Cocoa.Remaining and M.Cocoa.Remaining(key)) or 0
-                if rem + 60 < tankSec then
-                    local okQ, quote = pcall(M.Util_Cocoa.Quote, key, rem, math.floor(coins))
-                    local minutes = (okQ and type(quote) == "table" and quote.seconds and (quote.seconds // 60)) or stepMin
-                    local cost = (okQ and type(quote) == "table" and quote.cost) or math.huge
-                    if okQ and type(quote) == "table" and not quote.reason and minutes >= 1 and coins >= cost then
-                        local range = Net.GetNumberFFlag("PumpkinTycoon_CocoaRange", CONFIG.DefaultCocoaRange)
-                        local padPos = Move.FindMachinePad(M.Util_Cocoa.MACHINE or "PumpkinTycoonCocoaStand")
-                        if padPos then
-                            Move.ReturnToOwnIsland()
-                            if Move.MoveTo(padPos, math.max(5, range - 3), 3.0) then
-                                Cooldowns.LastCocoaBuyAt = os.clock()
-                                local ok = Net.PlotInvoke(M.PT_Types.NET.CocoaBuyTime, key, minutes)
-                                if ok then
-                                    ctx.Runtime.Status.Event = string.format("Bought Cocoa Boost %s (+%dm)", axis, minutes)
-                                    return true
-                                end
+                local roomMin = math.floor(math.max(0, tankSec - rem) / 60)
+                if roomMin >= minRoomMin then
+                    local costPerMin = (M.Util_Cocoa.CostPerMinute and M.Util_Cocoa.CostPerMinute(offer.Tier)) or 100000000
+                    local affordableMin = (costPerMin > 0) and math.floor(coins / costPerMin) or 0
+                    local wantMin = math.min(roomMin, affordableMin)
+                    if wantMin >= 1 then
+                        local okQ, quote = pcall(M.Util_Cocoa.Quote, offer, rem, wantMin)
+                        local minutes = (okQ and type(quote) == "table" and quote.seconds and (quote.seconds // 60)) or 0
+                        local cost = (okQ and type(quote) == "table" and quote.cost) or math.huge
+                        if okQ and type(quote) == "table" and not quote.reason and minutes >= 1 and coins >= cost then
+                            if not best or rem < best.rem or (rem == best.rem and orderIdx < best.orderIdx) then
+                                best = {
+                                    axis = axis,
+                                    key = key,
+                                    rem = rem,
+                                    orderIdx = orderIdx,
+                                    minutes = minutes,
+                                }
                             end
                         end
                     end
+                end
+            end
+        end
+
+        if not best then return false end
+
+        local range = Net.GetNumberFFlag("PumpkinTycoon_CocoaRange", CONFIG.DefaultCocoaRange)
+        local padPos = Move.FindMachinePad(M.Util_Cocoa.MACHINE or "PumpkinTycoonCocoaStand")
+        if padPos then
+            Move.ReturnToOwnIsland()
+            if Move.MoveTo(padPos, math.max(5, range - 3), 3.0) then
+                Cooldowns.LastCocoaBuyAt = os.clock()
+                local ok = Net.PlotInvoke(M.PT_Types.NET.CocoaBuyTime, best.key, best.minutes)
+                if ok then
+                    ctx.Runtime.Status.Event = string.format("Bought Cocoa Boost %s (+%dm)", best.axis, best.minutes)
+                    return true
                 end
             end
         end
