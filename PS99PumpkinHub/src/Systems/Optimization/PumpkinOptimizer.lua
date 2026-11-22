@@ -225,8 +225,17 @@ function PumpkinOptimizer.Init(ctx)
 
     local function scrubDebrisChild(d)
         if not Optimizer.Enabled or not d or not d.Parent then return end
-        if FLASH_NAMES[d.Name] or d.Name:find("ParticleHost", 1, true) or d.Name:find("Pumpkin", 1, true)
-            or d.Name:find("Confetti", 1, true) or d.Name:find("Flash", 1, true) or d.Name:find("Turkey", 1, true)
+        if d:IsA("LayerCollector") or d:IsA("BillboardGui") or d:IsA("SurfaceGui") or d:IsA("ScreenGui") then
+            return
+        end
+        local name = d.Name
+        if name:find("Tag", 1, true) or name:find("Sign", 1, true) or name:find("Board", 1, true) or name:find("Host", 1, true) then
+            if not name:find("ParticleHost", 1, true) then
+                return
+            end
+        end
+        if FLASH_NAMES[name] or name:find("ParticleHost", 1, true) or name:find("Confetti", 1, true)
+            or name:find("Flash", 1, true) or name:find("Shockwave", 1, true) or name:find("Feathers", 1, true)
             or d:IsA("ParticleEmitter") or d:IsA("Explosion") or d:IsA("Beam") or d:IsA("Trail") then
             local cnt = #d:GetDescendants() + 1
             if pcall(function() d:Destroy() end) then
@@ -235,9 +244,11 @@ function PumpkinOptimizer.Init(ctx)
             return
         end
         if d:IsA("BasePart") and (d.Transparency >= 0.99 or d:FindFirstChildOfClass("ParticleEmitter")) then
-            local cnt = #d:GetDescendants() + 1
-            if pcall(function() d:Destroy() end) then
-                trackDestroyed(cnt)
+            if not d:FindFirstChildWhichIsA("BillboardGui") and not d:FindFirstChildWhichIsA("SurfaceGui") then
+                local cnt = #d:GetDescendants() + 1
+                if pcall(function() d:Destroy() end) then
+                    trackDestroyed(cnt)
+                end
             end
         end
     end
@@ -254,13 +265,18 @@ function PumpkinOptimizer.Init(ctx)
         end
         if Optimizer.InEventZone then
             saveAndSet(Optimizer._savedProps, Lighting, "GlobalShadows", false)
-            saveAndSet(Optimizer._savedProps, Lighting, "FogEnd", 1e9)
+            saveAndSet(Optimizer._savedProps, Lighting, "FogStart", 45)
+            saveAndSet(Optimizer._savedProps, Lighting, "FogEnd", 180)
             local terrain = workspace:FindFirstChildOfClass("Terrain")
             if terrain then
                 saveAndSet(Optimizer._savedProps, terrain, "Decoration", false)
                 saveAndSet(Optimizer._savedProps, terrain, "WaterWaveSize", 0)
                 saveAndSet(Optimizer._savedProps, terrain, "WaterReflectance", 0)
                 saveAndSet(Optimizer._savedProps, terrain, "WaterTransparency", 0)
+                local clouds = terrain:FindFirstChildOfClass("Clouds")
+                if clouds then
+                    saveAndSet(Optimizer._savedProps, clouds, "Enabled", false)
+                end
             end
         end
 
@@ -328,15 +344,27 @@ function PumpkinOptimizer.Init(ctx)
         if not model or not model.Parent or not model:IsA("Model") then return end
         if model:GetAttribute("ParentID") ~= "PumpkinTycoon" then return end
         if model:GetAttribute("PumpkinTurkey") == true then return end
+        if model:GetAttribute("OwnerUsername") == LocalPlayer.Name then return end
+
+        local areaId = model:GetAttribute("AreaID")
+        local myPlot = Net.GetPlotModel()
+        if type(areaId) == "string" and myPlot and areaId:sub(-#myPlot.Name - 1) == ("_" .. myPlot.Name) then
+            return
+        end
 
         local PT_Types = Net.Mod.PT_Types
         if myPlotCF and myPlotSize and PT_Types and PT_Types.OnIsland then
             local okPos, pivot = pcall(model.GetPivot, model)
             if okPos and pivot then
+                if pivot.Position.Magnitude < 10 then
+                    return
+                end
                 local okOn, onMine = pcall(PT_Types.OnIsland, myPlotCF, myPlotSize, pivot.Position)
                 if okOn and onMine == true then
                     return
                 end
+            else
+                return
             end
         else
             return
@@ -379,7 +407,8 @@ function PumpkinOptimizer.Init(ctx)
             if lb then
                 clearChildrenSafe(lb)
             end
-            stripVisualsOnTree(front, true)
+            -- Only strip lights/particles/shadows on Front pads & _Look machines without destroying functional visuals
+            stripVisualsOnTree(front, false)
         end
 
         local ground = decor:FindFirstChild("Ground")
@@ -425,11 +454,10 @@ function PumpkinOptimizer.Init(ctx)
                 if TURKEY_CLUTTER_FOLDERS[sub.Name] then
                     clearChildrenSafe(sub)
                 else
-                    stripVisualsOnTree(sub, true)
+                    stripVisualsOnTree(sub, false)
                 end
             end
         end
-        stripVisualsOnTree(shared, false)
     end
 
     local function purgeIslandsAndPlots()
@@ -448,7 +476,7 @@ function PumpkinOptimizer.Init(ctx)
             end
         end
 
-        -- 2. workspace.__THINGS.Plots (Own Mini_Orchard + Other plots' clutter)
+        -- 2. workspace.__THINGS.Plots (Own Mini_Orchard + Other plots' decorative clutter only)
         local myPlot = Net.GetPlotModel()
         local things = workspace:FindFirstChild("__THINGS")
         local plots = things and things:FindFirstChild("Plots")
@@ -467,10 +495,6 @@ function PumpkinOptimizer.Init(ctx)
                         local sub = plotModel:FindFirstChild(subName)
                         if sub then clearChildrenSafe(sub) end
                     end
-                    local buttons = plotModel:FindFirstChild("Buttons")
-                    if buttons then clearChildrenSafe(buttons) end
-                    local inter = plotModel:FindFirstChild("Interactable")
-                    if inter then clearChildrenSafe(inter) end
                 else
                     for _, d in ipairs(plotModel:GetDescendants()) do
                         if d:IsA("BasePart") then
@@ -588,7 +612,7 @@ function PumpkinOptimizer.Init(ctx)
         if brkFolder then
             table.insert(Optimizer._eventConns, Lifecycle.TrackConnection(brkFolder.ChildAdded:Connect(function(model)
                 if not Optimizer.Enabled or not Optimizer.InEventZone then return end
-                task.defer(function()
+                task.delay(0.25, function()
                     if not Optimizer.Enabled or not Optimizer.InEventZone or not model.Parent then return end
                     local myPlot = Net.GetPlotModel()
                     if myPlot then

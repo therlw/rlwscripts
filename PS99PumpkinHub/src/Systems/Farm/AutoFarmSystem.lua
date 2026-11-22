@@ -344,7 +344,7 @@ function AutoFarmSystem.Init(ctx)
                                 end
                             end
 
-                            -- Skip kept/locked pedestal pumpkins inside PumpkinTycoon; include unkept pedestals when AutoBreakPumpkins is ON
+                            -- Skip kept/locked pedestal pumpkins inside PumpkinTycoon; include unkept pedestals anywhere on own island when AutoBreakPumpkins is ON
                             local keptPumpkin = false
                             local isUnkeptPedestal = false
                             if inInst and type(ca) == "table" and type(ca.PumpkinPedestal) == "number" then
@@ -352,9 +352,17 @@ function AutoFarmSystem.Init(ctx)
                                 local keptByRule = keepBelow > 0 and type(ca.PumpkinRung) == "number" and ca.PumpkinRung >= keepBelow
                                 if pedLocked or keptByRule or not States.PumpkinTycoon.AutoBreakPumpkins then
                                     keptPumpkin = true
-                                elseif plotCF and plotSize and checkPos and M.PT_Types and M.PT_Types.OnIsland then
-                                    local okOn, resOn = pcall(M.PT_Types.OnIsland, plotCF, plotSize, checkPos)
-                                    if okOn and resOn == true then
+                                else
+                                    local ownedByMe = (model:GetAttribute("OwnerUsername") == LocalPlayer.Name)
+                                        or (modOwner ~= nil and modOwner == LocalPlayer.Name)
+                                    local onMyIsland = false
+                                    if plotCF and plotSize and checkPos and M.PT_Types and M.PT_Types.OnIsland then
+                                        local okOn, resOn = pcall(M.PT_Types.OnIsland, plotCF, plotSize, checkPos)
+                                        if okOn and resOn == true then
+                                            onMyIsland = true
+                                        end
+                                    end
+                                    if onMyIsland or ownedByMe then
                                         isUnkeptPedestal = true
                                     else
                                         keptPumpkin = true
@@ -363,7 +371,8 @@ function AutoFarmSystem.Init(ctx)
                             end
 
                             local areaMatch = inActiveArea or isUnkeptPedestal
-                            if parentOk and areaMatch and not manual and not vipBlocked and not ownerBlocked and not keptPumpkin then
+                            local manualBlocked = manual and not isUnkeptPedestal
+                            if parentOk and areaMatch and not manualBlocked and not vipBlocked and not ownerBlocked and not keptPumpkin then
                                 local maxHp = math.max(hp, (type(brk) == "table" and tonumber(brk.maxHealth)) or hp)
                                 local avgRatio = getAvgDamageRatio(bAreaId or bParentId or parentId, cls)
                                 local estSingleDmg = math.max(1, maxHp * avgRatio)
