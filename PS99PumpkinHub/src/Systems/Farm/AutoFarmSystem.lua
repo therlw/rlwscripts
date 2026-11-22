@@ -327,6 +327,7 @@ function AutoFarmSystem.Init(ctx)
                             local vipBlocked = (not ownsVip) and ((dir and dir.VIPBreakable == true) or model:GetAttribute("VIPBreakable") == true)
                             local modOwner = (type(brk) == "table" and type(brk.modifier) == "table" and brk.modifier.Owner) or nil
                             local ownerBlocked = (modOwner ~= nil and modOwner ~= LocalPlayer.Name)
+                            local turkeyBlocked = inInst and type(ca) == "table" and ca.PumpkinTurkey == true
 
                             -- Scope breakables to active section/zone and own island
                             local bAreaId = (type(brk) == "table" and brk.areaID) or nil
@@ -372,7 +373,7 @@ function AutoFarmSystem.Init(ctx)
 
                             local areaMatch = inActiveArea or isUnkeptPedestal
                             local manualBlocked = manual and not isUnkeptPedestal
-                            if parentOk and areaMatch and not manualBlocked and not vipBlocked and not ownerBlocked and not keptPumpkin then
+                            if parentOk and areaMatch and not manualBlocked and not vipBlocked and not ownerBlocked and not keptPumpkin and not turkeyBlocked then
                                 local maxHp = math.max(hp, (type(brk) == "table" and tonumber(brk.maxHealth)) or hp)
                                 local avgRatio = getAvgDamageRatio(bAreaId or bParentId or parentId, cls)
                                 local estSingleDmg = math.max(1, maxHp * avgRatio)
