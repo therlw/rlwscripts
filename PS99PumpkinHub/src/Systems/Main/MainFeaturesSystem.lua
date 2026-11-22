@@ -1,5 +1,6 @@
 -- src/Systems/Main/MainFeaturesSystem.lua
 -- Main Tab Features:
+--   - Anti-AFK (PS99 Idle Tracking u44/Move Server reset + Roblox Engine Idled guard)
 --   - Auto Claim Free Gifts
 --   - Auto Claim Rank Rewards (Rewards only — NO Auto Rank Quests)
 --   - Auto Claim Default Forever Pack Free Gift
@@ -17,7 +18,11 @@ function MainFeaturesSystem.Init(ctx)
     local Move = ctx.Movement
     local States = ctx.States
 
+    local okVU, VirtualUser = pcall(function() return game:GetService("VirtualUser") end)
+    local okVIM, VirtualInputManager = pcall(function() return game:GetService("VirtualInputManager") end)
+
     local Sys = {
+        _lastAntiAfkAt = 0,
         _lastGiftAt = 0,
         _lastRankAt = 0,
         _lastPackAt = 0,
@@ -25,6 +30,29 @@ function MainFeaturesSystem.Init(ctx)
         _lastTreeAt = 0,
         _lastCastleAt = 0,
     }
+
+    local function pulseAntiAFK()
+        if not States.Main.AntiAFK then return end
+        if os.clock() - Sys._lastAntiAfkAt < 45 then return end
+        Sys._lastAntiAfkAt = os.clock()
+
+        -- 1. Reset PS99 Idle Tracking (`u44` timer + Stop Timer) via harmless F15 input (passes EngineIdleRule.counts)
+        if okVIM and VirtualInputManager then
+            pcall(function()
+                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.F15, false, game)
+                task.wait(0.03)
+                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.F15, false, game)
+            end)
+        end
+
+        -- 2. Reset Roblox Engine idle clock before 120s LocalPlayer.Idled / 20m kick triggers
+        if okVU and VirtualUser then
+            pcall(function()
+                VirtualUser:CaptureController()
+                VirtualUser:ClickButton2(Vector2.zero)
+            end)
+        end
+    end
 
     function Sys.TryClaimFreeGifts()
         if not States.Main.AutoClaimFreeGifts then return false end
@@ -185,7 +213,20 @@ function MainFeaturesSystem.Init(ctx)
     end
 
     function MainFeaturesSystem.Start()
+        local lp = ctx.Roblox.LocalPlayer
+        if lp and okVU and VirtualUser then
+            Lifecycle.TrackConnection(lp.Idled:Connect(function()
+                if States.Main.AntiAFK then
+                    pcall(function()
+                        VirtualUser:CaptureController()
+                        VirtualUser:ClickButton2(Vector2.zero)
+                    end)
+                end
+            end))
+        end
+
         Lifecycle.SpawnLoop("MainFeaturesWorker", 0.7, function()
+            pulseAntiAFK()
             Sys.TryLeaveStairway()
             Sys.TryClaimFreeGifts()
             Sys.TryClaimRankRewards()

@@ -116,7 +116,9 @@ function WildAndTurkey.Init(ctx)
             local sharedPos = Utils.getInstancePos(Net.GetTurkeyIslandFolder())
             local onTurkey = sharedPos ~= nil and Utils.flatDist(sighting.pos, sharedPos) < 420
             if onTurkey and not Move.IsOnTurkeyIsland() then
-                Move.CrossToTurkeyIsland()
+                if not Move.CrossToTurkeyIsland() then
+                    return false
+                end
             elseif not onTurkey and Move.IsOnTurkeyIsland() then
                 Move.ReturnToOwnIsland()
             end
@@ -164,6 +166,14 @@ function WildAndTurkey.Init(ctx)
         end
         if not Net.OwnPlotPart2() or Net.GetFFlag("PumpkinTycoon_Turkey", true) ~= true then return false end
 
+        local M = Net.Mod
+        local ownsCannon = M.Turkey and M.Turkey.OwnsCannon and M.Turkey.OwnsCannon() == true
+        if not ownsCannon then
+            WT._wasFightingTurkey = false
+            ctx.Runtime.Status.Event = "Waiting to unlock Zone 8 Cannon before Turkey"
+            return false
+        end
+
         local uid, turkeyModel = WT.GetActiveTurkeyBreakable()
         if not turkeyModel then
             -- Fallback: if no breakable seen yet while on Turkey island, leave after sightseeing check
@@ -199,7 +209,6 @@ function WildAndTurkey.Init(ctx)
         end
 
         -- Dispatch all available pets onto Turkey
-        local M = Net.Mod
         if M.PlayerPet and M.PlayerPet.GetByPlayer then
             for _, pet in pairs(M.PlayerPet.GetByPlayer(LocalPlayer) or {}) do
                 local cur = pet.GetTarget and pet:GetTarget()

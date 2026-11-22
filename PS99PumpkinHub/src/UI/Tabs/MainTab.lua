@@ -20,6 +20,13 @@ function MainTab.Init(ctx)
     })
 
     createBoundToggle(tab, {
+        name = "Anti-AFK (Idle Tracking + Engine)",
+        flag = "MainAntiAFK",
+        description = "Prevents Roblox 20m kick and PS99 15m/16.6m Move Server idle transfer",
+        value = Main.AntiAFK,
+    }, function() return Main.AntiAFK end, function(v) Main.AntiAFK = v end)
+
+    createBoundToggle(tab, {
         name = "Auto Claim Free Gifts",
         flag = "MainAutoFreeGifts",
         value = Main.AutoClaimFreeGifts,

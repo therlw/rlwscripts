@@ -76,6 +76,7 @@ function Context.New(opts)
         },
 
         Main = {
+            AntiAFK = true,
             AutoClaimFreeGifts = false,
             AutoClaimRankRewards = false, -- Rank Rewards only (no Auto Rank Quests)
             AutoClaimForeverPack = false,

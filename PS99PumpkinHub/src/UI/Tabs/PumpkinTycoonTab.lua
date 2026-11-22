@@ -113,7 +113,7 @@ function PumpkinTycoonTab.Init(ctx)
     createBoundToggle(tab, {
         name = "Auto Fight Turkey",
         flag = "PTAutoFightTurkey",
-        description = "Launches cannon to Turkey island, sends pets & taps within TurkeyReach",
+        description = "Waits for Zone 8 Cannon unlock, then launches to Turkey island & fights within TurkeyReach",
         value = PT.AutoFightTurkey,
     }, function() return PT.AutoFightTurkey end, function(v) PT.AutoFightTurkey = v end)
 

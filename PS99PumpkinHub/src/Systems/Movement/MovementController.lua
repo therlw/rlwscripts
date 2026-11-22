@@ -432,12 +432,16 @@ function MovementController.Init(ctx)
         local targetArenaPos = Utils.getInstancePos(turkeySpawn or arena or shared)
         if not targetArenaPos then return false end
 
-        local ownsCannon = Net.Mod.Turkey and Net.Mod.Turkey.OwnsCannon and Net.Mod.Turkey.OwnsCannon()
+        local ownsCannon = Net.Mod.Turkey and Net.Mod.Turkey.OwnsCannon and Net.Mod.Turkey.OwnsCannon() == true
+        if not ownsCannon then
+            return false
+        end
+
         if Move.GetMode() == "Legit Walk" then
             local plotModel = Net.GetPlotModel()
             local interact = plotModel and plotModel:FindFirstChild("Interactable")
             local cannonPad = interact and interact:FindFirstChild("CannonPad")
-            if ownsCannon and cannonPad and NET then
+            if cannonPad and NET then
                 local padPos = Utils.getInstancePos(cannonPad)
                 if padPos then
                     Move.WalkTo(padPos, 10)
@@ -449,7 +453,7 @@ function MovementController.Init(ctx)
             return false
         end
 
-        if ownsCannon and NET then
+        if NET then
             Net.PlotInvoke(NET.Cannon, "centre")
             task.wait(0.6)
             if Move.IsOnTurkeyIsland() then
