@@ -150,10 +150,31 @@ function PumpkinOptimizer.Init(ctx)
         table.clear(Optimizer._parkedMainWorld)
     end
 
-    local function clearChildrenSafe(container)
+    local function makeBudget()
+        return { t = os.clock(), ops = 0 }
+    end
+
+    local function stepBudget(b)
+        if not Optimizer.Enabled or not Lifecycle.IsCurrentGeneration() then
+            return false
+        end
+        if not b then return true end
+        b.ops = b.ops + 1
+        if b.ops % 64 == 0 and (os.clock() - b.t) >= 0.005 then
+            task.wait()
+            b.t = os.clock()
+            if not Optimizer.Enabled or not Optimizer.InEventZone or not Lifecycle.IsCurrentGeneration() then
+                return false
+            end
+        end
+        return true
+    end
+
+    local function clearChildrenSafe(container, budget)
         if not container or not container.Parent then return end
         for _, child in ipairs(container:GetChildren()) do
-            local cnt = #child:GetDescendants() + 1
+            if budget and not stepBudget(budget) then return end
+            local cnt = #child:GetChildren() + 1
             local ok = pcall(function() child:Destroy() end)
             if ok then
                 trackDestroyed(cnt)
@@ -412,39 +433,37 @@ function PumpkinOptimizer.Init(ctx)
         return false
     end
 
-    local function isSectionTrackedNode(inst)
+    local function isSectionTrackedNodeFast(inst)
         if not inst then return false end
         if inst:GetAttribute("Button") ~= nil or inst:GetAttribute("TycoonSection") ~= nil then
             return true
         end
-        if isProtectedInstance(inst) or #CollectionService:GetTags(inst) > 0 then
+        if #CollectionService:GetTags(inst) > 0 then
             return true
         end
         if inst:IsA("LayerCollector") or inst:IsA("BillboardGui") or inst:IsA("SurfaceGui") or inst:IsA("ScreenGui")
             or inst:IsA("TouchTransmitter") or inst:IsA("ClickDetector") or inst:IsA("ProximityPrompt") then
             return true
         end
-        return false
-    end
-
-    local function hasProtectedDescendantOrAttr(inst)
-        for _, d in ipairs(inst:GetDescendants()) do
-            if isSectionTrackedNode(d) then
-                return true
-            end
+        local n = inst.Name
+        if n == "Buttons" or n == "PumpkinTycoonPads" or n == "Interactable"
+            or n == "CustomEggs" or n == "Eggs" or n == "SAFETY_NET"
+            or n == "Teleports" or n == "TurkeyArena" then
+            return true
         end
         return false
     end
 
-    --- Frees heavy decorative children while keeping Model/Folder shells and Button/Section-tracked nodes
-    --- intact so PumpkinTycoonCmds.Sections never hits locked-Parent warnings on rebirth or unlock.
-    local function purgeDecorContentsKeepShells(container)
+    --- O(N) chunked cleaner: keeps Model/Folder shells and Button/Section-tracked nodes intact
+    --- while yielding cleanly on a 5ms frame budget so low-FPS / multi-instance clients never stall.
+    local function purgeDecorContentsKeepShells(container, budget)
         if not container or not container.Parent then return end
         for _, child in ipairs(container:GetChildren()) do
+            if budget and not stepBudget(budget) then return end
             if child.Parent then
                 if child:IsA("Model") or child:IsA("Folder") then
-                    purgeDecorContentsKeepShells(child)
-                elseif isSectionTrackedNode(child) then
+                    purgeDecorContentsKeepShells(child, budget)
+                elseif isSectionTrackedNodeFast(child) then
                     if child:IsA("BasePart") and not isWalkableOrFunctional(child) then
                         saveAndSet(Optimizer._savedProps, child, "Transparency", 1)
                         saveAndSet(Optimizer._savedProps, child, "CanCollide", false)
@@ -452,12 +471,11 @@ function PumpkinOptimizer.Init(ctx)
                         saveAndSet(Optimizer._savedProps, child, "CastShadow", false)
                     end
                     stripVisualsOnTree(child, true)
-                elseif hasProtectedDescendantOrAttr(child) then
-                    purgeDecorContentsKeepShells(child)
+                elseif #child:GetChildren() > 0 then
+                    purgeDecorContentsKeepShells(child, budget)
                 else
-                    local cnt = #child:GetDescendants() + 1
                     if pcall(function() child:Destroy() end) then
-                        trackDestroyed(cnt)
+                        trackDestroyed(1)
                     end
                 end
             end
@@ -479,12 +497,12 @@ function PumpkinOptimizer.Init(ctx)
         end
     end
 
-    local function purgeOwnDecor(decor)
+    local function purgeOwnDecor(decor, budget)
         if not Optimizer.Enabled or not Optimizer.InEventZone or not decor or not decor.Parent then return end
 
         local props = decor:FindFirstChild("Props")
         if props then
-            purgeDecorContentsKeepShells(props)
+            purgeDecorContentsKeepShells(props, budget)
         end
 
         local front = decor:FindFirstChild("Front")
@@ -500,11 +518,12 @@ function PumpkinOptimizer.Init(ctx)
         end
 
         local function processZoneItem(item)
+            if budget and not stepBudget(budget) then return end
             if isWalkableOrFunctional(item) or hasGameTag(item) then
                 stripVisualsOnTree(item, false)
-            elseif item:IsA("Model") or item:IsA("Folder") or isSectionTrackedNode(item) or hasProtectedDescendantOrAttr(item) then
+            elseif item:IsA("Model") or item:IsA("Folder") or isSectionTrackedNodeFast(item) or #item:GetChildren() > 0 then
                 -- Keep tracked shells intact so Sections.reveal never fails on unlocked/rebirthed islands
-                purgeDecorContentsKeepShells(item)
+                purgeDecorContentsKeepShells(item, budget)
             else
                 if pcall(function() item:Destroy() end) then
                     trackDestroyed(1)
@@ -515,6 +534,7 @@ function PumpkinOptimizer.Init(ctx)
         for _, child in ipairs(decor:GetChildren()) do
             if child.Name:match("^%d+ |") then
                 for _, item in ipairs(child:GetChildren()) do
+                    if not Optimizer.Enabled or not Optimizer.InEventZone then return end
                     if item.Name == "Pieces" then
                         for _, subItem in ipairs(item:GetChildren()) do
                             processZoneItem(subItem)
@@ -527,15 +547,16 @@ function PumpkinOptimizer.Init(ctx)
         end
     end
 
-    local function purgeTurkeyIsland()
+    local function purgeTurkeyIsland(budget)
         if not Optimizer.Enabled or not Optimizer.InEventZone then return end
         local shared = Net.GetTurkeyIslandFolder()
         if not shared then return end
         local sharedDecor = shared:FindFirstChild("Decor")
         if sharedDecor then
             for _, sub in ipairs(sharedDecor:GetChildren()) do
+                if budget and not stepBudget(budget) then return end
                 if TURKEY_CLUTTER_FOLDERS[sub.Name] then
-                    clearChildrenSafe(sub)
+                    clearChildrenSafe(sub, budget)
                 else
                     stripVisualsOnTree(sub, false)
                 end
@@ -543,31 +564,34 @@ function PumpkinOptimizer.Init(ctx)
         end
     end
 
-    local function purgeForeignIslandDecor(islandFolder)
+    local function purgeForeignIslandDecor(islandFolder, budget)
         if not Optimizer.Enabled or not Optimizer.InEventZone or not islandFolder or not islandFolder.Parent then return end
         -- Leave BillboardGui/SurfaceGui (PumpkinTimer_*, PumpkinSign_*, PumpkinIsland_*) intact so Signs/Billboard never warn,
         -- and keep tracked Model/Folder shells inside Props/Ground/ShoreFill/Zones so Sections never warns on foreign unlocks/rebirths.
         for _, sub in ipairs(islandFolder:GetChildren()) do
+            if budget and not stepBudget(budget) then return end
             if sub:IsA("LayerCollector") or sub:IsA("BillboardGui") or sub:IsA("SurfaceGui") or sub:IsA("ScreenGui") then
                 -- Keep UI intact
             elseif sub.Name == "Props" or sub.Name == "Ground" or sub.Name == "ShoreFill" then
-                purgeDecorContentsKeepShells(sub)
+                purgeDecorContentsKeepShells(sub, budget)
             elseif sub.Name:match("^%d+ |") then
                 for _, item in ipairs(sub:GetChildren()) do
+                    if budget and not stepBudget(budget) then return end
                     if item.Name == "Pieces" then
                         for _, subItem in ipairs(item:GetChildren()) do
+                            if budget and not stepBudget(budget) then return end
                             if hasGameTag(subItem) then
                                 stripVisualsOnTree(subItem, false)
-                            elseif subItem:IsA("Model") or subItem:IsA("Folder") or isSectionTrackedNode(subItem) or hasProtectedDescendantOrAttr(subItem) then
-                                purgeDecorContentsKeepShells(subItem)
+                            elseif subItem:IsA("Model") or subItem:IsA("Folder") or isSectionTrackedNodeFast(subItem) or #subItem:GetChildren() > 0 then
+                                purgeDecorContentsKeepShells(subItem, budget)
                             elseif pcall(function() subItem:Destroy() end) then
                                 trackDestroyed(1)
                             end
                         end
                     elseif hasGameTag(item) then
                         stripVisualsOnTree(item, false)
-                    elseif item:IsA("Model") or item:IsA("Folder") or isSectionTrackedNode(item) or hasProtectedDescendantOrAttr(item) then
-                        purgeDecorContentsKeepShells(item)
+                    elseif item:IsA("Model") or item:IsA("Folder") or isSectionTrackedNodeFast(item) or #item:GetChildren() > 0 then
+                        purgeDecorContentsKeepShells(item, budget)
                     elseif pcall(function() item:Destroy() end) then
                         trackDestroyed(1)
                     end
@@ -578,7 +602,7 @@ function PumpkinOptimizer.Init(ctx)
         end
     end
 
-    local function purgeIslandsAndPlots()
+    local function purgeIslandsAndPlots(budget)
         if not Optimizer.Enabled or not Optimizer.InEventZone then return end
         local myUidStr = tostring(LocalPlayer.UserId)
 
@@ -586,10 +610,11 @@ function PumpkinOptimizer.Init(ctx)
         local pti = workspace:FindFirstChild("PumpkinTycoonIslands")
         if pti then
             for _, islandFolder in ipairs(pti:GetChildren()) do
+                if budget and not stepBudget(budget) then return end
                 if islandFolder.Name == myUidStr then
-                    purgeOwnDecor(islandFolder)
+                    purgeOwnDecor(islandFolder, budget)
                 elseif islandFolder.Name ~= "Shared" then
-                    purgeForeignIslandDecor(islandFolder)
+                    purgeForeignIslandDecor(islandFolder, budget)
                 end
             end
         end
@@ -600,9 +625,10 @@ function PumpkinOptimizer.Init(ctx)
         local plots = things and things:FindFirstChild("Plots")
         if plots then
             for _, plotModel in ipairs(plots:GetChildren()) do
+                if budget and not stepBudget(budget) then return end
                 for _, child in ipairs(plotModel:GetChildren()) do
                     if child.Name:match("^Mini_Orchard%d*$") then
-                        local cnt = #child:GetDescendants() + 1
+                        local cnt = #child:GetChildren() + 1
                         if pcall(function() child:Destroy() end) then
                             trackDestroyed(cnt)
                         end
@@ -611,10 +637,11 @@ function PumpkinOptimizer.Init(ctx)
                 if plotModel ~= myPlot then
                     for _, subName in ipairs({ "WildAreas", "HayPileSpots", "Sections" }) do
                         local sub = plotModel:FindFirstChild(subName)
-                        if sub then clearChildrenSafe(sub) end
+                        if sub then clearChildrenSafe(sub, budget) end
                     end
                 else
                     for _, d in ipairs(plotModel:GetDescendants()) do
+                        if budget and not stepBudget(budget) then return end
                         if d:IsA("BasePart") then
                             saveAndSet(Optimizer._savedProps, d, "CastShadow", false)
                         end
@@ -644,6 +671,7 @@ function PumpkinOptimizer.Init(ctx)
             local okBox, myCF, mySize = pcall(myPlot.GetBoundingBox, myPlot)
             if okBox and myCF and mySize then
                 for _, model in ipairs(brkFolder:GetChildren()) do
+                    if budget and not stepBudget(budget) then return end
                     scrubForeignBreakableModel(model, myCF, mySize)
                 end
             end
@@ -698,10 +726,10 @@ function PumpkinOptimizer.Init(ctx)
         local function scheduleDecorSweep(decor)
             if Optimizer._decorRescanScheduled then return end
             Optimizer._decorRescanScheduled = true
-            task.delay(0.85, function()
+            task.delay(2.5, function()
                 Optimizer._decorRescanScheduled = false
                 if Optimizer.Enabled and Optimizer.InEventZone and decor and decor.Parent then
-                    purgeOwnDecor(decor)
+                    purgeOwnDecor(decor, makeBudget())
                 end
             end)
         end
@@ -713,12 +741,12 @@ function PumpkinOptimizer.Init(ctx)
                 task.delay(0.45, function()
                     if not Optimizer.Enabled or not Optimizer.InEventZone or not child.Parent then return end
                     if child.Name == myUidStr then
-                        purgeOwnDecor(child)
+                        purgeOwnDecor(child, makeBudget())
                         table.insert(Optimizer._eventConns, Lifecycle.TrackConnection(child.DescendantAdded:Connect(function()
                             scheduleDecorSweep(child)
                         end)))
                     elseif child.Name ~= "Shared" then
-                        purgeForeignIslandDecor(child)
+                        purgeForeignIslandDecor(child, makeBudget())
                     end
                 end)
             end)))
@@ -801,13 +829,14 @@ function PumpkinOptimizer.Init(ctx)
                 if not Optimizer.Enabled then return end
                 purgeDebrisAndLighting()
                 if Optimizer.InEventZone then
+                    local budget = makeBudget()
                     parkMainWorldBloat()
                     task.wait()
                     if not Optimizer.Enabled or not Optimizer.InEventZone then return end
-                    purgeTurkeyIsland()
+                    purgeTurkeyIsland(budget)
                     task.wait()
                     if not Optimizer.Enabled or not Optimizer.InEventZone then return end
-                    purgeIslandsAndPlots()
+                    purgeIslandsAndPlots(budget)
                     task.wait()
                     if not Optimizer.Enabled or not Optimizer.InEventZone then return end
                     purgeOtherPlayersAndPets()
@@ -910,11 +939,6 @@ function PumpkinOptimizer.Init(ctx)
         if Optimizer.InEventZone then
             bindEventWatchers()
             task.defer(runFullEventOptimization)
-            task.delay(1.8, function()
-                if Optimizer.Enabled and Optimizer.InEventZone then
-                    runFullEventOptimization()
-                end
-            end)
         end
     end
 
@@ -1093,11 +1117,11 @@ function PumpkinOptimizer.Init(ctx)
             end))
         end
 
-        Lifecycle.SpawnLoop("PumpkinOptimizerSweep", 2.0, function()
+        Lifecycle.SpawnLoop("PumpkinOptimizerSweep", 4.0, function()
             if not Optimizer.Enabled then return end
             syncEventZoneState(false)
             purgeDebrisAndLighting()
-            if Optimizer.InEventZone and os.clock() - Optimizer._eventPurgeAt >= 6.0 then
+            if Optimizer.InEventZone and os.clock() - Optimizer._eventPurgeAt >= 30.0 then
                 Optimizer._eventPurgeAt = os.clock()
                 runFullEventOptimization()
             end

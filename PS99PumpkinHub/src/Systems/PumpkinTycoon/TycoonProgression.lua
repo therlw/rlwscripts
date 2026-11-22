@@ -54,7 +54,7 @@ function TycoonProgression.Init(ctx)
         if not M.Util_Buttons or not M.PT_Types then return {} end
 
         local state = Net.PlotSave(M.PT_Types.VAR.Buttons)
-        if type(state) ~= "table" then return {} end
+        if type(state) ~= "table" then state = {} end
 
         local part2 = Net.IsPart2Enabled()
         local zoneCount = part2 and #M.PT_Types.ZONES or M.PT_Types.PART1_ZONES
@@ -121,7 +121,7 @@ function TycoonProgression.Init(ctx)
 
         local NET = M.PT_Types.NET
         local buttonsState = Net.PlotSave(M.PT_Types.VAR.Buttons)
-        if type(buttonsState) ~= "table" then return false end
+        if type(buttonsState) ~= "table" then buttonsState = {} end
 
         -- 1. Check Auto Claim Island Reward (Plot NET.Complete)
         if PT.AutoClaimIslandReward then

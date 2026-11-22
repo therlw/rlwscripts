@@ -86,7 +86,8 @@ function PumpkinEconomy.Init(ctx)
         for zoneIdx, z in ipairs(zones) do
             if (z.Part or 1) == 1 or part2 then
                 local eggBtnKey = (zoneIdx == 1) and "CocoaCabin_Egg" or (tostring(z.Section) .. "_Egg")
-                local isUnlocked = (zoneIdx == 1) or (buttonsState[eggBtnKey] ~= nil and buttonsState[eggBtnKey] ~= false)
+                local isUnlocked = (zoneIdx == 1 and next(buttonsState) ~= nil)
+                    or (buttonsState[eggBtnKey] ~= nil and buttonsState[eggBtnKey] ~= false)
                 if isUnlocked then
                     local eggObj = findOwnPlotEggById(z.Egg)
                     if eggObj then
