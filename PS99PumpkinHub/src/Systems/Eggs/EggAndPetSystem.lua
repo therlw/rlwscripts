@@ -139,6 +139,43 @@ function EggAndPetSystem.Init(ctx)
             or ps:FindFirstChild("Egg Opening Frontend", true)
     end
 
+    local function resolveEggFrontendEnv()
+        local Network = Net.Mod.Network
+        local sig = Network and Network.Fired and Network.Fired("Eggs_PlayOpenAnimation")
+        local getConns = (type(getconnections) == "function") and getconnections or nil
+        local getfenvFn = (type(getfenv) == "function") and getfenv or nil
+
+        -- Primary: grab the exact fenv directly from Egg Opening Frontend's Eggs_PlayOpenAnimation handler
+        if sig and getConns and getfenvFn then
+            local okConns, list = pcall(getConns, sig)
+            if okConns and type(list) == "table" then
+                for _, conn in ipairs(list) do
+                    local fn = conn and conn.Function
+                    if type(fn) == "function" then
+                        local okEnv, fenv = pcall(getfenvFn, fn)
+                        if okEnv and type(fenv) == "table"
+                            and (type(fenv.PlayNormalEggAnimation) == "function" or type(fenv.PlayEggAnimation) == "function") then
+                            return fenv
+                        end
+                    end
+                end
+            end
+        end
+
+        -- Secondary: getsenv lookup on PlayerScripts
+        local getsenvFn = (type(getsenv) == "function") and getsenv or nil
+        local eggScript = getsenvFn and findEggFrontendScript()
+        if eggScript and getsenvFn then
+            local okEnv, fenv = pcall(getsenvFn, eggScript)
+            if okEnv and type(fenv) == "table"
+                and (type(fenv.PlayNormalEggAnimation) == "function" or type(fenv.PlayEggAnimation) == "function") then
+                return fenv
+            end
+        end
+
+        return nil
+    end
+
     function EggSys.SetDisableEggAnimation(enable)
         local target = enable == true
         States.Egg.DisableEggAnimation = target
@@ -150,20 +187,12 @@ function EggAndPetSystem.Init(ctx)
             ui.Enabled = not target
         end
 
-        local getsenvFn = (type(getsenv) == "function") and getsenv or nil
-        local eggScript = getsenvFn and findEggFrontendScript()
-        local scriptEnv = nil
-        if eggScript and getsenvFn then
-            local okEnv, e = pcall(getsenvFn, eggScript)
-            if okEnv and type(e) == "table" then
-                scriptEnv = e
-            end
-        end
-
         if target then
-            -- Preferred pure client-side skip: no-op the visual renderers inside Egg Opening Frontend
-            -- so the game script itself natively fires SM_Unmask + CompletedHatching without our script sending remotes.
-            if scriptEnv and (type(scriptEnv.PlayNormalEggAnimation) == "function" or type(scriptEnv.PlayEggAnimation) == "function") then
+            local scriptEnv = resolveEggFrontendEnv()
+
+            -- Pure client-side skip: no-op visual renderers inside Egg Opening Frontend's own env
+            -- so PS99's own script natively executes SM_Unmask + CompletedHatching without our script sending remotes.
+            if scriptEnv then
                 if not EggSys._origAnimFns then
                     EggSys._origAnimFns = {
                         env = scriptEnv,
@@ -185,7 +214,7 @@ function EggAndPetSystem.Init(ctx)
                 return
             end
 
-            -- Fallback only if getsenv isn't available on the executor
+            -- Fallback only if executor provides neither getfenv(conn) nor getsenv
             local Network = Net.Mod.Network
             local sig = Network and Network.Fired and Network.Fired("Eggs_PlayOpenAnimation")
             local getConns = (type(getconnections) == "function") and getconnections or nil
