@@ -19,6 +19,7 @@ function ConfigManagerModule.Init(ctx)
         LastError = nil,
         _applying = false,
         _saveScheduled = false,
+        _dirty = false,
     }
 
     local STATE_SECTIONS = {
@@ -133,6 +134,7 @@ function ConfigManagerModule.Init(ctx)
         end)
         self:SyncUI()
         self._applying = false
+        self._dirty = false
 
         if ctx.Optimizer then
             if ctx.Optimizer.SetEnabled then
@@ -161,6 +163,7 @@ function ConfigManagerModule.Init(ctx)
         end
         self.LastSavedAt = os.time()
         self.LastError = nil
+        self._dirty = false
         return true, path
     end
 
@@ -197,13 +200,22 @@ function ConfigManagerModule.Init(ctx)
     function ConfigManager:MarkDirty()
         if self._applying then return end
         if not (CONFIG.Persistence and CONFIG.Persistence.AutoSave) then return end
+        self._dirty = true
         if self._saveScheduled then return end
         self._saveScheduled = true
-        task.delay(0.75, function()
+        task.delay(0.15, function()
             self._saveScheduled = false
             if ctx.Lifecycle and not ctx.Lifecycle.IsCurrentGeneration() then return end
-            if CONFIG.Persistence and CONFIG.Persistence.AutoSave then
+            if CONFIG.Persistence and CONFIG.Persistence.AutoSave and self._dirty then
                 pcall(function() self:Save() end)
+            end
+        end)
+    end
+
+    if ctx.Lifecycle and ctx.Lifecycle.RegisterCleanup then
+        ctx.Lifecycle.RegisterCleanup(function()
+            if ConfigManager._dirty and CONFIG.Persistence and CONFIG.Persistence.AutoSave then
+                pcall(function() ConfigManager:Save() end)
             end
         end)
     end

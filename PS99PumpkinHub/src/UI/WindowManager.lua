@@ -36,18 +36,46 @@ function WindowManager.Init(ctx)
         end
     end)
 
-    -- Route Rayfield into PlayerGui cleanly
+    -- Route Rayfield into PlayerGui cleanly (always restore gethui even on error, retry once on transient CoreGui race)
     local original_gethui = nil
-    if type(getgenv) == "function" then
-        pcall(function()
-            original_gethui = getgenv().gethui
-            getgenv().gethui = function()
-                return PlayerGui
-            end
-        end)
+    local function restoreGethui()
+        if type(getgenv) == "function" then
+            pcall(function()
+                getgenv().gethui = original_gethui
+            end)
+        end
     end
 
-    local Rayfield = loadstring(game:HttpGet("https://sirius.menu/gen2"))()
+    local Rayfield = nil
+    local rfErr = nil
+    local gen2Source = nil
+    for attempt = 1, 2 do
+        if type(getgenv) == "function" then
+            pcall(function()
+                original_gethui = getgenv().gethui
+                getgenv().gethui = function()
+                    return PlayerGui
+                end
+            end)
+        end
+        local okLoad, res = pcall(function()
+            gen2Source = gen2Source or game:HttpGet("https://sirius.menu/gen2")
+            return loadstring(gen2Source)()
+        end)
+        restoreGethui()
+        if okLoad and type(res) == "table" then
+            Rayfield = res
+            break
+        end
+        rfErr = res
+        if attempt == 1 then
+            task.wait(0.25)
+        end
+    end
+    if not Rayfield then
+        error(tostring(rfErr or "Rayfield Gen2 load failed"), 0)
+    end
+
     local Window = Rayfield:CreateWindow({
         name = "PS99 | Pumpkin Tycoon Hub",
         subtitle = "RLW · Türkçe Arayüz",
@@ -58,12 +86,6 @@ function WindowManager.Init(ctx)
             fileName = "PS99PumpkinHubRF",
         },
     })
-
-    if type(getgenv) == "function" then
-        pcall(function()
-            getgenv().gethui = original_gethui
-        end)
-    end
 
     pcall(function()
         for _, child in ipairs(PlayerGui:GetChildren()) do
