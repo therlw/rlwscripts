@@ -461,12 +461,29 @@ function PumpkinOptimizer.Init(ctx)
 
     local function purgeForeignIslandDecor(islandFolder)
         if not Optimizer.Enabled or not Optimizer.InEventZone or not islandFolder or not islandFolder.Parent then return end
-        -- Leave BillboardGui/SurfaceGui (PumpkinTimer_*, PumpkinSign_*, PumpkinIsland_*) & Front signs intact so Signs/Billboard never warn
+        -- Leave BillboardGui/SurfaceGui (PumpkinTimer_*, PumpkinSign_*, PumpkinIsland_*) intact so Signs/Billboard never warn,
+        -- and clear contents inside named Models rather than destroying top button-tracked Model shells so Sections never errors on unlock.
         for _, sub in ipairs(islandFolder:GetChildren()) do
             if sub:IsA("LayerCollector") or sub:IsA("BillboardGui") or sub:IsA("SurfaceGui") or sub:IsA("ScreenGui") then
-                -- Keep UI intact to prevent Signs/Billboard missing-child errors
-            elseif sub.Name == "Props" or sub.Name == "Ground" or sub.Name == "ShoreFill" or sub.Name:match("^%d+ |") then
+                -- Keep UI intact
+            elseif sub.Name == "Props" or sub.Name == "Ground" or sub.Name == "ShoreFill" then
                 clearChildrenSafe(sub)
+            elseif sub.Name:match("^%d+ |") then
+                for _, item in ipairs(sub:GetChildren()) do
+                    if item.Name == "Pieces" then
+                        for _, subItem in ipairs(item:GetChildren()) do
+                            if subItem:IsA("Model") or subItem:IsA("Folder") then
+                                clearChildrenSafe(subItem)
+                            elseif pcall(function() subItem:Destroy() end) then
+                                trackDestroyed(1)
+                            end
+                        end
+                    elseif item:IsA("Model") or item:IsA("Folder") then
+                        clearChildrenSafe(item)
+                    elseif pcall(function() item:Destroy() end) then
+                        trackDestroyed(1)
+                    end
+                end
             elseif sub.Name == "Front" then
                 local lb = sub:FindFirstChild("PumpkinLeaderboardCatches")
                 local lbMain = lb and lb:FindFirstChild("Main")
