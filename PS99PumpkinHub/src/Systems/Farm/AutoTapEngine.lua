@@ -56,6 +56,11 @@ function AutoTapEngine.Init(ctx)
             return false, math.huge
         end
 
+        local ownerAttr = model:GetAttribute("OwnerUsername")
+        if ownerAttr ~= nil and ownerAttr ~= LocalPlayer.Name then
+            return false, math.huge
+        end
+
         -- Respect TapTargetPolicy ManualDamage check unless AutoTapOverManual is explicitly set
         if model:GetAttribute("ManualDamage") == true and model:GetAttribute("AutoTapOverManual") ~= true then
             return false, math.huge
@@ -104,6 +109,7 @@ function AutoTapEngine.Init(ctx)
 
         local myPlot = inInst and Net.GetPlotModel and Net.GetPlotModel() or nil
         local plotSuffix = myPlot and ("_" .. myPlot.Name) or nil
+        local plotNum = myPlot and tonumber(myPlot.Name) or nil
         local curBreakZoneId = (inInst and M.MapCmds and M.MapCmds.GetCurrentBreakZone and M.MapCmds.GetCurrentBreakZone()) or nil
         local turkeyPriorityMode = (States.Farm.TapTargetMode == "Best / Turkey Priority")
 
@@ -141,10 +147,22 @@ function AutoTapEngine.Init(ctx)
                 local rawArea = rawget(brk, "areaID")
                 if inInst and not isTurkeyRaw then
                     local isPedRaw = (type(rawCA) == "table" and type(rawCA.PumpkinPedestal) == "number")
-                    if not isPedRaw and curBreakZoneId and rawArea and rawArea ~= curBreakZoneId then
-                        continue
-                    elseif plotSuffix and type(rawArea) == "string" and rawArea:match("_%d+$") and rawArea:sub(-#plotSuffix) ~= plotSuffix then
-                        continue
+                    if not isPedRaw then
+                        if curBreakZoneId and rawArea and rawArea ~= curBreakZoneId then
+                            continue
+                        elseif plotSuffix and type(rawArea) == "string" and rawArea:match("_%d+$") and rawArea:sub(-#plotSuffix) ~= plotSuffix then
+                            continue
+                        end
+                    else
+                        local rawMod = rawget(brk, "modifier")
+                        local rawModOwner = type(rawMod) == "table" and rawMod.Owner or nil
+                        if rawModOwner ~= nil and rawModOwner ~= LocalPlayer.Name then
+                            continue
+                        end
+                        local rawPlot = type(rawCA) == "table" and rawCA.Plot or nil
+                        if plotNum and type(rawPlot) == "number" and rawPlot ~= plotNum then
+                            continue
+                        end
                     end
                 end
             end

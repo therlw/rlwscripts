@@ -300,10 +300,12 @@ function AutoFarmSystem.Init(ctx)
 
         local plotCF, plotSize = nil, nil
         local plotSuffix = nil
+        local plotNum = nil
         if inInst then
             local plotModel = Net.GetPlotModel and Net.GetPlotModel()
             if plotModel then
                 plotSuffix = "_" .. plotModel.Name
+                plotNum = tonumber(plotModel.Name)
                 if FarmSys._cachedPlotModel == plotModel and FarmSys._cachedPlotCF and FarmSys._cachedPlotSize then
                     plotCF, plotSize = FarmSys._cachedPlotCF, FarmSys._cachedPlotSize
                 else
@@ -369,7 +371,8 @@ function AutoFarmSystem.Init(ctx)
                                 if rawModOwner ~= nil and rawModOwner ~= lpName then
                                     continue
                                 end
-                                if plotSuffix and type(rawAreaId) == "string" and rawAreaId:match("_%d+$") and rawAreaId:sub(-#plotSuffix) ~= plotSuffix then
+                                local rawPlot = type(rawCA) == "table" and rawCA.Plot or nil
+                                if plotNum and type(rawPlot) == "number" and rawPlot ~= plotNum then
                                     continue
                                 end
                             end

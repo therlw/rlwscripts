@@ -314,7 +314,7 @@ function PumpkinEconomy.Init(ctx)
 
         local okBrk, chests = pcall(M.BreakableFrontend.AllByInstanceAndClass, "Chest")
         if okBrk and type(chests) == "table" then
-            for _, brk in pairs(chests) do
+            for mapKey, brk in pairs(chests) do
                 local model, ca, _, _, disabled = Utils.unpackBreakable(brk)
                 if type(ca) == "table" and type(ca.PumpkinPedestal) == "number" and model and model.Parent then
                     local locked = M.AutoBreak and M.AutoBreak.Locked and M.AutoBreak.Locked(ca.PumpkinPedestal)
@@ -327,7 +327,10 @@ function PumpkinEconomy.Init(ctx)
                     end
 
                     if onOwnIsland and not locked and not keptByRule and not manual and not disabled then
-                        table.insert(candidates, model)
+                        local bUid = (type(brk) == "table" and rawget(brk, "uid") ~= nil and tostring(rawget(brk, "uid")))
+                            or model:GetAttribute("BreakableUID")
+                            or (mapKey ~= nil and tostring(mapKey))
+                        table.insert(candidates, { model = model, uid = bUid and tostring(bUid) or nil })
                     end
                 end
             end
@@ -340,28 +343,35 @@ function PumpkinEconomy.Init(ctx)
 
         local idx = 1
         local dispatched = 0
+        local bulkJoin = {}
         for _, pet in pairs(pets) do
             if pet.AIHold == nil or pet.AIHold == "PumpkinAutoBreak" then
                 local curTarget = pet.GetTarget and pet:GetTarget()
                 local targetValid = false
                 if typeof(curTarget) == "Instance" and curTarget.Parent then
                     for _, c in ipairs(candidates) do
-                        if c == curTarget then
+                        if c.model == curTarget then
                             targetValid = true
                             break
                         end
                     end
                 end
                 if not targetValid then
-                    local assignModel = candidates[idx]
+                    local assign = candidates[idx]
                     idx = (idx % #candidates) + 1
                     pcall(function()
                         if pet.SetAnchored then pet:SetAnchored(false) end
-                        if pet.SetTarget then pet:SetTarget(assignModel) end
+                        if pet.SetTarget then pet:SetTarget(assign.model) end
                     end)
+                    if pet.euid and assign.uid then
+                        bulkJoin[pet.euid] = assign.uid
+                    end
                     dispatched = dispatched + 1
                 end
             end
+        end
+        if next(bulkJoin) then
+            Net.NetworkFire("Breakables_JoinPetBulk", bulkJoin)
         end
         return dispatched > 0
     end
