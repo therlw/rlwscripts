@@ -212,7 +212,8 @@ function MovementController.Init(ctx)
                         local fv = Vector3.new(segDest.X - curHrp.Position.X, 0, segDest.Z - curHrp.Position.Z)
                         swimUnit = (fv.Magnitude > 0.1) and fv.Unit or Vector3.new(0, 0, -1)
                     end
-                    curHum:Move(Vector3.new(swimUnit.X, 0.95, swimUnit.Z).Unit, false)
+                    local climbBias = (consecutiveStucks >= 1 and consecutiveStucks <= 3) and 0.35 or 1.0
+                    curHum:Move(Vector3.new(swimUnit.X * climbBias, 0.95, swimUnit.Z * climbBias).Unit, false)
                     curHum.Jump = true
                     usingSwimMove = true
                     if jumpAhead or os.clock() - lastJumpAt >= 0.36 then
@@ -232,9 +233,11 @@ function MovementController.Init(ctx)
                 if now - lastSampleAt >= 0.18 then
                     local curSegDist = Utils.flatDist(curHrp.Position, segDest)
                     local movedFlat = Utils.flatDist(curHrp.Position, lastSamplePos)
+                    local movedY = curHrp.Position.Y - lastSamplePos.Y
                     local segProgress = lastSampleDist - curSegDist
-                    local stalled = movedFlat < 0.70
-                        or (segProgress < math.max(0.40, movedFlat * 0.22) and lastSampleDist > (arrivalThresh or 4) + 1.0)
+                    local climbingUp = swimmingNow and movedY >= 0.25
+                    local stalled = (not climbingUp) and (movedFlat < 0.70
+                        or (segProgress < math.max(0.40, movedFlat * 0.22) and lastSampleDist > (arrivalThresh or 4) + 1.0))
 
                     if stalled then
                         consecutiveStucks = consecutiveStucks + 1
@@ -243,12 +246,12 @@ function MovementController.Init(ctx)
                             clearSwimMove(curHum)
                             return false, false, false
                         end
-                        local repathLimit = swimmingNow and 5 or 4
+                        local repathLimit = swimmingNow and 9 or 4
                         if consecutiveStucks >= repathLimit then
                             clearSwimMove(curHum)
                             return false, false, true
                         end
-                        if (tallBlocked or consecutiveStucks >= 2) and unit then
+                        if ((not swimmingNow and (tallBlocked or consecutiveStucks >= 2)) or (swimmingNow and consecutiveStucks >= 4)) and unit then
                             local nudgeVec
                             if hitNormal and Vector2.new(hitNormal.X, hitNormal.Z).Magnitude > 0.1 and consecutiveStucks <= 2 then
                                 local nFlat = Vector3.new(hitNormal.X, 0, hitNormal.Z).Unit
@@ -330,7 +333,7 @@ function MovementController.Init(ctx)
             end
         end
 
-        local repathsLeft = 2
+        local repathsLeft = 4
         while not arrived and #waypoints >= 2 and not shouldStop() and os.clock() <= timeoutAt do
             local needRepath = false
             for idx = 2, #waypoints do
