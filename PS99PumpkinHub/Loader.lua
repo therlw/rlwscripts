@@ -147,12 +147,13 @@ if not okExecMan or type(manifest) ~= "table" or type(manifest.Modules) ~= "tabl
 end
 Loader.Manifest = manifest
 
--- Step 2: Atomic Fetch + Compile + Factory Evaluation BEFORE terminating any prior Hub generation
+-- Step 2: Parallel Fetch + Atomic Compile + Factory Evaluation BEFORE terminating any prior Hub generation
 local compiledFactories = {}
 local seenIds = {}
+local fetchResults = {}
+local pendingCount = 0
 
-for _, entry in ipairs(manifest.Modules) do
-    local t0 = os.clock()
+for idx, entry in ipairs(manifest.Modules) do
     if type(entry) ~= "table" or type(entry.id) ~= "string" or type(entry.path) ~= "string" then
         reportFatal("ManifestSchema", "Invalid module entry in Manifest.lua")
     end
@@ -161,24 +162,46 @@ for _, entry in ipairs(manifest.Modules) do
     end
     seenIds[entry.id] = true
 
-    local src = Loader.UseMemoryCache and Loader.Cache.Sources[entry.path] or nil
-    if type(src) == "string" then
+    local cachedSrc = Loader.UseMemoryCache and Loader.Cache.Sources[entry.path] or nil
+    if type(cachedSrc) == "string" then
         Loader.Diagnostics.CacheHitCount = Loader.Diagnostics.CacheHitCount + 1
+        fetchResults[idx] = { ok = true, body = cachedSrc, ms = 0 }
     else
-        local okFetch, bodyOrErr = fetchSource(entry.path)
-        if not okFetch then
-            if entry.required ~= false then
-                reportFatal("Fetch:" .. entry.id, tostring(bodyOrErr))
-            else
-                table.insert(Loader.Diagnostics.Errors, "Optional fetch failed (" .. entry.id .. "): " .. tostring(bodyOrErr))
-                continue
+        pendingCount = pendingCount + 1
+        task.spawn(function()
+            local t0 = os.clock()
+            local okFetch, bodyOrErr = fetchSource(entry.path)
+            fetchResults[idx] = {
+                ok = okFetch,
+                body = bodyOrErr,
+                ms = (os.clock() - t0) * 1000,
+            }
+            if okFetch and type(bodyOrErr) == "string" then
+                Loader.Cache.Sources[entry.path] = bodyOrErr
+                Loader.Diagnostics.FetchedCount = Loader.Diagnostics.FetchedCount + 1
+                Loader.Diagnostics.TotalBytes = Loader.Diagnostics.TotalBytes + #bodyOrErr
             end
-        end
-        src = bodyOrErr
-        Loader.Cache.Sources[entry.path] = src
-        Loader.Diagnostics.FetchedCount = Loader.Diagnostics.FetchedCount + 1
-        Loader.Diagnostics.TotalBytes = Loader.Diagnostics.TotalBytes + #src
+            pendingCount = pendingCount - 1
+        end)
     end
+end
+
+while pendingCount > 0 do
+    task.wait(0.02)
+end
+
+for idx, entry in ipairs(manifest.Modules) do
+    local t0 = os.clock()
+    local res = fetchResults[idx]
+    if not res or not res.ok then
+        if entry.required ~= false then
+            reportFatal("Fetch:" .. entry.id, tostring(res and res.body or "Unknown fetch error"))
+        else
+            table.insert(Loader.Diagnostics.Errors, "Optional fetch failed (" .. entry.id .. "): " .. tostring(res and res.body))
+            continue
+        end
+    end
+    local src = res.body
 
     local chunkFn, syntaxErr = loadstring(src, "@" .. entry.path)
     if not chunkFn then
@@ -214,7 +237,7 @@ for _, entry in ipairs(manifest.Modules) do
     table.insert(compiledFactories, {
         entry = entry,
         module = modTable,
-        fetchCompileMs = (os.clock() - t0) * 1000,
+        fetchCompileMs = (res.ms or 0) + ((os.clock() - t0) * 1000),
     })
 end
 

@@ -39,9 +39,9 @@ function AutoTapEngine.Init(ctx)
     end
 
     local function isBreakableTapAllowed(brk, model, hrpPos, maxDist)
-        if not brk or not model or not model.Parent then return false, math.huge end
-        local dir = brk.directory or {}
-        if dir.NoTapping or model:GetAttribute("DisableDamage") == true then
+        if type(brk) ~= "table" or not model or not model.Parent then return false, math.huge end
+        local dir = brk.dir or brk.directory or {}
+        if dir.NoTapping or brk.disableDamage == true or model:GetAttribute("DisableDamage") == true then
             return false, math.huge
         end
 
@@ -59,7 +59,7 @@ function AutoTapEngine.Init(ctx)
             return false, math.huge
         end
 
-        local pos = Utils.getInstancePos(model)
+        local pos = brk.position or Utils.getInstancePos(model)
         if not pos then return false, math.huge end
 
         local flat = Utils.flatDist(hrpPos, pos)
@@ -79,7 +79,7 @@ function AutoTapEngine.Init(ctx)
 
     local function selectBestTarget()
         local M = Net.Mod
-        if not M.BreakableCmds then return nil end
+        if not M.BreakableFrontend then return nil end
 
         local _, hrp = Utils.getCharacterParts()
         if not hrp then return nil end
@@ -96,7 +96,7 @@ function AutoTapEngine.Init(ctx)
         local pool = {}
         if inInst then
             for _, cls in ipairs({ "Chest", "Normal" }) do
-                local ok, t = pcall(M.BreakableCmds.AllByInstanceAndClass, cls)
+                local ok, t = pcall(M.BreakableFrontend.AllByInstanceAndClass, cls)
                 if ok and type(t) == "table" then
                     for uid, b in pairs(t) do pool[uid] = b end
                 end
@@ -105,7 +105,7 @@ function AutoTapEngine.Init(ctx)
             local zone = M.MapCmds and M.MapCmds.GetCurrentZone and M.MapCmds.GetCurrentZone()
             if zone then
                 for _, cls in ipairs({ "Chest", "Normal" }) do
-                    local ok, t = pcall(M.BreakableCmds.AllByZoneAndClass, zone, cls)
+                    local ok, t = pcall(M.BreakableFrontend.AllByZoneAndClass, zone, cls)
                     if ok and type(t) == "table" then
                         for uid, b in pairs(t) do pool[uid] = b end
                     end

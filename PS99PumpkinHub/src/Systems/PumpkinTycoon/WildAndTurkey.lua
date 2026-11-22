@@ -141,15 +141,15 @@ function WildAndTurkey.Init(ctx)
 
     function WT.GetActiveTurkeyBreakable()
         local M = Net.Mod
-        if not M.BreakableCmds or not M.BreakableCmds.AllByInstanceAndClass then return nil, nil end
+        if not M.BreakableFrontend or not M.BreakableFrontend.AllByInstanceAndClass then return nil, nil end
         for _, cls in ipairs({ "Chest", "Normal" }) do
-            local ok, tbl = pcall(M.BreakableCmds.AllByInstanceAndClass, cls)
+            local ok, tbl = pcall(M.BreakableFrontend.AllByInstanceAndClass, cls)
             if ok and type(tbl) == "table" then
                 for uid, brk in pairs(tbl) do
-                    local ca = brk.clientAttributes
-                    local model = brk.model
+                    local ca = type(brk) == "table" and brk.clientAttributes or nil
+                    local model = type(brk) == "table" and brk.model or (typeof(brk) == "Instance" and brk or nil)
                     if type(ca) == "table" and ca.PumpkinTurkey == true and model and model.Parent then
-                        if model:GetAttribute("DisableDamage") ~= true then
+                        if brk.disableDamage ~= true and model:GetAttribute("DisableDamage") ~= true then
                             return uid, model
                         end
                     end

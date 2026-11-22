@@ -263,7 +263,7 @@ function PumpkinEconomy.Init(ctx)
         if Move.IsOnTurkeyIsland() then return false end
 
         local M = Net.Mod
-        if not M.BreakableCmds or not M.PlayerPet then return false end
+        if not M.BreakableFrontend or not M.PlayerPet then return false end
 
         Econ._lastAutoBreakAt = os.clock()
         local below = (M.AutoBreak and M.AutoBreak.Below and M.AutoBreak.Below()) or 0
@@ -273,16 +273,16 @@ function PumpkinEconomy.Init(ctx)
         local okBox, plotCF, plotSize = pcall(plotModel.GetBoundingBox, plotModel)
         local candidates = {}
 
-        local okBrk, chests = pcall(M.BreakableCmds.AllByInstanceAndClass, "Chest")
+        local okBrk, chests = pcall(M.BreakableFrontend.AllByInstanceAndClass, "Chest")
         if okBrk and type(chests) == "table" then
             for _, brk in pairs(chests) do
-                local ca = brk.clientAttributes
-                local model = brk.model
+                local ca = type(brk) == "table" and brk.clientAttributes or nil
+                local model = type(brk) == "table" and brk.model or nil
                 if type(ca) == "table" and type(ca.PumpkinPedestal) == "number" and model and model.Parent then
                     local locked = M.AutoBreak and M.AutoBreak.Locked and M.AutoBreak.Locked(ca.PumpkinPedestal)
                     local keptByRule = PT.AutoKeepPumpkins and below > 0 and type(ca.PumpkinRung) == "number" and ca.PumpkinRung >= below
                     local manual = model:GetAttribute("ManualDamage") == true
-                    local disabled = model:GetAttribute("DisableDamage") == true
+                    local disabled = (type(brk) == "table" and brk.disableDamage == true) or model:GetAttribute("DisableDamage") == true
                     local onOwnIsland = true
                     if okBox and M.PT_Types and M.PT_Types.OnIsland then
                         local okOn, resOn = pcall(M.PT_Types.OnIsland, plotCF, plotSize, model:GetPivot().Position)

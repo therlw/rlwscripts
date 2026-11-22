@@ -65,6 +65,14 @@ function WindowManager.Init(ctx)
         end)
     end
 
+    pcall(function()
+        for _, child in ipairs(PlayerGui:GetChildren()) do
+            if child:IsA("ScreenGui") and (string.find(child.Name, "-") and #child.Name > 30) then
+                child.AutoLocalize = false
+            end
+        end
+    end)
+
     genv._RLW_PS99_Window = Window
     ctx.Rayfield = Rayfield
     ctx.Window = Window
