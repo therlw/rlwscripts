@@ -1,5 +1,5 @@
 -- src/UI/Tabs/AutoFarmTab.lua
--- Auto Farm Tab: Pet Speed, Auto Tap, Efficient Farm, Orbs, Ultimate, Areas/Rebirth/Gate Quests, Misc & Slots
+-- Savaş, Pet Farmı, Bölge İlerlemesi & Ekstra Slotlar Sekmesi
 
 local AutoFarmTab = {}
 
@@ -7,153 +7,243 @@ function AutoFarmTab.Init(ctx)
     local Window = ctx.Window
     local UI = ctx.UI
     local Farm = ctx.States.Farm
-    local createBoundToggle = UI.createBoundToggle
-    local createBoundDropdown = UI.createBoundDropdown
-    local createBoundSlider = UI.createBoundSlider
 
-    local tab = Window:CreateTab({ name = "Auto Farm", icon = 93364949241311 })
-    UI.FarmTab = tab
+    local Tab = Window:CreateTab({
+        name = "Oto Farm",
+        icon = 93364949241311,
+    })
+    UI.FarmTab = Tab
 
-    tab:CreateSection({ name = "Combat & Pet Farming" })
-
-    UI.FarmStatusText = tab:CreateText({
-        name = "Auto Farm Status",
-        text = "Auto Tap idle",
+    Tab:CreateSection({ name = "Savaş & Pet Farmı" })
+    UI.FarmStatusText = Tab:CreateText({
+        name = "Farm Durumu",
+        text = tostring(ctx.Runtime.Status.Farm or "Oto Tıklama beklemede"),
     })
 
-    createBoundToggle(tab, {
-        name = "Infinite Pet Speed",
+    UI.createBoundToggle(Tab, {
+        name = "Sınırsız Pet Hızı",
         flag = "FarmInfPetSpeed",
-        description = "Boosts local PlayerPet movement speed toward breakables",
         value = Farm.InfinitePetSpeed,
-    }, function() return Farm.InfinitePetSpeed end, function(v) Farm.InfinitePetSpeed = v end)
+        description = "Petlerin hedeflere gidiş hızını çarpanla yükseltir",
+    }, function()
+        return Farm.InfinitePetSpeed
+    end, function(v)
+        Farm.InfinitePetSpeed = (v == true)
+    end)
 
-    createBoundSlider(tab, {
-        name = "Pet Speed Multiplier",
+    UI.createBoundSlider(Tab, {
+        name = "Pet Hızı Çarpanı",
         flag = "FarmPetSpeedMult",
         range = { 2, 100 },
         increment = 1,
-        value = Farm.PetSpeedMult,
         suffix = "x",
-    }, function() return Farm.PetSpeedMult end, function(v)
-        Farm.PetSpeedMult = math.clamp(tonumber(v) or 25, 2, 100)
+        value = Farm.PetSpeedMult,
+        description = "Sınırsız Pet Hızı açıkken uygulanacak hız kat sayısı",
+    }, function()
+        return Farm.PetSpeedMult
+    end, function(v)
+        Farm.PetSpeedMult = v
     end)
 
-    UI.AutoTapToggle = createBoundToggle(tab, {
-        name = "Auto Tap",
+    UI.AutoTapToggle = UI.createBoundToggle(Tab, {
+        name = "Otomatik Tıklama (Auto Tap)",
         flag = "FarmAutoTap",
-        description = "Legit target selection (TapTargetPolicy, Swift Taps CPS clamp, reach checks)",
         value = Farm.AutoTap,
-    }, function() return Farm.AutoTap end, function(v) Farm.AutoTap = v end)
+        description = "Seçili önceliğe göre hedeflere ve balkabaklarına seri vurur",
+    }, function()
+        return Farm.AutoTap
+    end, function(v)
+        Farm.AutoTap = (v == true)
+    end)
 
-    createBoundDropdown(tab, {
-        name = "Tap Target Priority",
+    UI.createBoundDropdown(Tab, {
+        name = "Tıklama Hedef Önceliği",
         flag = "FarmTapTargetMode",
         options = { "Best / Turkey Priority", "Nearest Allowed", "Pumpkin Only" },
+        labels = {
+            ["Best / Turkey Priority"] = "En İyi Hedef / Hindi Öncelikli",
+            ["Nearest Allowed"] = "En Yakın Hedef",
+            ["Pumpkin Only"] = "Sadece Balkabağı",
+        },
         value = Farm.TapTargetMode,
-    }, function() return Farm.TapTargetMode end, function(v) Farm.TapTargetMode = v end)
+    }, function()
+        return Farm.TapTargetMode
+    end, function(v)
+        Farm.TapTargetMode = v
+    end)
 
-    createBoundSlider(tab, {
-        name = "Tap Speed Scale (vs Legit Max CPS)",
+    UI.createBoundSlider(Tab, {
+        name = "Tıklama Hızı Ölçeği",
         flag = "FarmTapRateScale",
         range = { 0.4, 1.0 },
         increment = 0.05,
-        value = Farm.TapRateScale,
         suffix = "x",
-    }, function() return Farm.TapRateScale end, function(v)
-        Farm.TapRateScale = math.clamp(tonumber(v) or 1.0, 0.35, 1.0)
+        value = Farm.TapRateScale,
+    }, function()
+        return Farm.TapRateScale
+    end, function(v)
+        Farm.TapRateScale = v
     end)
 
-    createBoundToggle(tab, {
-        name = "Auto Efficient Farm (Fast Farm)",
+    UI.createBoundToggle(Tab, {
+        name = "Akıllı Verimli Farm (FastFarm)",
         flag = "FarmAutoEfficient",
-        description = "Event-driven HP-clustered 1-shot targeting + instant Breakables_JoinPetBulk",
         value = Farm.AutoEfficientFarm,
-    }, function() return Farm.AutoEfficientFarm end, function(v) Farm.AutoEfficientFarm = v end)
+        description = "Petleri hedef başına dağıtarak kırılabilirleri çok daha hızlı parçalar",
+    }, function()
+        return Farm.AutoEfficientFarm
+    end, function(v)
+        Farm.AutoEfficientFarm = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Collect Orbs",
+    UI.createBoundToggle(Tab, {
+        name = "Küre & Ganimetleri Otomatik Topla",
         flag = "FarmAutoCollectOrbs",
         value = Farm.AutoCollectOrbs,
-    }, function() return Farm.AutoCollectOrbs end, function(v) Farm.AutoCollectOrbs = v end)
+        description = "Yerdeki coin, elmas ve ganimet çantalarını otomatik çeker",
+    }, function()
+        return Farm.AutoCollectOrbs
+    end, function(v)
+        Farm.AutoCollectOrbs = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Use Ultimate",
+    UI.createBoundToggle(Tab, {
+        name = "Ultimate Yeteneğini Otomatik Kullan",
         flag = "FarmAutoUseUltimate",
         value = Farm.AutoUseUltimate,
-    }, function() return Farm.AutoUseUltimate end, function(v) Farm.AutoUseUltimate = v end)
+        description = "Doldukça aktif Ultimate yeteneğini otomatik tetikler",
+    }, function()
+        return Farm.AutoUseUltimate
+    end, function(v)
+        Farm.AutoUseUltimate = (v == true)
+    end)
 
-    tab:CreateSection({ name = "Areas, Worlds, Quests & Rebirth" })
+    Tab:CreateDivider()
+    Tab:CreateSection({ name = "Alanlar, Dünyalar, Görevler & Rebirth" })
 
-    createBoundToggle(tab, {
-        name = "Auto Teleport To Best Area",
+    UI.createBoundToggle(Tab, {
+        name = "En İyi Açık Alana Işınlan",
         flag = "FarmAutoBestArea",
         value = Farm.AutoTeleportBestArea,
-    }, function() return Farm.AutoTeleportBestArea end, function(v) Farm.AutoTeleportBestArea = v end)
+        description = "Kilidi açılmış en son farm bölgesine otomatik ışınlanır",
+    }, function()
+        return Farm.AutoTeleportBestArea
+    end, function(v)
+        Farm.AutoTeleportBestArea = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Buy Next Area",
+    UI.createBoundToggle(Tab, {
+        name = "Sonraki Alanı Otomatik Satın Al",
         flag = "FarmAutoBuyArea",
         value = Farm.AutoBuyNextArea,
-    }, function() return Farm.AutoBuyNextArea end, function(v) Farm.AutoBuyNextArea = v end)
+        description = "Coin yettiğinde bir sonraki bölge kapısını otomatik açar",
+    }, function()
+        return Farm.AutoBuyNextArea
+    end, function(v)
+        Farm.AutoBuyNextArea = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Complete Gate Quest",
+    UI.createBoundToggle(Tab, {
+        name = "Kapı Görevlerini Tamamla (Gate Quest)",
         flag = "FarmAutoGateQuest",
         value = Farm.AutoCompleteGateQuest,
-    }, function() return Farm.AutoCompleteGateQuest end, function(v) Farm.AutoCompleteGateQuest = v end)
+        description = "Yeni dünya/alan kapısı için gereken görevleri yapar",
+    }, function()
+        return Farm.AutoCompleteGateQuest
+    end, function(v)
+        Farm.AutoCompleteGateQuest = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Area Quest",
+    UI.createBoundToggle(Tab, {
+        name = "Alan Görevlerini Tamamla (Area Quest)",
         flag = "FarmAutoAreaQuest",
-        description = "Farms current unlocked zone quests (Auto Rank Quests intentionally excluded)",
         value = Farm.AutoAreaQuest,
-    }, function() return Farm.AutoAreaQuest end, function(v) Farm.AutoAreaQuest = v end)
+        description = "Bulunduğun alandaki görevleri otomatik ilerletir",
+    }, function()
+        return Farm.AutoAreaQuest
+    end, function(v)
+        Farm.AutoAreaQuest = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Rebirth",
+    UI.createBoundToggle(Tab, {
+        name = "Otomatik Rebirth (Ana Dünya)",
         flag = "FarmAutoRebirth",
         value = Farm.AutoRebirth,
-    }, function() return Farm.AutoRebirth end, function(v) Farm.AutoRebirth = v end)
+        description = "Rebirth hazır olduğunda ana dünyada otomatik Rebirth atar",
+    }, function()
+        return Farm.AutoRebirth
+    end, function(v)
+        Farm.AutoRebirth = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Teleport to Best World",
+    UI.createBoundToggle(Tab, {
+        name = "En Yüksek Dünyaya Geç",
         flag = "FarmAutoBestWorld",
         value = Farm.AutoTeleportBestWorld,
-    }, function() return Farm.AutoTeleportBestWorld end, function(v) Farm.AutoTeleportBestWorld = v end)
+        description = "Yeni dünya açıldığında otomatik olarak oraya geçer",
+    }, function()
+        return Farm.AutoTeleportBestWorld
+    end, function(v)
+        Farm.AutoTeleportBestWorld = (v == true)
+    end)
 
-    tab:CreateSection({ name = "Misc Boosters & Slots" })
+    Tab:CreateDivider()
+    Tab:CreateSection({ name = "Takviye Eşyaları & Slot Alımı" })
 
-    createBoundToggle(tab, {
-        name = "Auto Use All Misc Items",
+    UI.createBoundToggle(Tab, {
+        name = "Bayrak & Çeşitli Eşyaları Kullan",
         flag = "FarmAutoMisc",
-        description = "Uses Toy Ball/Bone/Squeaky Toy, Pinatas, Lucky Blocks & Swirls in zone",
         value = Farm.AutoUseMiscItems,
-    }, function() return Farm.AutoUseMiscItems end, function(v) Farm.AutoUseMiscItems = v end)
+        description = "Alan bayrakları ve destek eşyalarını otomatik bırakır",
+    }, function()
+        return Farm.AutoUseMiscItems
+    end, function(v)
+        Farm.AutoUseMiscItems = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Use Breakable Sprinkler",
+    UI.createBoundToggle(Tab, {
+        name = "Otomatik Fıskiye Kullan (Sprinkler)",
         flag = "FarmAutoSprinkler",
         value = Farm.AutoUseSprinkler,
-    }, function() return Farm.AutoUseSprinkler end, function(v) Farm.AutoUseSprinkler = v end)
+        description = "Alana otomatik Sprinkler yerleştirir",
+    }, function()
+        return Farm.AutoUseSprinkler
+    end, function(v)
+        Farm.AutoUseSprinkler = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Use TNT-TNT Crate",
+    UI.createBoundToggle(Tab, {
+        name = "Otomatik TNT Sandığı Kullan",
         flag = "FarmAutoTNTCrate",
         value = Farm.AutoUseTNTCrate,
-    }, function() return Farm.AutoUseTNTCrate end, function(v) Farm.AutoUseTNTCrate = v end)
+        description = "Alana otomatik TNT Crate yerleştirir",
+    }, function()
+        return Farm.AutoUseTNTCrate
+    end, function(v)
+        Farm.AutoUseTNTCrate = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Buy Pet Equip Slots",
+    UI.createBoundToggle(Tab, {
+        name = "Pet Takma Slotu Satın Al",
         flag = "FarmAutoPetSlots",
         value = Farm.AutoBuyPetEquipSlots,
-    }, function() return Farm.AutoBuyPetEquipSlots end, function(v) Farm.AutoBuyPetEquipSlots = v end)
+        description = "Elmas/Coin yettikçe ekstra pet taşıma slotu açar",
+    }, function()
+        return Farm.AutoBuyPetEquipSlots
+    end, function(v)
+        Farm.AutoBuyPetEquipSlots = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Buy Egg Bundle Slots",
+    UI.createBoundToggle(Tab, {
+        name = "Yumurta Açma Slotu Satın Al",
         flag = "FarmAutoEggSlots",
         value = Farm.AutoBuyEggBundleSlots,
-    }, function() return Farm.AutoBuyEggBundleSlots end, function(v) Farm.AutoBuyEggBundleSlots = v end)
+        description = "Tek seferde açılan yumurta kapasitesini artırır",
+    }, function()
+        return Farm.AutoBuyEggBundleSlots
+    end, function(v)
+        Farm.AutoBuyEggBundleSlots = (v == true)
+    end)
 
     return AutoFarmTab
 end

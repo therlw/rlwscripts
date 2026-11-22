@@ -1,5 +1,5 @@
 -- src/UI/Tabs/MailboxTab.lua
--- Mailbox Tab: Open/Close Mailbox Gui, Auto Claim Mailbox & Auto Mail Pets
+-- Posta Kutusu (Otomatik Toplama & Pet Gönderme) Sekmesi
 
 local MailboxTab = {}
 
@@ -7,22 +7,22 @@ function MailboxTab.Init(ctx)
     local Window = ctx.Window
     local UI = ctx.UI
     local Mail = ctx.States.Mailbox
-    local createBoundToggle = UI.createBoundToggle
-    local createBoundDropdown = UI.createBoundDropdown
-    local createBoundInput = UI.createBoundInput
 
-    local tab = Window:CreateTab({ name = "Mailbox", icon = 93364949241311 })
-    UI.MailboxTab = tab
+    local Tab = Window:CreateTab({
+        name = "Posta Kutusu",
+        icon = 93364949241311,
+    })
+    UI.MailboxTab = Tab
 
-    tab:CreateSection({ name = "Mailbox Controls" })
-
-    UI.MailboxStatusText = tab:CreateText({
-        name = "Mailbox Status",
-        text = "Mailbox idle",
+    Tab:CreateSection({ name = "Posta Kutusu Yönetimi" })
+    UI.MailboxStatusText = Tab:CreateText({
+        name = "Posta Durumu",
+        text = tostring(ctx.Runtime.Status.Mailbox or "Posta kutusu beklemede"),
     })
 
-    tab:CreateButton({
-        name = "Open/Close Mailbox Gui",
+    Tab:CreateButton({
+        name = "Oyun İçi Posta Kutusunu Aç / Kapat",
+        description = "Nerede olursan ol Mailbox arayüzünü uzaktan açar",
         callback = function()
             if ctx.MailboxSystem and ctx.MailboxSystem.ToggleGui then
                 ctx.MailboxSystem.ToggleGui()
@@ -30,42 +30,69 @@ function MailboxTab.Init(ctx)
         end,
     })
 
-    createBoundToggle(tab, {
-        name = "Auto Claim Mailbox",
+    UI.createBoundToggle(Tab, {
+        name = "Gelen Postaları Otomatik Topla (Auto Claim)",
         flag = "MailAutoClaim",
-        description = "Loads inbox and claims incoming gifts via Mailbox: Claim All",
         value = Mail.AutoClaimMailbox,
-    }, function() return Mail.AutoClaimMailbox end, function(v) Mail.AutoClaimMailbox = v end)
+        description = "Posta kutuna gelen tüm eşyaları ve hediyeleri otomatik alır",
+    }, function()
+        return Mail.AutoClaimMailbox
+    end, function(v)
+        Mail.AutoClaimMailbox = (v == true)
+    end)
 
-    tab:CreateSection({ name = "Auto Mail Pets" })
+    Tab:CreateDivider()
+    Tab:CreateSection({ name = "Otomatik Pet Gönderme (Auto Mail)" })
 
-    createBoundToggle(tab, {
-        name = "Auto Mail Pets",
+    UI.createBoundToggle(Tab, {
+        name = "Petleri Otomatik Postala (Auto Send)",
         flag = "MailAutoSend",
-        description = "Sends unlocked, unfavorited & unequipped pets matching filter via Mailbox: Send",
         value = Mail.AutoMailPets,
-    }, function() return Mail.AutoMailPets end, function(v) Mail.AutoMailPets = v end)
+        description = "Seçilen nadirlikteki petleri hedef hesaba otomatik gönderir",
+    }, function()
+        return Mail.AutoMailPets
+    end, function(v)
+        Mail.AutoMailPets = (v == true)
+    end)
 
-    createBoundInput(tab, {
-        name = "Mail Target Username",
+    UI.createBoundInput(Tab, {
+        name = "Alıcı Kullanıcı Adı (Username)",
         flag = "MailTargetUser",
-        placeholder = "Exact Roblox Username",
+        placeholder = "Alıcı Roblox kullanıcı adı...",
         value = Mail.MailUsername,
-    }, function() return Mail.MailUsername end, function(v) Mail.MailUsername = v end)
+    }, function()
+        return Mail.MailUsername
+    end, function(v)
+        Mail.MailUsername = tostring(v or "")
+    end)
 
-    createBoundDropdown(tab, {
-        name = "Pet Rarity Filter",
+    UI.createBoundDropdown(Tab, {
+        name = "Gönderilecek Pet Nadirlik Filtresi",
         flag = "MailRarityFilter",
         options = { "Huge / Titanic+", "Exclusive / Huge+", "Mythical+", "All Unlocked" },
+        labels = {
+            ["Huge / Titanic+"] = "Sadece Huge / Titanic+",
+            ["Exclusive / Huge+"] = "Exclusive / Huge+",
+            ["Mythical+"] = "Mythical ve Üstü",
+            ["All Unlocked"] = "Kilitsiz Tüm Petler",
+        },
         value = Mail.MailRarityFilter,
-    }, function() return Mail.MailRarityFilter end, function(v) Mail.MailRarityFilter = v end)
+    }, function()
+        return Mail.MailRarityFilter
+    end, function(v)
+        Mail.MailRarityFilter = v
+    end)
 
-    createBoundInput(tab, {
-        name = "Mail Message",
+    UI.createBoundInput(Tab, {
+        name = "Posta Mesajı",
         flag = "MailMsgText",
-        placeholder = "PS99 Hub Mail",
+        placeholder = "Örn: Ana hesap transferi",
         value = Mail.MailMessage,
-    }, function() return Mail.MailMessage end, function(v) Mail.MailMessage = v end)
+    }, function()
+        return Mail.MailMessage
+    end, function(v)
+        Mail.MailMessage = tostring(v or "")
+    end)
 
     return MailboxTab
 end

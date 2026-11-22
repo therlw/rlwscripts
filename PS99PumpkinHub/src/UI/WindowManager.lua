@@ -50,7 +50,7 @@ function WindowManager.Init(ctx)
     local Rayfield = loadstring(game:HttpGet("https://sirius.menu/gen2"))()
     local Window = Rayfield:CreateWindow({
         name = "PS99 | Pumpkin Tycoon Hub",
-        subtitle = "by RLW",
+        subtitle = "RLW · Türkçe Arayüz",
         sidebarLayout = true,
         configuration = {
             autoSave = false,
@@ -124,22 +124,66 @@ function WindowManager.Init(ctx)
     end
 
     local function createBoundDropdown(tab, opts, getter, setter, extraCb)
+        local labels = opts.labels
+        local revLabels = nil
+        local dispOptions = opts.options or {}
+        if type(labels) == "table" then
+            revLabels = {}
+            dispOptions = {}
+            for _, rawOpt in ipairs(opts.options or {}) do
+                local disp = labels[rawOpt] or rawOpt
+                table.insert(dispOptions, disp)
+                revLabels[disp] = rawOpt
+            end
+        end
+
+        local function mapValue(val, mapTbl)
+            if not mapTbl then return val end
+            if type(val) == "table" then
+                local out = {}
+                for _, item in ipairs(val) do
+                    table.insert(out, mapTbl[item] or item)
+                end
+                return out
+            end
+            return mapTbl[val] or val
+        end
+
+        local function toDisplay(val)
+            return mapValue(val, labels)
+        end
+
+        local function toInternal(val)
+            return mapValue(val, revLabels)
+        end
+
         local el = tab:CreateDropdown({
             name = opts.name,
             flag = opts.flag,
             description = opts.description,
-            options = opts.options or {},
-            value = opts.value,
+            options = dispOptions,
+            value = toDisplay(opts.value),
             multiSelect = opts.multiSelect == true,
             forgetState = true,
             callback = function(val)
-                setter(val)
-                if extraCb then extraCb(val) end
+                local internalVal = toInternal(val)
+                setter(internalVal)
+                if extraCb then extraCb(internalVal) end
                 ConfigManager:MarkDirty()
             end,
         })
         if opts.flag then
-            ConfigManager:Bind(opts.flag, el, getter, setter)
+            local boundTarget = el
+            if labels then
+                boundTarget = {
+                    Set = function(_, val, silent)
+                        if el and el.Set then
+                            el:Set(toDisplay(val), silent)
+                        end
+                    end,
+                }
+            end
+            ConfigManager:Bind(opts.flag, boundTarget, getter, setter)
         end
         return el
     end
@@ -210,7 +254,7 @@ function WindowManager.Init(ctx)
             name = opts.name,
             flag = opts.flag,
             description = opts.description,
-            placeholder = opts.placeholder or "Enter text...",
+            placeholder = opts.placeholder or "Metin girin...",
             value = tostring(opts.value or ""),
             clearOnFocus = opts.clearOnFocus == true,
             forgetState = true,

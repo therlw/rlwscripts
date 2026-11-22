@@ -1,5 +1,5 @@
 -- src/UI/Tabs/MainTab.lua
--- Main Tab: Free Gifts, Rank Rewards (Rewards Only), Forever Pack, Balloons, Stairway, Treehouse & Crystal Castle
+-- Genel Özellikler & Günlük Ödüller Sekmesi
 
 local MainTab = {}
 
@@ -7,69 +7,109 @@ function MainTab.Init(ctx)
     local Window = ctx.Window
     local UI = ctx.UI
     local Main = ctx.States.Main
-    local createBoundToggle = UI.createBoundToggle
 
-    local tab = Window:CreateTab({ name = "Main", icon = 93364949241311 })
-    UI.MainTab = tab
+    local Tab = Window:CreateTab({
+        name = "Genel",
+        icon = 93364949241311,
+    })
+    UI.MainTab = Tab
 
-    tab:CreateSection({ name = "Main World & Rewards" })
-
-    UI.MainStatusText = tab:CreateText({
-        name = "Main Status",
-        text = "Main features idle",
+    Tab:CreateSection({ name = "Durum & Koruma" })
+    UI.MainStatusText = Tab:CreateText({
+        name = "Genel Özellik Durumu",
+        text = tostring(ctx.Runtime.Status.Main or "Genel özellikler beklemede"),
     })
 
-    createBoundToggle(tab, {
-        name = "Anti-AFK (Idle Tracking + Engine)",
+    UI.createBoundToggle(Tab, {
+        name = "Anti-AFK Koruması",
         flag = "MainAntiAFK",
-        description = "Prevents Roblox 20m kick and PS99 15m/16.6m Move Server idle transfer",
         value = Main.AntiAFK,
-    }, function() return Main.AntiAFK end, function(v) Main.AntiAFK = v end)
+        description = "20 dakika hareketsizlikten oyundan atılmanı engeller",
+    }, function()
+        return Main.AntiAFK
+    end, function(v)
+        Main.AntiAFK = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Claim Free Gifts",
+    Tab:CreateDivider()
+    Tab:CreateSection({ name = "Ücretsiz Ödüller & Harita Özellikleri" })
+
+    UI.createBoundToggle(Tab, {
+        name = "Ücretsiz Hediyeleri Topla (Free Gifts)",
         flag = "MainAutoFreeGifts",
         value = Main.AutoClaimFreeGifts,
-    }, function() return Main.AutoClaimFreeGifts end, function(v) Main.AutoClaimFreeGifts = v end)
+        description = "Süresi dolan ücretsiz hediye kutularını otomatik alır",
+    }, function()
+        return Main.AutoClaimFreeGifts
+    end, function(v)
+        Main.AutoClaimFreeGifts = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Claim Rank Rewards",
+    UI.createBoundToggle(Tab, {
+        name = "Rütbe Ödüllerini Topla (Rank Rewards)",
         flag = "MainAutoRankRewards",
-        description = "Claims unlocked Rank Star Rewards only (Auto Rank Quests excluded)",
         value = Main.AutoClaimRankRewards,
-    }, function() return Main.AutoClaimRankRewards end, function(v) Main.AutoClaimRankRewards = v end)
+        description = "Açılan rütbe ödüllerini otomatik toplar",
+    }, function()
+        return Main.AutoClaimRankRewards
+    end, function(v)
+        Main.AutoClaimRankRewards = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Claim Default Forever Pack Free Gift",
+    UI.createBoundToggle(Tab, {
+        name = "Sonsuz Paket Ödüllerini Al (Forever Pack)",
         flag = "MainAutoForeverPack",
         value = Main.AutoClaimForeverPack,
-    }, function() return Main.AutoClaimForeverPack end, function(v) Main.AutoClaimForeverPack = v end)
+        description = "Forever Pack içindeki ücretsiz adımları otomatik alır",
+    }, function()
+        return Main.AutoClaimForeverPack
+    end, function(v)
+        Main.AutoClaimForeverPack = (v == true)
+    end)
 
-    tab:CreateSection({ name = "World Encounters & Instances" })
-
-    createBoundToggle(tab, {
-        name = "Auto Pop Balloons",
+    UI.createBoundToggle(Tab, {
+        name = "Otomatik Balon Patlat (Hediye Balonları)",
         flag = "MainAutoBalloons",
         value = Main.AutoPopBalloons,
-    }, function() return Main.AutoPopBalloons end, function(v) Main.AutoPopBalloons = v end)
+        description = "Haritada uçan hediye balonlarını otomatik patlatıp toplar",
+    }, function()
+        return Main.AutoPopBalloons
+    end, function(v)
+        Main.AutoPopBalloons = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Leave Stairway To Heaven",
+    UI.createBoundToggle(Tab, {
+        name = "Cennet Merdiveninden Çık (Stairway)",
         flag = "MainAutoLeaveStairway",
         value = Main.AutoLeaveStairway,
-    }, function() return Main.AutoLeaveStairway end, function(v) Main.AutoLeaveStairway = v end)
+        description = "Stairway to Heaven alanına girilirse otomatik çıkış yapar",
+    }, function()
+        return Main.AutoLeaveStairway
+    end, function(v)
+        Main.AutoLeaveStairway = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Treehouse Merchant",
+    UI.createBoundToggle(Tab, {
+        name = "Ağaç Ev Tüccarı (Treehouse Merchant)",
         flag = "MainAutoTreehouseMerchant",
         value = Main.AutoTreehouseMerchant,
-    }, function() return Main.AutoTreehouseMerchant end, function(v) Main.AutoTreehouseMerchant = v end)
+        description = "Secret Treehouse içindeki ürün tekliflerini otomatik alır",
+    }, function()
+        return Main.AutoTreehouseMerchant
+    end, function(v)
+        Main.AutoTreehouseMerchant = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Crystal Key Castle",
+    UI.createBoundToggle(Tab, {
+        name = "Kristal Anahtar Kalesi (Crystal Key)",
         flag = "MainAutoCrystalKeyCastle",
         value = Main.AutoCrystalKeyCastle,
-    }, function() return Main.AutoCrystalKeyCastle end, function(v) Main.AutoCrystalKeyCastle = v end)
+        description = "Anahtar biriktikçe Crystal Key sandığını otomatik açar",
+    }, function()
+        return Main.AutoCrystalKeyCastle
+    end, function(v)
+        Main.AutoCrystalKeyCastle = (v == true)
+    end)
 
     return MainTab
 end

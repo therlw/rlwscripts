@@ -1,5 +1,5 @@
 -- src/UI/Tabs/WebhookTab.lua
--- Webhook Tab: Discord Alerts for Titanic/Gargantuan, Huge & Exclusive Pets
+-- Discord Webhook Bildirim Ayarları Sekmesi
 
 local WebhookTab = {}
 
@@ -7,59 +7,75 @@ function WebhookTab.Init(ctx)
     local Window = ctx.Window
     local UI = ctx.UI
     local Hook = ctx.States.Webhook
-    local safeNotify = UI.safeNotify
-    local createBoundToggle = UI.createBoundToggle
-    local createBoundInput = UI.createBoundInput
 
-    local tab = Window:CreateTab({ name = "Webhook", icon = 93364949241311 })
-    UI.WebhookTab = tab
+    local Tab = Window:CreateTab({
+        name = "Webhook",
+        icon = 93364949241311,
+    })
+    UI.WebhookTab = Tab
 
-    tab:CreateSection({ name = "Discord Webhook Configuration" })
-
-    UI.WebhookStatusText = tab:CreateText({
-        name = "Webhook Status",
-        text = "Webhook listener active",
+    Tab:CreateSection({ name = "Discord Webhook Bağlantısı" })
+    UI.WebhookStatusText = Tab:CreateText({
+        name = "Webhook Durumu",
+        text = tostring(ctx.Runtime.Status.Webhook or "Webhook dinleyicisi aktif"),
     })
 
-    createBoundInput(tab, {
+    UI.createBoundInput(Tab, {
         name = "Discord Webhook URL",
         flag = "WebhookUrl",
         placeholder = "https://discord.com/api/webhooks/...",
         value = Hook.Url,
-    }, function() return Hook.Url end, function(v) Hook.Url = v end)
+    }, function()
+        return Hook.Url
+    end, function(v)
+        Hook.Url = tostring(v or "")
+    end)
 
-    tab:CreateButton({
-        name = "Send Test Webhook",
+    Tab:CreateButton({
+        name = "Test Bildirimi Gönder",
+        description = "Webhook adresinin doğru çalışıp çalışmadığını test eder",
         callback = function()
             if ctx.Webhook and ctx.Webhook.SendTestWebhook then
-                local ok, res = ctx.Webhook.SendTestWebhook()
-                safeNotify({
-                    title = "Webhook Test",
-                    content = ok and "Test embed sent to Discord!" or ("Failed: " .. tostring(res)),
-                })
+                ctx.Webhook.SendTestWebhook()
             end
         end,
     })
 
-    tab:CreateSection({ name = "Pet Notifications" })
+    Tab:CreateDivider()
+    Tab:CreateSection({ name = "Bildirim Gönderilecek Pet Katmanları" })
 
-    createBoundToggle(tab, {
-        name = "New Titanic Pets Webhook",
+    UI.createBoundToggle(Tab, {
+        name = "Titanic Pet Bildir",
         flag = "WebhookTitanic",
         value = Hook.NotifyTitanic,
-    }, function() return Hook.NotifyTitanic end, function(v) Hook.NotifyTitanic = v end)
+        description = "Titanic veya Gargantuan pet çıktığında Discord'a mesaj atar",
+    }, function()
+        return Hook.NotifyTitanic
+    end, function(v)
+        Hook.NotifyTitanic = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "New Huge Pets Webhook",
+    UI.createBoundToggle(Tab, {
+        name = "Huge Pet Bildir",
         flag = "WebhookHuge",
         value = Hook.NotifyHuge,
-    }, function() return Hook.NotifyHuge end, function(v) Hook.NotifyHuge = v end)
+        description = "Huge pet çıktığında Discord'a bildirim gönderir",
+    }, function()
+        return Hook.NotifyHuge
+    end, function(v)
+        Hook.NotifyHuge = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "New Exclusive Pets Webhook",
+    UI.createBoundToggle(Tab, {
+        name = "Exclusive Pet Bildir",
         flag = "WebhookExclusive",
         value = Hook.NotifyExclusive,
-    }, function() return Hook.NotifyExclusive end, function(v) Hook.NotifyExclusive = v end)
+        description = "Exclusive pet çıktığında Discord'a bildirim gönderir",
+    }, function()
+        return Hook.NotifyExclusive
+    end, function(v)
+        Hook.NotifyExclusive = (v == true)
+    end)
 
     return WebhookTab
 end

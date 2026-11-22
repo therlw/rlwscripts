@@ -13,7 +13,7 @@ function HubExports.Init(ctx)
         if CONFIG.Persistence and CONFIG.Persistence.AutoLoad and ConfigManager then
             local ok = ConfigManager:Load()
             if ok and UI.ConfigStatusText and UI.ConfigStatusText.Set then
-                UI.ConfigStatusText:Set("Auto-loaded config.json at " .. os.date("%X"))
+                UI.ConfigStatusText:Set("config.json otomatik yüklendi: " .. os.date("%X"))
             end
         end
     end)
@@ -45,8 +45,8 @@ function HubExports.Start(ctx)
     end
     if ctx.UI and ctx.UI.safeNotify then
         ctx.UI.safeNotify({
-            title = "PS99 Hub (Current Event + Worlds)",
-            content = "Loaded Current Event, Main, Auto Farm, Egg, Automatic, Fishing, Farming, Mailbox, Optimization & Webhook!",
+            title = "PS99 Hub (Güncel Etkinlik + Dünyalar)",
+            content = "Güncel Etkinlik, Genel, Oto Farm, Yumurta, Otomatik İşler, Balıkçılık, Çiftlik, Posta, Optimizasyon ve Webhook yüklendi!",
         })
     end
 end

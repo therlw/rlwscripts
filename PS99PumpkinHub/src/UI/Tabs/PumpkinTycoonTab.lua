@@ -1,5 +1,5 @@
 -- src/UI/Tabs/PumpkinTycoonTab.lua
--- Current Event Tab: "Current Event" (Pumpkin Tycoon Part 1 & Part 2 Suite, Halloween Games omitted)
+-- Güncel Etkinlik (Pumpkin Patch Tycoon) - Sadeleştirilmiş ve Türkçe Kontrol Sekmesi
 
 local PumpkinTycoonTab = {}
 
@@ -7,336 +7,615 @@ function PumpkinTycoonTab.Init(ctx)
     local Window = ctx.Window
     local UI = ctx.UI
     local PT = ctx.States.PumpkinTycoon
+    local Opt = ctx.States.Optimization
     local Move = ctx.States.Movement
-    local Net = ctx.Net
-    local createBoundToggle = UI.createBoundToggle
-    local createBoundDropdown = UI.createBoundDropdown
-    local createBoundSlider = UI.createBoundSlider
 
-    local tab = Window:CreateTab({ name = "Current Event", icon = 93364949241311 })
-    UI.PumpkinTycoonTab = tab
+    local Tab = Window:CreateTab({
+        name = "Güncel Etkinlik",
+        icon = 93364949241311,
+    })
+    UI.PumpkinTycoonTab = Tab
 
-    tab:CreateSection({ name = "Live Event Status" })
-    UI.PumpkinStatusText = tab:CreateText({
-        name = "Pumpkin Patch Tycoon",
-        text = "Initializing live telemetry...",
+    --------------------------------------------------------------------
+    -- 1. Canlı Özet & Hızlı Ayarlar
+    --------------------------------------------------------------------
+    Tab:CreateSection({ name = "Canlı Özet & Hızlı Ayarlar" })
+
+    local statsRow = Tab:CreateGroup({ direction = "row" })
+    UI.PTStatTokens = statsRow:CreateStat({
+        name = "Token",
+        value = 0,
+        numberEasing = false,
+    })
+    UI.PTStatNets = statsRow:CreateStat({
+        name = "Pet Ağı",
+        value = 0,
+        numberEasing = false,
+    })
+    UI.PTStatButtons = statsRow:CreateStat({
+        name = "Buton",
+        value = 0,
+        numberEasing = false,
     })
 
-    -- Movement & Performance
-    tab:CreateSection({ name = "Movement & Optimization" })
+    UI.PumpkinStatusText = Tab:CreateText({
+        name = "Etkinlik Durumu",
+        text = tostring(ctx.Runtime.Status.Event or "Balkabağı adası bekleniyor..."),
+    })
 
-    createBoundDropdown(tab, {
-        name = "Select Movement Mode",
-        flag = "PTMovementMode",
-        description = "Choose Teleport or Legit Walk across all event actions & pads",
-        options = { "Teleport", "Legit Walk" },
-        value = Move.Mode,
-    }, function() return Move.Mode end, function(v) Move.Mode = v end)
-
-    UI.OptimizePTToggle = createBoundToggle(tab, {
-        name = "Optimize Pumpkin Tycoon",
+    UI.OptimizePTToggle = UI.createBoundToggle(Tab, {
+        name = "Etkinlik Alanını Optimize Et (RAM / FPS)",
         flag = "PTOptimize",
-        description = "Frees RAM in event zone: deletes trees/props/clutter, other islands/plots/breakables, debris & unused world bloat",
         value = PT.OptimizePumpkinTycoon,
-    }, function() return PT.OptimizePumpkinTycoon end, function(v)
-        PT.OptimizePumpkinTycoon = v
+        description = "Gereksiz dekorasyonları, ağaçları ve diğer adaları gizleyip RAM kullanımını düşürür",
+    }, function()
+        return PT.OptimizePumpkinTycoon
+    end, function(v)
+        local enabled = (v == true)
+        PT.OptimizePumpkinTycoon = enabled
+        if Opt then
+            Opt.OptimizePumpkinTycoon = enabled
+        end
+    end, function(v)
         if ctx.Optimizer and ctx.Optimizer.SetEnabled then
             ctx.Optimizer.SetEnabled(v == true)
         end
         if UI.OptOptimizePTToggle and UI.OptOptimizePTToggle.Set then
-            pcall(function() UI.OptOptimizePTToggle:Set(v == true, true) end)
+            pcall(function()
+                UI.OptOptimizePTToggle:Set(v == true, true)
+            end)
         end
     end)
 
-    -- Tycoon Building & Rebirth
-    tab:CreateSection({ name = "Tycoon Progression & Rebirth" })
+    UI.createBoundDropdown(Tab, {
+        name = "Hareket Modu",
+        flag = "PTMovementMode",
+        options = { "Teleport", "Legit Walk" },
+        labels = {
+            ["Teleport"] = "Işınlanma (Hızlı)",
+            ["Legit Walk"] = "Yürüyerek (Normal)",
+        },
+        value = Move.Mode,
+        description = "Buton, yumurta ve vahşi petlere gidiş şeklini seçer",
+    }, function()
+        return Move.Mode
+    end, function(v)
+        Move.Mode = v
+    end)
 
-    UI.AutoButtonsToggle = createBoundToggle(tab, {
-        name = "Auto Buy Pumpkin Tycoon Buttons",
+    Tab:CreateDivider()
+
+    --------------------------------------------------------------------
+    -- 2. Temel Otomasyon (Ana Sistem)
+    --------------------------------------------------------------------
+    Tab:CreateSection({ name = "Temel Otomasyon (Ana Sistem)" })
+
+    UI.AutoButtonsToggle = UI.createBoundToggle(Tab, {
+        name = "Otomatik Buton Satın Al",
         flag = "PTAutoButtons",
-        description = "Builds Part 1 & Part 2 zones (1-8) and claims your island reward",
         value = PT.AutoBuyButtons,
-    }, function() return PT.AutoBuyButtons end, function(v) PT.AutoBuyButtons = v end)
+        description = "Adandaki tüm Tycoon platformlarını sırayla satın alır",
+    }, function()
+        return PT.AutoBuyButtons
+    end, function(v)
+        PT.AutoBuyButtons = (v == true)
+    end)
 
-    createBoundDropdown(tab, {
-        name = "Button Build Priority",
-        flag = "PTButtonPriority",
-        options = { "Zone/Egg First", "Cheapest First" },
-        value = PT.ButtonPriorityMode,
-    }, function() return PT.ButtonPriorityMode end, function(v) PT.ButtonPriorityMode = v end)
-
-    createBoundToggle(tab, {
-        name = "Auto Claim Island Completion Reward",
+    UI.createBoundToggle(Tab, {
+        name = "Otomatik Ada Ödülü Topla",
         flag = "PTAutoIslandReward",
-        description = "Automatically claims Flannel Gifts at 100% completion",
         value = PT.AutoClaimIslandReward,
-    }, function() return PT.AutoClaimIslandReward end, function(v) PT.AutoClaimIslandReward = v end)
+        description = "Tamamlanan ada ödüllerini otomatik olarak alır",
+    }, function()
+        return PT.AutoClaimIslandReward
+    end, function(v)
+        PT.AutoClaimIslandReward = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Rebirth Pumpkin Tycoon",
+    UI.createBoundToggle(Tab, {
+        name = "Otomatik Rebirth",
         flag = "PTAutoRebirth",
-        description = "Rebirths at 100% Part 2 shrine respecting server 5s cooldown",
         value = PT.AutoRebirth,
-    }, function() return PT.AutoRebirth end, function(v) PT.AutoRebirth = v end)
+        description = "Ada tamamlandığında otomatik Rebirth atar",
+    }, function()
+        return PT.AutoRebirth
+    end, function(v)
+        PT.AutoRebirth = (v == true)
+    end)
 
-    -- Eggs & Intelligent Coin Saving
-    tab:CreateSection({ name = "Eggs & Smart Coin Saving (Zones 1-8)" })
-
-    createBoundToggle(tab, {
-        name = "Auto Teleport to Best Pumpkin Egg/Area",
+    UI.createBoundToggle(Tab, {
+        name = "En İyi Yumurtaya Işınlan",
         flag = "PTAutoTPBestEgg",
-        description = "Stands inside BreakableZone on the edge closest to best unlocked Egg (Zones 1-8)",
         value = PT.AutoTeleportBestEgg,
-    }, function() return PT.AutoTeleportBestEgg end, function(v) PT.AutoTeleportBestEgg = v end)
+        description = "Kilidi açılmış en yüksek bölge yumurtasına otomatik geçer",
+    }, function()
+        return PT.AutoTeleportBestEgg
+    end, function(v)
+        PT.AutoTeleportBestEgg = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Buy Nearest Pumpkin Egg",
+    UI.createBoundToggle(Tab, {
+        name = "Otomatik Yumurta Aç (En Yakın)",
         flag = "PTAutoBuyNearestEgg",
-        description = "Hatches nearest unlocked Pumpkin Egg cleanly via CustomEggs_Hatch",
         value = PT.AutoBuyNearestEgg,
-    }, function() return PT.AutoBuyNearestEgg end, function(v) PT.AutoBuyNearestEgg = v end)
+        description = "Bulunduğun veya en yakın yumurtayı sürekli açar",
+    }, function()
+        return PT.AutoBuyNearestEgg
+    end, function(v)
+        PT.AutoBuyNearestEgg = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Intelligent Coin Saving System",
+    UI.createBoundToggle(Tab, {
+        name = "Akıllı Coin Biriktirme",
         flag = "PTSmartCoinSave",
-        description = "Pauses egg buying while saving Patch Coins for next priority button/zone",
         value = PT.SmartCoinSaving,
-    }, function() return PT.SmartCoinSaving end, function(v) PT.SmartCoinSaving = v end)
+        description = "Sonraki kritik buton veya geçit için Coin birikene kadar yumurtayı duraklatır",
+    }, function()
+        return PT.SmartCoinSaving
+    end, function(v)
+        PT.SmartCoinSaving = (v == true)
+    end)
 
-    createBoundDropdown(tab, {
-        name = "Egg Hatch Count",
-        flag = "PTEggHatchCount",
-        options = { "Max", "1", "3", "10", "50" },
-        value = PT.EggHatchAmount,
-    }, function() return PT.EggHatchAmount end, function(v) PT.EggHatchAmount = v end)
-
-    -- Wild Pets, Pet Nets, Turkey & Rare Pet Spawns
-    tab:CreateSection({ name = "Turkey Boss, Wild Pets & Rare Spawns" })
-
-    createBoundToggle(tab, {
-        name = "Auto Fight Turkey",
+    UI.createBoundToggle(Tab, {
+        name = "Hindi Boss'a Otomatik Saldır (Turkey)",
         flag = "PTAutoFightTurkey",
-        description = "Waits for Zone 8 Cannon unlock, then launches to Turkey island & fights within TurkeyReach",
         value = PT.AutoFightTurkey,
-    }, function() return PT.AutoFightTurkey end, function(v) PT.AutoFightTurkey = v end)
+        description = "Hindi Boss doğduğunda otomatik olarak gider ve keser",
+    }, function()
+        return PT.AutoFightTurkey
+    end, function(v)
+        PT.AutoFightTurkey = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Return Home After Turkey",
+    UI.createBoundToggle(Tab, {
+        name = "Hindi Kesilince Adaya Dön",
         flag = "PTReturnAfterTurkey",
         value = PT.ReturnHomeAfterTurkey,
-    }, function() return PT.ReturnHomeAfterTurkey end, function(v) PT.ReturnHomeAfterTurkey = v end)
+        description = "Hindi Boss bittikten sonra otomatik olarak kendi adana geri döner",
+    }, function()
+        return PT.ReturnHomeAfterTurkey
+    end, function(v)
+        PT.ReturnHomeAfterTurkey = (v == true)
+    end)
 
-    UI.AutoCatchRareToggle = createBoundToggle(tab, {
-        name = "Auto Catch Rare Pet Spawns",
-        flag = "PTAutoCatchRare",
-        description = "Throws your best Pet Net at Huge, Titanic & Gargantuan spawns after each Turkey",
-        value = PT.AutoCatchRareSpawns,
-    }, function() return PT.AutoCatchRareSpawns end, function(v) PT.AutoCatchRareSpawns = v end)
+    Tab:CreateDivider()
 
-    createBoundDropdown(tab, {
-        name = "Rare Tiers to Catch",
-        flag = "PTRareTiers",
-        multiSelect = true,
-        options = { "Huge", "Titanic", "Gargantuan" },
-        value = PT.CatchRareTiers,
-    }, function() return PT.CatchRareTiers end, function(v) PT.CatchRareTiers = v end)
+    --------------------------------------------------------------------
+    -- 3. Balkabağı, Yükseltme, Boost & Tüccar
+    --------------------------------------------------------------------
+    Tab:CreateSection({ name = "Balkabağı, Boost & Tüccar" })
 
-    createBoundToggle(tab, {
-        name = "Auto Hunt Wild Pets",
-        flag = "PTAutoHuntWild",
-        description = "Syncs game Auto Hunt rules safely via Plot Auto Hunt",
-        value = PT.AutoHuntWildPets,
-    }, function() return PT.AutoHuntWildPets end, function(v) PT.AutoHuntWildPets = v end)
-
-    createBoundDropdown(tab, {
-        name = "Auto Hunt Minimum Rarity",
-        flag = "PTHuntMinTier",
-        options = { "Any", "Uncommon", "Rare", "Epic", "Huge" },
-        value = PT.HuntMinTier,
-    }, function() return PT.HuntMinTier end, function(v) PT.HuntMinTier = v end)
-
-    createBoundToggle(tab, {
-        name = "Auto Hunt Variants Only",
-        flag = "PTHuntVariants",
-        value = PT.HuntVariantsOnly,
-    }, function() return PT.HuntVariantsOnly end, function(v) PT.HuntVariantsOnly = v end)
-
-    createBoundToggle(tab, {
-        name = "Auto Hunt Ultra Net on Huges",
-        flag = "PTHuntUltraHuge",
-        value = PT.HuntUltraOnHuges,
-    }, function() return PT.HuntUltraOnHuges end, function(v) PT.HuntUltraOnHuges = v end)
-
-    createBoundToggle(tab, {
-        name = "Auto Catch Wild Pets",
-        flag = "PTAutoCatchWild",
-        description = "Moves within 150 studs and throws nets directly at wild pets",
-        value = PT.AutoCatchWildPets,
-    }, function() return PT.AutoCatchWildPets end, function(v) PT.AutoCatchWildPets = v end)
-
-    createBoundDropdown(tab, {
-        name = "Auto Catch Min Rarity",
-        flag = "PTCatchWildMinTier",
-        options = { "Any", "Uncommon", "Rare", "Epic", "Huge" },
-        value = PT.CatchWildMinTier,
-    }, function() return PT.CatchWildMinTier end, function(v) PT.CatchWildMinTier = v end)
-
-    createBoundDropdown(tab, {
-        name = "Wild Pet Net Preference",
-        flag = "PTCatchWildNetPref",
-        options = { "Best Available", "Pet Net Only", "Ultra For Huge+" },
-        value = PT.CatchWildNetPreference,
-    }, function() return PT.CatchWildNetPreference end, function(v) PT.CatchWildNetPreference = v end)
-
-    createBoundToggle(tab, {
-        name = "Auto Catch Wild Variants Only",
-        flag = "PTCatchWildVariants",
-        value = PT.CatchWildVariantsOnly,
-    }, function() return PT.CatchWildVariantsOnly end, function(v) PT.CatchWildVariantsOnly = v end)
-
-    createBoundToggle(tab, {
-        name = "Auto Buy Pet Nets",
-        flag = "PTAutoBuyNets",
-        description = "Enables game Auto Buy Nets and buys selected nets in Pet Net Store",
-        value = PT.AutoBuyPetNets,
-    }, function() return PT.AutoBuyPetNets end, function(v) PT.AutoBuyPetNets = v end)
-
-    createBoundDropdown(tab, {
-        name = "Pet Net Purchase Mode",
-        flag = "PTBuyNetsMode",
-        options = { "Game Auto Nets + Shop", "Game Auto Nets", "Shop Selected Only" },
-        value = PT.BuyPetNetsMode,
-    }, function() return PT.BuyPetNetsMode end, function(v) PT.BuyPetNetsMode = v end)
-
-    createBoundDropdown(tab, {
-        name = "Selected Pet Nets (Shop)",
-        flag = "PTSelectedNets",
-        multiSelect = true,
-        options = { "Pet Net", "Ultra Pet Net" },
-        value = PT.SelectedNetOffers,
-    }, function() return PT.SelectedNetOffers end, function(v) PT.SelectedNetOffers = v end)
-
-    -- Pumpkins Keep, Break, Merchant & Planting
-    tab:CreateSection({ name = "Pumpkins Keep, Break & Merchant" })
-
-    createBoundToggle(tab, {
-        name = "Auto Keep Pumpkins",
-        flag = "PTAutoKeepPumpkins",
-        description = "Keeps rare pumpkins below rule so pets leave high-earning pumpkins alive",
-        value = PT.AutoKeepPumpkins,
-    }, function() return PT.AutoKeepPumpkins end, function(v) PT.AutoKeepPumpkins = v end)
-
-    local ladderOpts = { "Off", "Basic", "Uncommon", "Rare", "Epic", "Legendary", "Mythical", "Exotic", "Secret" }
-    createBoundDropdown(tab, {
-        name = "Keep Pumpkins At or Above",
-        flag = "PTKeepRarityRule",
-        options = ladderOpts,
-        value = PT.KeepRarityRule,
-    }, function() return PT.KeepRarityRule end, function(v) PT.KeepRarityRule = v end)
-
-    createBoundToggle(tab, {
-        name = "Auto Break Pumpkins",
+    UI.createBoundToggle(Tab, {
+        name = "Otomatik Balkabağı Kır (Tarla)",
         flag = "PTAutoBreakPumpkins",
-        description = "Dispatches pets to break unkept pumpkins across your island without moving",
         value = PT.AutoBreakPumpkins,
-    }, function() return PT.AutoBreakPumpkins end, function(v) PT.AutoBreakPumpkins = v end)
+        description = "Adanda çıkan tüm balkabaklarına pet gönderip kırar",
+    }, function()
+        return PT.AutoBreakPumpkins
+    end, function(v)
+        PT.AutoBreakPumpkins = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Buy Merchant Pumpkins",
+    UI.createBoundToggle(Tab, {
+        name = "Nadir Balkabaklarını Koru (Sakla)",
+        flag = "PTAutoKeepPumpkins",
+        value = PT.AutoKeepPumpkins,
+        description = "Seçilen nadirlik ve üstündeki balkabaklarını kırmadan tutar",
+    }, function()
+        return PT.AutoKeepPumpkins
+    end, function(v)
+        PT.AutoKeepPumpkins = (v == true)
+    end)
+
+    UI.createBoundToggle(Tab, {
+        name = "Otomatik Yükseltme Al (Upgrades)",
+        flag = "PTAutoBuyUpgrades",
+        value = PT.AutoBuyUpgrades,
+        description = "Seçili Tycoon yükseltmelerini otomatik olarak satın alır",
+    }, function()
+        return PT.AutoBuyUpgrades
+    end, function(v)
+        PT.AutoBuyUpgrades = (v == true)
+    end)
+
+    UI.createBoundToggle(Tab, {
+        name = "Otomatik Kakao Boost Satın Al",
+        flag = "PTAutoBuyCocoa",
+        value = PT.AutoBuyCocoaBoosts,
+        description = "Sıcak Kakao standından seçili boostları otomatik satın alır",
+    }, function()
+        return PT.AutoBuyCocoaBoosts
+    end, function(v)
+        PT.AutoBuyCocoaBoosts = (v == true)
+    end)
+
+    UI.createBoundToggle(Tab, {
+        name = "Balkabağı Boostlarını Kullan",
+        flag = "PTAutoUseBoosts",
+        value = PT.AutoUsePumpkinBoosts,
+        description = "Süresi biten seçili balkabağı boostlarını otomatik yeniler",
+    }, function()
+        return PT.AutoUsePumpkinBoosts
+    end, function(v)
+        PT.AutoUsePumpkinBoosts = (v == true)
+    end)
+
+    UI.createBoundToggle(Tab, {
+        name = "Tüccardan Otomatik Balkabağı Al",
         flag = "PTAutoBuyMerchant",
-        description = "Reworked: uses game Auto Merchant or Selected Bands",
         value = PT.AutoBuyMerchantPumpkins,
-    }, function() return PT.AutoBuyMerchantPumpkins end, function(v) PT.AutoBuyMerchantPumpkins = v end)
+        description = "Etkinlik tüccarından seçili nadirliklerdeki balkabaklarını alır",
+    }, function()
+        return PT.AutoBuyMerchantPumpkins
+    end, function(v)
+        PT.AutoBuyMerchantPumpkins = (v == true)
+    end)
 
-    createBoundDropdown(tab, {
-        name = "Merchant Buy Mode",
+    UI.createBoundToggle(Tab, {
+        name = "Tüccar Balkabaklarını Otomatik Ek",
+        flag = "PTAutoPlant",
+        value = PT.AutoPlantMerchantPumpkins,
+        description = "Alınan balkabaklarını boş alanlara otomatik olarak eker",
+    }, function()
+        return PT.AutoPlantMerchantPumpkins
+    end, function(v)
+        PT.AutoPlantMerchantPumpkins = (v == true)
+    end)
+
+    UI.createBoundToggle(Tab, {
+        name = "Otomatik Flannel Hediye Aç",
+        flag = "PTAutoOpenGifts",
+        value = PT.AutoOpenFlannelGifts,
+        description = "Envanterdeki Flannel Gift paketlerini toplu olarak açar",
+    }, function()
+        return PT.AutoOpenFlannelGifts
+    end, function(v)
+        PT.AutoOpenFlannelGifts = (v == true)
+    end)
+
+    Tab:CreateDivider()
+
+    --------------------------------------------------------------------
+    -- 4. Vahşi Petler & Nadir Yakalama
+    --------------------------------------------------------------------
+    Tab:CreateSection({ name = "Vahşi Petler & Nadir Yakalama" })
+
+    UI.AutoCatchRareToggle = UI.createBoundToggle(Tab, {
+        name = "Nadir Spawn Yakala (Huge / Titanic+)",
+        flag = "PTAutoCatchRare",
+        value = PT.AutoCatchRareSpawns,
+        description = "Haritada Huge, Titanic veya Gargantuan çıktığında anında yakalamaya gider",
+    }, function()
+        return PT.AutoCatchRareSpawns
+    end, function(v)
+        PT.AutoCatchRareSpawns = (v == true)
+    end)
+
+    UI.createBoundToggle(Tab, {
+        name = "Vahşi Pet Yakala (Otomatik Ağ At)",
+        flag = "PTAutoCatchWild",
+        value = PT.AutoCatchWildPets,
+        description = "Etkinlikteki vahşi petlere yaklaşıp ağ fırlatır",
+    }, function()
+        return PT.AutoCatchWildPets
+    end, function(v)
+        PT.AutoCatchWildPets = (v == true)
+    end)
+
+    UI.createBoundToggle(Tab, {
+        name = "Otomatik Vahşi Pet Avla (Auto Hunt)",
+        flag = "PTAutoHuntWild",
+        value = PT.AutoHuntWildPets,
+        description = "Seçili seviyedeki vahşi petleri takip edip otomatik yakalar",
+    }, function()
+        return PT.AutoHuntWildPets
+    end, function(v)
+        PT.AutoHuntWildPets = (v == true)
+    end)
+
+    UI.createBoundToggle(Tab, {
+        name = "Otomatik Pet Ağı Satın Al",
+        flag = "PTAutoBuyNets",
+        value = PT.AutoBuyPetNets,
+        description = "Mağazadan veya oyun içi sistemden Pet Net / Ultra Pet Net alır",
+    }, function()
+        return PT.AutoBuyPetNets
+    end, function(v)
+        PT.AutoBuyPetNets = (v == true)
+    end)
+
+    Tab:CreateDivider()
+
+    --------------------------------------------------------------------
+    -- 5. İnce Ayarlar & Filtreler (Gelişmiş)
+    --------------------------------------------------------------------
+    Tab:CreateSection({ name = "İnce Ayarlar & Filtreler (Gelişmiş)" })
+
+    UI.createBoundDropdown(Tab, {
+        name = "Buton Alım Önceliği",
+        flag = "PTButtonPriority",
+        options = { "Zone/Egg First", "Cheapest First" },
+        labels = {
+            ["Zone/Egg First"] = "Önce Bölge & Yumurta",
+            ["Cheapest First"] = "Önce En Ucuz Buton",
+        },
+        value = PT.ButtonPriorityMode,
+        description = "Yeni alan ve yumurta açmaya mı yoksa en ucuz butona mı öncelik verilsin",
+    }, function()
+        return PT.ButtonPriorityMode
+    end, function(v)
+        PT.ButtonPriorityMode = v
+    end)
+
+    UI.createBoundDropdown(Tab, {
+        name = "Yumurta Açma Adedi",
+        flag = "PTEggHatchCount",
+        options = { "Max", "1", "3", "10", "50" },
+        labels = {
+            ["Max"] = "Maksimum",
+        },
+        value = PT.EggHatchAmount,
+        description = "Her işlemde açılacak yumurta sayısı",
+    }, function()
+        return PT.EggHatchAmount
+    end, function(v)
+        PT.EggHatchAmount = v
+    end)
+
+    UI.createBoundDropdown(Tab, {
+        name = "Korunacak Balkabağı Nadirliği",
+        flag = "PTKeepRarityRule",
+        options = { "Off", "Basic", "Uncommon", "Rare", "Epic", "Legendary", "Mythical", "Exotic", "Secret" },
+        labels = {
+            ["Off"] = "Kapalı",
+            ["Basic"] = "Temel (Basic)",
+            ["Uncommon"] = "Sıradışı (Uncommon)",
+            ["Rare"] = "Nadir (Rare)",
+            ["Epic"] = "Epik (Epic)",
+            ["Legendary"] = "Efsanevi (Legendary)",
+            ["Mythical"] = "Mitik (Mythical)",
+            ["Exotic"] = "Egzotik (Exotic)",
+            ["Secret"] = "Gizli (Secret)",
+        },
+        value = PT.KeepRarityRule,
+        description = "Bu seviye ve üstündeki balkabakları kırılmaz",
+    }, function()
+        return PT.KeepRarityRule
+    end, function(v)
+        PT.KeepRarityRule = v
+    end)
+
+    UI.createBoundDropdown(Tab, {
+        name = "Tüccar Alım Modu",
         flag = "PTMerchantBuyMode",
         options = { "Game Auto Merchant", "Selected Bands" },
+        labels = {
+            ["Game Auto Merchant"] = "Oyun İçi Oto Tüccar",
+            ["Selected Bands"] = "Sadece Seçili Nadirlikler",
+        },
         value = PT.AutoBuyMerchantMode,
-    }, function() return PT.AutoBuyMerchantMode end, function(v) PT.AutoBuyMerchantMode = v end)
+    }, function()
+        return PT.AutoBuyMerchantMode
+    end, function(v)
+        PT.AutoBuyMerchantMode = v
+    end)
 
-    createBoundDropdown(tab, {
-        name = "Selected Merchant Bands",
+    UI.createBoundDropdown(Tab, {
+        name = "Tüccar Balkabağı Nadirlikleri",
         flag = "PTSelectedMerchantBands",
-        multiSelect = true,
         options = { "RarePlus", "EpicPlus", "LegendaryPlus", "MythicalPlus", "ExoticPlus" },
+        labels = {
+            RarePlus = "Rare+",
+            EpicPlus = "Epic+",
+            LegendaryPlus = "Legendary+",
+            MythicalPlus = "Mythical+",
+            ExoticPlus = "Exotic+",
+        },
         value = PT.SelectedMerchantBands,
-    }, function() return PT.SelectedMerchantBands end, function(v) PT.SelectedMerchantBands = v end)
+        multiSelect = true,
+    }, function()
+        return PT.SelectedMerchantBands
+    end, function(v)
+        PT.SelectedMerchantBands = v
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Plant Merchant Pumpkins",
-        flag = "PTAutoPlant",
-        description = "Enables auto planting and plants leftover stock on free pedestals",
-        value = PT.AutoPlantMerchantPumpkins,
-    }, function() return PT.AutoPlantMerchantPumpkins end, function(v) PT.AutoPlantMerchantPumpkins = v end)
-
-    -- Upgrades, Hot Cocoa, Boosts & Gifts
-    tab:CreateSection({ name = "Upgrades, Hot Cocoa, Boosts & Gifts" })
-
-    createBoundToggle(tab, {
-        name = "Auto Buy Selected Pumpkin Upgrades",
-        flag = "PTAutoBuyUpgrades",
-        description = "Includes Part 2 upgrade tiers using Pumpkin Tokens",
-        value = PT.AutoBuyUpgrades,
-    }, function() return PT.AutoBuyUpgrades end, function(v) PT.AutoBuyUpgrades = v end)
-
-    local trackOptions = (Net.Mod.PT_Upgrades and Net.Mod.PT_Upgrades.TRACKS) or {
-        "SpawnLuck", "PumpkinCoins", "PumpkinDamage", "RespawnSpeed",
-        "StockSlots", "ChaseOdds", "EggLuck", "MerchantLuck",
-    }
-    createBoundDropdown(tab, {
-        name = "Selected Pumpkin Upgrades",
+    UI.createBoundDropdown(Tab, {
+        name = "Alınacak Yükseltmeler",
         flag = "PTSelectedUpgrades",
-        multiSelect = true,
-        options = trackOptions,
+        options = { "SpawnLuck", "PumpkinCoins", "PumpkinDamage", "RespawnSpeed", "StockSlots", "ChaseOdds", "EggLuck", "MerchantLuck" },
+        labels = {
+            SpawnLuck = "Doğma Şansı (Spawn Luck)",
+            PumpkinCoins = "Balkabağı Coin Artışı",
+            PumpkinDamage = "Balkabağı Hasarı",
+            RespawnSpeed = "Yeniden Çıkma Hızı",
+            StockSlots = "Tüccar Stok Slotu",
+            ChaseOdds = "Nadir Yakalama Şansı",
+            EggLuck = "Yumurta Şansı",
+            MerchantLuck = "Tüccar Şansı",
+        },
         value = PT.SelectedUpgrades,
-    }, function() return PT.SelectedUpgrades end, function(v) PT.SelectedUpgrades = v end)
+        multiSelect = true,
+    }, function()
+        return PT.SelectedUpgrades
+    end, function(v)
+        PT.SelectedUpgrades = v
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Buy Selected Hot Cocoa Boosts",
-        flag = "PTAutoBuyCocoa",
-        description = "Refills low boosts (+30m max per visit) only when <= 3m remaining",
-        value = PT.AutoBuyCocoaBoosts,
-    }, function() return PT.AutoBuyCocoaBoosts end, function(v) PT.AutoBuyCocoaBoosts = v end)
-
-    createBoundDropdown(tab, {
-        name = "Selected Hot Cocoa Boosts",
+    UI.createBoundDropdown(Tab, {
+        name = "Alınacak Kakao Boostları",
         flag = "PTSelectedCocoa",
-        multiSelect = true,
         options = { "Coins", "Damage", "IslandLuck" },
+        labels = {
+            Coins = "Coin Boost",
+            Damage = "Hasar Boost",
+            IslandLuck = "Ada Şansı Boost",
+        },
         value = PT.SelectedCocoaBoosts,
-    }, function() return PT.SelectedCocoaBoosts end, function(v) PT.SelectedCocoaBoosts = v end)
-
-    createBoundToggle(tab, {
-        name = "Auto Use Selected Pumpkin Boosts",
-        flag = "PTAutoUseBoosts",
-        description = "Uses Tier III boosts first from your Consumables (Tier III -> II -> I)",
-        value = PT.AutoUsePumpkinBoosts,
-    }, function() return PT.AutoUsePumpkinBoosts end, function(v) PT.AutoUsePumpkinBoosts = v end)
-
-    createBoundDropdown(tab, {
-        name = "Selected Pumpkin Boosts",
-        flag = "PTSelectedBoosts",
         multiSelect = true,
+    }, function()
+        return PT.SelectedCocoaBoosts
+    end, function(v)
+        PT.SelectedCocoaBoosts = v
+    end)
+
+    UI.createBoundDropdown(Tab, {
+        name = "Kullanılacak Balkabağı Boostları",
+        flag = "PTSelectedBoosts",
         options = { "Coins", "Damage", "IslandLuck" },
+        labels = {
+            Coins = "Coin Boost",
+            Damage = "Hasar Boost",
+            IslandLuck = "Ada Şansı Boost",
+        },
         value = PT.SelectedPumpkinBoosts,
-    }, function() return PT.SelectedPumpkinBoosts end, function(v) PT.SelectedPumpkinBoosts = v end)
+        multiSelect = true,
+    }, function()
+        return PT.SelectedPumpkinBoosts
+    end, function(v)
+        PT.SelectedPumpkinBoosts = v
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Open Flannel Gifts",
-        flag = "PTAutoOpenGifts",
-        description = "Opens Flannel Gifts in batches of up to 8 inside Pumpkin Tycoon",
-        value = PT.AutoOpenFlannelGifts,
-    }, function() return PT.AutoOpenFlannelGifts end, function(v) PT.AutoOpenFlannelGifts = v end)
-
-    createBoundSlider(tab, {
-        name = "Flannel Gift Batch Size",
+    UI.createBoundSlider(Tab, {
+        name = "Tek Seferde Açılacak Hediye",
         flag = "PTGiftBatch",
         range = { 1, 8 },
         increment = 1,
+        suffix = " adet",
         value = PT.GiftOpenBatch,
-        suffix = " gifts",
-    }, function() return PT.GiftOpenBatch end, function(v) PT.GiftOpenBatch = math.clamp(math.floor(v), 1, 8) end)
+    }, function()
+        return PT.GiftOpenBatch
+    end, function(v)
+        PT.GiftOpenBatch = v
+    end)
+
+    UI.createBoundDropdown(Tab, {
+        name = "Nadir Spawn Katmanları",
+        flag = "PTRareTiers",
+        options = { "Huge", "Titanic", "Gargantuan" },
+        value = PT.CatchRareTiers,
+        multiSelect = true,
+    }, function()
+        return PT.CatchRareTiers
+    end, function(v)
+        PT.CatchRareTiers = v
+    end)
+
+    UI.createBoundDropdown(Tab, {
+        name = "Avlama Minimum Seviyesi",
+        flag = "PTHuntMinTier",
+        options = { "Any", "Uncommon", "Rare", "Epic", "Huge" },
+        labels = {
+            Any = "Tümü",
+            Uncommon = "Uncommon+",
+            Rare = "Rare+",
+            Epic = "Epic+",
+            Huge = "Sadece Huge+",
+        },
+        value = PT.HuntMinTier,
+    }, function()
+        return PT.HuntMinTier
+    end, function(v)
+        PT.HuntMinTier = v
+    end)
+
+    UI.createBoundToggle(Tab, {
+        name = "Avlamada Sadece Varyantlı Petler",
+        flag = "PTHuntVariants",
+        value = PT.HuntVariantsOnly,
+        description = "Avlanırken yalnızca Golden / Rainbow / Shiny petleri hedefler",
+    }, function()
+        return PT.HuntVariantsOnly
+    end, function(v)
+        PT.HuntVariantsOnly = (v == true)
+    end)
+
+    UI.createBoundToggle(Tab, {
+        name = "Huge İçin Ultra Pet Ağı Kullan",
+        flag = "PTHuntUltraHuge",
+        value = PT.HuntUltraOnHuges,
+        description = "Huge veya üstü petlerde öncelikle Ultra Pet Net kullanır",
+    }, function()
+        return PT.HuntUltraOnHuges
+    end, function(v)
+        PT.HuntUltraOnHuges = (v == true)
+    end)
+
+    UI.createBoundDropdown(Tab, {
+        name = "Yakalama Minimum Seviyesi",
+        flag = "PTCatchWildMinTier",
+        options = { "Any", "Uncommon", "Rare", "Epic", "Huge" },
+        labels = {
+            Any = "Tümü",
+            Uncommon = "Uncommon+",
+            Rare = "Rare+",
+            Epic = "Epic+",
+            Huge = "Huge+",
+        },
+        value = PT.CatchWildMinTier,
+    }, function()
+        return PT.CatchWildMinTier
+    end, function(v)
+        PT.CatchWildMinTier = v
+    end)
+
+    UI.createBoundDropdown(Tab, {
+        name = "Vahşi Pet Ağ Tercihi",
+        flag = "PTCatchWildNetPref",
+        options = { "Best Available", "Pet Net Only", "Ultra For Huge+" },
+        labels = {
+            ["Best Available"] = "Eldeki En İyi Ağ",
+            ["Pet Net Only"] = "Sadece Normal Pet Net",
+            ["Ultra For Huge+"] = "Huge+ İçin Ultra Ağ",
+        },
+        value = PT.CatchWildNetPreference,
+    }, function()
+        return PT.CatchWildNetPreference
+    end, function(v)
+        PT.CatchWildNetPreference = v
+    end)
+
+    UI.createBoundToggle(Tab, {
+        name = "Yakalamada Sadece Varyantlılar",
+        flag = "PTCatchWildVariants",
+        value = PT.CatchWildVariantsOnly,
+        description = "Sadece Golden / Rainbow / Shiny vahşi petlere ağ atar",
+    }, function()
+        return PT.CatchWildVariantsOnly
+    end, function(v)
+        PT.CatchWildVariantsOnly = (v == true)
+    end)
+
+    UI.createBoundDropdown(Tab, {
+        name = "Ağ Satın Alma Modu",
+        flag = "PTBuyNetsMode",
+        options = { "Game Auto Nets + Shop", "Game Auto Nets", "Shop Selected Only" },
+        labels = {
+            ["Game Auto Nets + Shop"] = "Oto Ağ + Mağaza",
+            ["Game Auto Nets"] = "Sadece Oyun İçi Oto Ağ",
+            ["Shop Selected Only"] = "Sadece Mağazadan Seçililer",
+        },
+        value = PT.BuyPetNetsMode,
+    }, function()
+        return PT.BuyPetNetsMode
+    end, function(v)
+        PT.BuyPetNetsMode = v
+    end)
+
+    UI.createBoundDropdown(Tab, {
+        name = "Mağazadan Alınacak Ağlar",
+        flag = "PTSelectedNets",
+        options = { "Pet Net", "Ultra Pet Net" },
+        labels = {
+            ["Pet Net"] = "Normal Pet Net",
+            ["Ultra Pet Net"] = "Ultra Pet Net",
+        },
+        value = PT.SelectedNetOffers,
+        multiSelect = true,
+    }, function()
+        return PT.SelectedNetOffers
+    end, function(v)
+        PT.SelectedNetOffers = v
+    end)
 
     return PumpkinTycoonTab
 end

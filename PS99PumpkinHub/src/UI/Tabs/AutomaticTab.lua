@@ -1,5 +1,5 @@
 -- src/UI/Tabs/AutomaticTab.lua
--- Automatic Tab: Boosts, Wings, Fruits, Toys, Potions, Gifts, Lootboxes, Keys, Chests, Wheels, Upgrades
+-- Meyve, İksir, Sandık, Çark & Yükseltme Otomasyonları Sekmesi
 
 local AutomaticTab = {}
 
@@ -7,116 +7,191 @@ function AutomaticTab.Init(ctx)
     local Window = ctx.Window
     local UI = ctx.UI
     local Auto = ctx.States.Automatic
-    local createBoundToggle = UI.createBoundToggle
-    local createBoundSlider = UI.createBoundSlider
 
-    local tab = Window:CreateTab({ name = "Automatic", icon = 93364949241311 })
-    UI.AutomaticTab = tab
+    local Tab = Window:CreateTab({
+        name = "Otomatik İşler",
+        icon = 93364949241311,
+    })
+    UI.AutomaticTab = Tab
 
-    tab:CreateSection({ name = "Upgrades, Fruits, Toys & Potions" })
-
-    UI.AutomaticStatusText = tab:CreateText({
-        name = "Automatic Status",
-        text = "Automatic systems idle",
+    Tab:CreateSection({ name = "Boostlar, Meyveler & İksirler" })
+    UI.AutomaticStatusText = Tab:CreateText({
+        name = "Tüketim & Açma Durumu",
+        text = tostring(ctx.Runtime.Status.Automatic or "Otomatik tüketim beklemede"),
     })
 
-    createBoundToggle(tab, {
-        name = "Auto Buy Boosts",
+    UI.createBoundToggle(Tab, {
+        name = "Boostları Otomatik Kullan / Yenile",
         flag = "AutoBuyBoosts",
         value = Auto.AutoBuyBoosts,
-    }, function() return Auto.AutoBuyBoosts end, function(v) Auto.AutoBuyBoosts = v end)
+        description = "Envanterdeki Boost eşyalarını süresi bittikçe aktif eder",
+    }, function()
+        return Auto.AutoBuyBoosts
+    end, function(v)
+        Auto.AutoBuyBoosts = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Buy Wings Upgrades",
+    UI.createBoundToggle(Tab, {
+        name = "Kanat Yükseltmelerini Al (Wings)",
         flag = "AutoBuyWings",
         value = Auto.AutoBuyWingsUpgrades,
-    }, function() return Auto.AutoBuyWingsUpgrades end, function(v) Auto.AutoBuyWingsUpgrades = v end)
+        description = "Mevcut Wing / Hoverboard yükseltmelerini otomatik satın alır",
+    }, function()
+        return Auto.AutoBuyWingsUpgrades
+    end, function(v)
+        Auto.AutoBuyWingsUpgrades = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Eat Fruits (Normal / Shiny)",
+    UI.createBoundToggle(Tab, {
+        name = "Otomatik Meyve Ye (Fruits)",
         flag = "AutoEatFruits",
         value = Auto.AutoEatFruits,
-    }, function() return Auto.AutoEatFruits end, function(v) Auto.AutoEatFruits = v end)
+        description = "Elma, Muz, Ananas ve Karpuz takviyelerini otomatik tazeler",
+    }, function()
+        return Auto.AutoEatFruits
+    end, function(v)
+        Auto.AutoEatFruits = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Include Shiny Fruits",
+    UI.createBoundToggle(Tab, {
+        name = "Shiny Meyveleri Önce Ye",
         flag = "AutoEatShinyFruits",
         value = Auto.EatShinyFruits,
-    }, function() return Auto.EatShinyFruits end, function(v) Auto.EatShinyFruits = v end)
+        description = "Mümkünse daha yüksek bonus veren Shiny meyveleri tüketir",
+    }, function()
+        return Auto.EatShinyFruits
+    end, function(v)
+        Auto.EatShinyFruits = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Use Toys",
+    UI.createBoundToggle(Tab, {
+        name = "Oyuncakları Otomatik Kullan (Toys)",
         flag = "AutoUseToys",
         value = Auto.AutoUseToys,
-    }, function() return Auto.AutoUseToys end, function(v) Auto.AutoUseToys = v end)
+        description = "Toy Ball, Toy Bone vb. oyuncakları otomatik aktif tutar",
+    }, function()
+        return Auto.AutoUseToys
+    end, function(v)
+        Auto.AutoUseToys = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Use Potions",
+    UI.createBoundToggle(Tab, {
+        name = "İksirleri Otomatik İç (Potions)",
         flag = "AutoUsePotions",
         value = Auto.AutoUsePotions,
-    }, function() return Auto.AutoUsePotions end, function(v) Auto.AutoUsePotions = v end)
+        description = "Belirlenen seviye ve üzerindeki iksirleri otomatik kullanır",
+    }, function()
+        return Auto.AutoUsePotions
+    end, function(v)
+        Auto.AutoUsePotions = (v == true)
+    end)
 
-    createBoundSlider(tab, {
-        name = "Min Potion Tier",
+    UI.createBoundSlider(Tab, {
+        name = "Minimum İksir Seviyesi (Tier)",
         flag = "AutoPotionMinTier",
         range = { 1, 10 },
         increment = 1,
+        suffix = ". sv",
         value = Auto.PotionMinTier,
-    }, function() return Auto.PotionMinTier end, function(v)
-        Auto.PotionMinTier = math.clamp(tonumber(v) or 1, 1, 10)
+    }, function()
+        return Auto.PotionMinTier
+    end, function(v)
+        Auto.PotionMinTier = v
     end)
 
-    tab:CreateSection({ name = "Gifts, Lootboxes, Keys, Chests & Wheels" })
+    Tab:CreateDivider()
+    Tab:CreateSection({ name = "Hediye, Kutu, Anahtar & Çarklar" })
 
-    createBoundToggle(tab, {
-        name = "Auto Open Gifts",
+    UI.createBoundToggle(Tab, {
+        name = "Hediye Paketlerini Otomatik Aç",
         flag = "AutoOpenGifts",
         value = Auto.AutoOpenGifts,
-    }, function() return Auto.AutoOpenGifts end, function(v) Auto.AutoOpenGifts = v end)
+        description = "Gift Bag ve Bundle paketlerini otomatik açar",
+    }, function()
+        return Auto.AutoOpenGifts
+    end, function(v)
+        Auto.AutoOpenGifts = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Open Lootboxes",
+    UI.createBoundToggle(Tab, {
+        name = "Ganimet Kutularını Aç (Lootboxes)",
         flag = "AutoOpenLootboxes",
         value = Auto.AutoOpenLootboxes,
-    }, function() return Auto.AutoOpenLootboxes end, function(v) Auto.AutoOpenLootboxes = v end)
+        description = "Envanterdeki Lootbox kasalarını otomatik açar",
+    }, function()
+        return Auto.AutoOpenLootboxes
+    end, function(v)
+        Auto.AutoOpenLootboxes = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Combine Keys",
+    UI.createBoundToggle(Tab, {
+        name = "Anahtarları Birleştir (Combine Keys)",
         flag = "AutoCombineKeys",
         value = Auto.AutoCombineKeys,
-    }, function() return Auto.AutoCombineKeys end, function(v) Auto.AutoCombineKeys = v end)
+        description = "Crystal, Secret, Tech ve Void anahtar parçalarını birleştirir",
+    }, function()
+        return Auto.AutoCombineKeys
+    end, function(v)
+        Auto.AutoCombineKeys = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Open Chests",
+    UI.createBoundToggle(Tab, {
+        name = "Sandıkları Otomatik Aç (Chests)",
         flag = "AutoOpenChests",
         value = Auto.AutoOpenChests,
-    }, function() return Auto.AutoOpenChests end, function(v) Auto.AutoOpenChests = v end)
+        description = "Anahtarlı dünya sandıklarını otomatik açar",
+    }, function()
+        return Auto.AutoOpenChests
+    end, function(v)
+        Auto.AutoOpenChests = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Spin Wheels",
+    UI.createBoundToggle(Tab, {
+        name = "Şans Çarklarını Çevir (Spin Wheels)",
         flag = "AutoSpinWheels",
         value = Auto.AutoSpinWheels,
-    }, function() return Auto.AutoSpinWheels end, function(v) Auto.AutoSpinWheels = v end)
+        description = "Spinny Wheel biletlerin varsa otomatik çevirir",
+    }, function()
+        return Auto.AutoSpinWheels
+    end, function(v)
+        Auto.AutoSpinWheels = (v == true)
+    end)
 
-    tab:CreateSection({ name = "Machine Upgraders" })
+    Tab:CreateDivider()
+    Tab:CreateSection({ name = "Otomatik Eşya Yükseltme (Upgrade)" })
 
-    createBoundToggle(tab, {
-        name = "Auto Upgrade Fruits",
+    UI.createBoundToggle(Tab, {
+        name = "Meyveleri Yükselt (Rainbow Fruits)",
         flag = "AutoUpgradeFruits",
         value = Auto.AutoUpgradeFruits,
-    }, function() return Auto.AutoUpgradeFruits end, function(v) Auto.AutoUpgradeFruits = v end)
+        description = "Meyveleri birleştirip Rainbow Fruit üretir",
+    }, function()
+        return Auto.AutoUpgradeFruits
+    end, function(v)
+        Auto.AutoUpgradeFruits = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Upgrade Potions",
+    UI.createBoundToggle(Tab, {
+        name = "İksirleri Üst Seviyeye Çıkar",
         flag = "AutoUpgradePotions",
         value = Auto.AutoUpgradePotions,
-    }, function() return Auto.AutoUpgradePotions end, function(v) Auto.AutoUpgradePotions = v end)
+        description = "Aynı seviye iksirleri makinede birleştirip güçlendirir",
+    }, function()
+        return Auto.AutoUpgradePotions
+    end, function(v)
+        Auto.AutoUpgradePotions = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Upgrade Enchants",
+    UI.createBoundToggle(Tab, {
+        name = "Büyüleri Yükselt (Upgrade Enchants)",
         flag = "AutoUpgradeEnchants",
         value = Auto.AutoUpgradeEnchants,
-    }, function() return Auto.AutoUpgradeEnchants end, function(v) Auto.AutoUpgradeEnchants = v end)
+        description = "Düşük seviye Enchant kitaplarını üst seviyeye birleştirir",
+    }, function()
+        return Auto.AutoUpgradeEnchants
+    end, function(v)
+        Auto.AutoUpgradeEnchants = (v == true)
+    end)
 
     return AutomaticTab
 end

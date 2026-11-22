@@ -1,5 +1,5 @@
 -- src/UI/Tabs/ConfigTab.lua
--- Config Persistence, Notifications, Debug Logs & Action Hotkeys
+-- Yapılandırma Dosyası, Bildirimler & Klavye Kısayolları Sekmesi
 
 local ConfigTab = {}
 
@@ -8,97 +8,171 @@ function ConfigTab.Init(ctx)
     local UI = ctx.UI
     local CONFIG = ctx.Config
     local ConfigManager = ctx.ConfigManager
-    local PT = ctx.States.PumpkinTycoon
-    local Farm = ctx.States.Farm
-    local safeNotify = UI.safeNotify
-    local createBoundToggle = UI.createBoundToggle
-    local bindHotkeyElement = UI.bindHotkeyElement
+    local States = ctx.States
 
-    local tab = Window:CreateTab({ name = "Config", icon = 93364949241311 })
-    UI.ConfigTab = tab
+    local Tab = Window:CreateTab({
+        name = "Ayarlar",
+        icon = 93364949241311,
+    })
+    UI.ConfigTab = Tab
 
-    tab:CreateSection({ name = "Config File (PS99PumpkinHub/config.json)" })
+    --------------------------------------------------------------------
+    -- Yapılandırma Dosyası (config.json)
+    --------------------------------------------------------------------
+    Tab:CreateSection({ name = "Yapılandırma Dosyası (" .. tostring(CONFIG.Persistence.FileName) .. ")" })
 
-    UI.ConfigStatusText = tab:CreateText({
-        name = "Config Status",
-        text = "Path: " .. tostring(CONFIG.Persistence.FileName),
+    UI.ConfigStatusText = Tab:CreateText({
+        name = "Ayar Durumu",
+        text = "Kayıt yolu: " .. tostring(CONFIG.Persistence.FileName),
     })
 
-    createBoundToggle(tab, {
-        name = "Auto Save Config on Change",
+    UI.createBoundToggle(Tab, {
+        name = "Değişiklikleri Otomatik Kaydet (Auto Save)",
         flag = "CfgAutoSave",
         value = CONFIG.Persistence.AutoSave,
-    }, function() return CONFIG.Persistence.AutoSave end, function(v) CONFIG.Persistence.AutoSave = v end)
+        description = "Bir ayar değiştirildiğinde 1-2 saniye içinde otomatik diske kaydeder",
+    }, function()
+        return CONFIG.Persistence.AutoSave
+    end, function(v)
+        CONFIG.Persistence.AutoSave = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Load Config on Startup",
+    UI.createBoundToggle(Tab, {
+        name = "Açılışta Otomatik Yükle (Auto Load)",
         flag = "CfgAutoLoad",
         value = CONFIG.Persistence.AutoLoad,
-    }, function() return CONFIG.Persistence.AutoLoad end, function(v) CONFIG.Persistence.AutoLoad = v end)
+        description = "Script her başlatıldığında kayıtlı ayarları otomatik uygular",
+    }, function()
+        return CONFIG.Persistence.AutoLoad
+    end, function(v)
+        CONFIG.Persistence.AutoLoad = (v == true)
+    end)
 
-    tab:CreateButton({
-        name = "Save Config Now",
+    Tab:CreateButton({
+        name = "Ayarları Şimdi Kaydet",
         callback = function()
-            local ok, msg = ConfigManager:Save()
-            if UI.ConfigStatusText and UI.ConfigStatusText.Set then
-                pcall(function() UI.ConfigStatusText:Set(ok and ("Saved cleanly at " .. os.date("%X")) or ("Save error: " .. tostring(msg))) end)
-            end
-            safeNotify({ title = "Config Save", content = ok and ("Saved to " .. tostring(msg)) or tostring(msg) })
+            local ok = ConfigManager:Save()
+            pcall(function()
+                if UI.ConfigStatusText and UI.ConfigStatusText.Set then
+                    UI.ConfigStatusText:Set(ok and ("Temiz kaydedildi: " .. os.date("%X")) or "Kaydetme başarısız!", nil)
+                end
+            end)
+            UI.safeNotify({
+                title = "Ayarlar",
+                content = ok and "Tüm ayarlar config.json dosyasına kaydedildi." or "Ayar dosyası kaydedilemedi.",
+                duration = 3,
+                force = true,
+            })
         end,
     })
 
-    tab:CreateButton({
-        name = "Load Config from Disk",
+    Tab:CreateButton({
+        name = "Ayarları Dosyadan Yükle",
         callback = function()
-            local ok, msg = ConfigManager:Load()
-            if UI.ConfigStatusText and UI.ConfigStatusText.Set then
-                pcall(function() UI.ConfigStatusText:Set(ok and ("Loaded at " .. os.date("%X")) or ("Note: " .. tostring(msg))) end)
+            local ok = ConfigManager:Load()
+            if ConfigManager.SyncUI then
+                pcall(function() ConfigManager:SyncUI() end)
             end
-            safeNotify({ title = "Config Load", content = ok and "Config loaded and synced!" or tostring(msg) })
+            pcall(function()
+                if UI.ConfigStatusText and UI.ConfigStatusText.Set then
+                    UI.ConfigStatusText:Set(ok and ("Yüklendi: " .. os.date("%X")) or "Kayıtlı config.json bulunamadı", nil)
+                end
+            end)
+            UI.safeNotify({
+                title = "Ayarlar",
+                content = ok and "Kayıtlı ayarlar diskten yüklendi." or "Kayıtlı ayar dosyası bulunamadı.",
+                duration = 3,
+                force = true,
+            })
         end,
     })
 
-    tab:CreateButton({
-        name = "Reset All Config to Defaults",
+    Tab:CreateButton({
+        name = "Tüm Ayarları Varsayılana Sıfırla",
         callback = function()
             ConfigManager:Reset()
             ConfigManager:Save()
-            safeNotify({ title = "Config Reset", content = "Restored default settings." })
+            pcall(function()
+                if UI.ConfigStatusText and UI.ConfigStatusText.Set then
+                    UI.ConfigStatusText:Set("Varsayılanlara sıfırlandı: " .. os.date("%X"), nil)
+                end
+            end)
+            UI.safeNotify({
+                title = "Ayarlar Sıfırlandı",
+                content = "Tüm ayarlar varsayılan değerlere döndürüldü.",
+                duration = 4,
+                force = true,
+            })
         end,
     })
 
-    tab:CreateSection({ name = "Notifications & Diagnostics" })
+    Tab:CreateDivider()
 
-    createBoundToggle(tab, {
-        name = "Enable Notifications",
+    --------------------------------------------------------------------
+    -- Bildirimler & Tanılama
+    --------------------------------------------------------------------
+    Tab:CreateSection({ name = "Bildirimler & Geliştirici" })
+
+    UI.createBoundToggle(Tab, {
+        name = "Bildirimleri Göster",
         flag = "CfgNotifications",
         value = CONFIG.Notifications.Enabled,
-    }, function() return CONFIG.Notifications.Enabled end, function(v) CONFIG.Notifications.Enabled = v end)
+        description = "Rebirth, nadir spawn ve sistem bildirim baloncuklarını açar",
+    }, function()
+        return CONFIG.Notifications.Enabled
+    end, function(v)
+        CONFIG.Notifications.Enabled = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Debug Mode (Console Logs)",
+    UI.createBoundToggle(Tab, {
+        name = "Geliştirici Modu (Konsol Logları)",
         flag = "CfgDebugMode",
         value = CONFIG.Debug.DebugMode,
-    }, function() return CONFIG.Debug.DebugMode end, function(v) CONFIG.Debug.DebugMode = v end)
-
-    tab:CreateSection({ name = "Hotkeys" })
-
-    bindHotkeyElement("Toggle Auto Tap", "ToggleAutoTap", CONFIG.Hotkeys.ToggleAutoTap, function()
-        Farm.AutoTap = not Farm.AutoTap
-        if UI.AutoTapToggle and UI.AutoTapToggle.Set then pcall(function() UI.AutoTapToggle:Set(Farm.AutoTap, true) end) end
-        safeNotify({ title = "Hotkey", content = "Auto Tap: " .. tostring(Farm.AutoTap) })
+        description = "Roblox konsoluna detaylı teknik hata ayıklama çıktıları yazar",
+    }, function()
+        return CONFIG.Debug.DebugMode
+    end, function(v)
+        CONFIG.Debug.DebugMode = (v == true)
     end)
 
-    bindHotkeyElement("Toggle Auto Buy Buttons", "ToggleAutoButtons", CONFIG.Hotkeys.ToggleAutoButtons, function()
-        PT.AutoBuyButtons = not PT.AutoBuyButtons
-        if UI.AutoButtonsToggle and UI.AutoButtonsToggle.Set then pcall(function() UI.AutoButtonsToggle:Set(PT.AutoBuyButtons, true) end) end
-        safeNotify({ title = "Hotkey", content = "Auto Buy Buttons: " .. tostring(PT.AutoBuyButtons) })
+    Tab:CreateDivider()
+
+    --------------------------------------------------------------------
+    -- Klavye Kısayolları
+    --------------------------------------------------------------------
+    Tab:CreateSection({ name = "Klavye Kısayolları (Hotkeys)" })
+
+    UI.bindHotkeyElement("Oto Tıklama Aç / Kapat", "ToggleAutoTap", function()
+        local nxt = not (States.Farm.AutoTap == true)
+        States.Farm.AutoTap = nxt
+        pcall(function()
+            if UI.AutoTapToggle and UI.AutoTapToggle.Set then
+                UI.AutoTapToggle:Set(nxt, true)
+            end
+        end)
+        ConfigManager:MarkDirty()
     end)
 
-    bindHotkeyElement("Toggle Auto Catch Rare Spawns", "ToggleAutoCatchRare", CONFIG.Hotkeys.ToggleAutoCatchRare, function()
-        PT.AutoCatchRareSpawns = not PT.AutoCatchRareSpawns
-        if UI.AutoCatchRareToggle and UI.AutoCatchRareToggle.Set then pcall(function() UI.AutoCatchRareToggle:Set(PT.AutoCatchRareSpawns, true) end) end
-        safeNotify({ title = "Hotkey", content = "Auto Catch Rare Spawns: " .. tostring(PT.AutoCatchRareSpawns) })
+    UI.bindHotkeyElement("Oto Buton Alımını Aç / Kapat", "ToggleAutoButtons", function()
+        local nxt = not (States.PumpkinTycoon.AutoBuyButtons == true)
+        States.PumpkinTycoon.AutoBuyButtons = nxt
+        pcall(function()
+            if UI.AutoButtonsToggle and UI.AutoButtonsToggle.Set then
+                UI.AutoButtonsToggle:Set(nxt, true)
+            end
+        end)
+        ConfigManager:MarkDirty()
+    end)
+
+    UI.bindHotkeyElement("Nadir Spawn Yakalamayı Aç / Kapat", "ToggleAutoCatchRare", function()
+        local nxt = not (States.PumpkinTycoon.AutoCatchRareSpawns == true)
+        States.PumpkinTycoon.AutoCatchRareSpawns = nxt
+        pcall(function()
+            if UI.AutoCatchRareToggle and UI.AutoCatchRareToggle.Set then
+                UI.AutoCatchRareToggle:Set(nxt, true)
+            end
+        end)
+        ConfigManager:MarkDirty()
     end)
 
     return ConfigTab

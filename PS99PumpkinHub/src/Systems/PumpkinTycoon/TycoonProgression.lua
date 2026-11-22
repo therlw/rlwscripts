@@ -214,7 +214,7 @@ function TycoonProgression.Init(ctx)
             ctx.Runtime.Telemetry.Rebirths = ctx.Runtime.Telemetry.Rebirths + 1
             ctx.Runtime.Status.Event = "Completed Pumpkin Tycoon Rebirth #" .. tostring(ctx.Runtime.Telemetry.Rebirths)
             if ctx.UI and ctx.UI.safeNotify and CONFIG.Notifications.RebirthAlerts then
-                ctx.UI.safeNotify({ title = "Pumpkin Tycoon Rebirth", content = "Rebirthed successfully!", force = false })
+                ctx.UI.safeNotify({ title = "Etkinlik Rebirth", content = "Rebirth başarıyla tamamlandı!", force = false })
             end
             return true
         else

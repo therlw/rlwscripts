@@ -65,16 +65,125 @@ function EventCoordinator.Init(ctx)
         end
     end
 
+    local STATUS_EXACT = {
+        ["None"] = "Yok",
+        ["Disabled"] = "Kapalı",
+        ["Island Buttons Done"] = "Ada Butonları Tamamlandı",
+        ["Waiting inside Pumpkin Patch Tycoon..."] = "Balkabağı adasına girilmesi bekleniyor...",
+        ["Waiting: Enter Pumpkin Patch Tycoon instance"] = "Balkabağı Etkinliği alanına girmen bekleniyor",
+        ["Pumpkin Tycoon is currently disabled by server FFlag"] = "Balkabağı Etkinliği sunucu tarafından kapalı",
+        ["Waiting to unlock Zone 8 Cannon before Turkey"] = "Hindi için Bölge 8 Topunun açılması bekleniyor",
+        ["Turkey defeated — returned home"] = "Hindi kesildi — adaya dönüldü",
+        ["Claimed Pumpkin Island Completion Reward!"] = "Ada tamamlama ödülü alındı!",
+        ["Enabled Game Auto Merchant"] = "Oyun İçi Oto Tüccar aktif",
+        ["Auto Tap off"] = "Oto Tıklama kapalı",
+        ["Auto Tap idle"] = "Oto Tıklama beklemede",
+        ["Auto Tap: scanning breakables in reach..."] = "Oto Tıklama: menzilde hedef aranıyor...",
+        ["Main features idle"] = "Genel özellikler beklemede",
+        ["Egg & Pet machines idle"] = "Yumurta & Pet makineleri beklemede",
+        ["Automatic consumables idle"] = "Otomatik tüketim beklemede",
+        ["Fishing Event idle"] = "Balıkçılık etkinliği beklemede",
+        ["Waiting: Enter Fishing Event instance"] = "Balıkçılık Etkinliği alanına girmen bekleniyor",
+        ["Enabled Game Event Autofish"] = "Oyun İçi Oto-Balık aktif",
+        ["Cast rod at nearby water"] = "Yakındaki suya olta atıldı",
+        ["Used Bucket O' Chum"] = "Yem Kovası (Bucket O' Chum) kullanıldı",
+        ["Farming World idle"] = "Çiftlik Dünyası beklemede",
+        ["Claimed Farm Storage!"] = "Çiftlik deposu toplandı!",
+        ["Redeemed Farming Quests Reward!"] = "Çiftlik görev ödülleri alındı!",
+        ["Mailbox idle"] = "Posta kutusu beklemede",
+        ["Webhook listener active"] = "Webhook dinleyicisi aktif",
+        ["Checked / Claimed Rank Rewards"] = "Rütbe ödülleri kontrol edildi / alındı",
+        ["Claimed Default Forever Pack Free Gift!"] = "Forever Pack ücretsiz hediyesi alındı!",
+        ["Left Stairway To Heaven"] = "Stairway To Heaven alanından çıkıldı",
+        ["Unlocked Crystal Key Castle Chest"] = "Crystal Key Kalesi sandığı açıldı",
+        ["Bulk Upgraded Potions!"] = "İksirler topluca yükseltildi!",
+        ["Bulk Upgraded Enchants!"] = "Büyüler topluca yükseltildi!",
+    }
+
+    local function translateStatus(raw)
+        local s = tostring(raw or "")
+        if STATUS_EXACT[s] then
+            return STATUS_EXACT[s]
+        end
+
+        local amt, target = s:match("^Saving (.+) for (.+)$")
+        if amt then return string.format("%s için %s biriktiriliyor", target, amt) end
+        local okId = s:match("^Surplus OK %((.+)%)$")
+        if okId then return string.format("Fazla Coin Hazır (%s)", okId) end
+        local farmId = s:match("^Farm OK %((.+)%)$")
+        if farmId then return string.format("Farm Uygun (%s)", farmId) end
+
+        local bId, bPrice = s:match("^Bought Button: (.+) %(%$(.+)%)$")
+        if bId then return string.format("Buton Alındı: %s (%s)", bId, bPrice) end
+        local fUid, fCps = s:match("^Tapping UID (.+) %((.+) cps%)$")
+        if fUid then return string.format("Hedef %s vuruluyor (%s/sn)", fUid, fCps) end
+        local tUid = s:match("^Fighting Turkey %(UID: (.+)%)$")
+        if tUid then return string.format("Hindi Boss kesiliyor (UID: %s)", tUid) end
+        local trk, cost = s:match("^Upgraded (.+) %((.+) Tokens%)$")
+        if trk then return string.format("%s yükseltildi (%s Token)", trk, cost) end
+        local coco = s:match("^Cocoa Refilled: (.+)$")
+        if coco then return "Kakao Yenilendi: " .. coco end
+        local bName, bTier = s:match("^Used (.+) Tier (%d+)$")
+        if bName then return string.format("Kullanıldı: %s (Sv. %s)", bName, bTier) end
+        local keepR = s:match("^Set Pumpkin Keep Rule: (.+)$")
+        if keepR then return "Koruma Kuralı Ayarlandı: " .. keepR end
+        local merchB = s:match("^Bought Merchant Pumpkin: (.+)$")
+        if merchB then return "Tüccardan Alındı: " .. merchB end
+        local hCnt, hName = s:match("^Hatched (.+)x (.+)$")
+        if hCnt then return string.format("Yumurta Açıldı: %sx %s", hCnt, hName) end
+        local oCnt, oId = s:match("^Opened (.+)x (.+)$")
+        if oCnt then return string.format("Açıldı: %sx %s", oCnt, oId) end
+        local rebN = s:match("^Completed Pumpkin Tycoon Rebirth #(.+)$")
+        if rebN then return "Etkinlik Rebirth #" .. rebN .. " tamamlandı!" end
+        local thNet, thPet, thOut = s:match("^Threw (.+) at (.+) %((.+)%)$")
+        if thNet then return string.format("%s hedefine %s atıldı (%s)", thPet, thNet, thOut) end
+        local thNet2, thPet2 = s:match("^Threw (.+) at (.+)!$")
+        if thNet2 then return string.format("%s hedefine %s atıldı!", thPet2, thNet2) end
+        local huntT = s:match("^Synced Auto Hunt %((.+)%)$")
+        if huntT then return "Oto Av senkronize (" .. huntT .. ")" end
+        local netItem = s:match("^Bought (.+) from Pet Net Store$")
+        if netItem then return "Mağazadan alındı: " .. netItem end
+        local fishSold = s:match("^Sold (%d+) Event Fish!$")
+        if fishSold then return fishSold .. " etkinlik balığı satıldı!" end
+        local mSent = s:match("^Claimed (%d+) Mailbox items!$")
+        if mSent then return mSent .. " posta eşyası alındı!" end
+
+        if s:find("^At Best Egg %(in BreakableZone%): ") then
+            return s:gsub("^At Best Egg %(in BreakableZone%): ", "En İyi Yumurtada (Kırılabilir Alan): ")
+        elseif s:find("^At Best Egg %(near pad%): ") then
+            return s:gsub("^At Best Egg %(near pad%): ", "En İyi Yumurtada (Yakın): ")
+        end
+
+        return s
+    end
+
+    local function translateSummaryBlock(summary)
+        local out = summary:gsub("(İşlem: )([^\n]+)", function(pfx, val)
+            return pfx .. translateStatus(val)
+        end)
+        out = out:gsub("(Coin Tasarrufu: )([^|]+)( | )", function(pfx, val, sep)
+            local trimmed = val:gsub("^%s+", ""):gsub("%s+$", "")
+            return pfx .. translateStatus(trimmed) .. sep
+        end)
+        return out
+    end
+
+    local function safeStat(statEl, value)
+        if statEl and statEl.Set then
+            pcall(function() statEl:Set(tonumber(value) or 0) end)
+        end
+    end
+
     function Coordinator.FormatStatusSummary()
         local coins = Net.GetPumpkinCoins()
         local tokens = Net.GetPumpkinTokens()
         local pNets = Net.GetMiscCount("Pet Net")
         local uNets = Net.GetMiscCount("Ultra Pet Net")
         local te = ctx.Runtime.Telemetry
-        local part2Txt = Net.OwnPlotPart2() and "P2 Built" or "P1"
+        local part2Txt = Net.OwnPlotPart2() and "Bölüm 2 Açık" or "Bölüm 1"
 
         return string.format(
-            "%s | Coins: %s | Tokens: %s | Nets: %d / Ultra: %d\nAction: %s\nCoinSave: %s | Buttons: %d | Eggs: %d | Rare: %d",
+            "%s | Coin: %s | Token: %s | Ağ: %d (Ultra: %d)\nİşlem: %s\nCoin Tasarrufu: %s | Buton: %d | Yumurta: %d | Nadir: %d",
             part2Txt,
             Utils.formatCompact(coins),
             Utils.formatCompact(tokens),
@@ -105,15 +214,18 @@ function EventCoordinator.Init(ctx)
                     pcall(function() el:Set(txt) end)
                 end
             end
-            safeSet(UI.PumpkinStatusText, Coordinator.FormatStatusSummary())
-            safeSet(UI.FarmStatusText, string.format("%s | Taps: %d", tostring(st.Farm), te.TurkeyHits))
-            safeSet(UI.MainStatusText, tostring(st.Main))
-            safeSet(UI.EggStatusText, tostring(st.Egg))
-            safeSet(UI.AutomaticStatusText, tostring(st.Automatic))
-            safeSet(UI.FishingStatusText, string.format("%s | Casts: %d", tostring(st.Fishing), te.FishCaught))
-            safeSet(UI.FarmingStatusText, tostring(st.Farming))
-            safeSet(UI.MailboxStatusText, string.format("%s | Sent: %d", tostring(st.Mailbox), te.PetsMailed))
-            safeSet(UI.WebhookStatusText, string.format("%s | Sent: %d", tostring(st.Webhook), te.WebhooksSent))
+            safeSet(UI.PumpkinStatusText, translateSummaryBlock(Coordinator.FormatStatusSummary()))
+            safeStat(UI.PTStatTokens, Net.GetPumpkinTokens())
+            safeStat(UI.PTStatNets, Net.GetMiscCount("Pet Net"))
+            safeStat(UI.PTStatButtons, te.ButtonsBought)
+            safeSet(UI.FarmStatusText, string.format("%s | Vuruş: %d", translateStatus(st.Farm), te.TurkeyHits))
+            safeSet(UI.MainStatusText, translateStatus(st.Main))
+            safeSet(UI.EggStatusText, translateStatus(st.Egg))
+            safeSet(UI.AutomaticStatusText, translateStatus(st.Automatic))
+            safeSet(UI.FishingStatusText, string.format("%s | Tutulan: %d", translateStatus(st.Fishing), te.FishCaught))
+            safeSet(UI.FarmingStatusText, translateStatus(st.Farming))
+            safeSet(UI.MailboxStatusText, string.format("%s | Gönderilen: %d", translateStatus(st.Mailbox), te.PetsMailed))
+            safeSet(UI.WebhookStatusText, string.format("%s | Gönderilen: %d", translateStatus(st.Webhook), te.WebhooksSent))
         end)
     end
 

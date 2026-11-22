@@ -133,7 +133,7 @@ function WildAndTurkey.Init(ctx)
             ctx.Runtime.Telemetry.RareAttempts = ctx.Runtime.Telemetry.RareAttempts + 1
             ctx.Runtime.Status.Event = string.format("Threw %s at %s!", bestNet, tostring(sighting.pet))
             if ctx.UI and ctx.UI.safeNotify and CONFIG.Notifications.RareSpawns then
-                ctx.UI.safeNotify({ title = "Rare Pet Sighting", content = string.format("Threw %s at %s", bestNet, tostring(sighting.pet)) })
+                ctx.UI.safeNotify({ title = "Nadir Pet Görüldü!", content = string.format("%s hedefine %s atıldı", tostring(sighting.pet), bestNet) })
             end
             return true
         else

@@ -1,113 +1,184 @@
 -- src/UI/Tabs/FarmingWorldTab.lua
--- Farming World Tab: Eggs, Supply, Place, Harvest, Feed, Sell, Craft, Storage, Quests, Slots & Pixel Mail
+-- Çiftlik Dünyası (Farming World) Otomasyon Sekmesi
 
 local FarmingWorldTab = {}
 
 function FarmingWorldTab.Init(ctx)
     local Window = ctx.Window
     local UI = ctx.UI
-    local FarmW = ctx.States.FarmingWorld
-    local createBoundToggle = UI.createBoundToggle
-    local createBoundInput = UI.createBoundInput
+    local FMW = ctx.States.FarmingWorld
 
-    local tab = Window:CreateTab({ name = "Farming World", icon = 93364949241311 })
-    UI.FarmingWorldTab = tab
+    local Tab = Window:CreateTab({
+        name = "Çiftlik Dünyası",
+        icon = 93364949241311,
+    })
+    UI.FarmingWorldTab = Tab
 
-    tab:CreateSection({ name = "Eggs, Crops & Merchants" })
-
-    UI.FarmingStatusText = tab:CreateText({
-        name = "Farming World Status",
-        text = "Farming World idle",
+    Tab:CreateSection({ name = "Çiftlik Yumurtaları & Besleme" })
+    UI.FarmingStatusText = Tab:CreateText({
+        name = "Çiftlik Durumu",
+        text = tostring(ctx.Runtime.Status.Farming or "Çiftlik Dünyası beklemede"),
     })
 
-    createBoundToggle(tab, {
-        name = "Auto Buy Farm Egg",
+    UI.createBoundToggle(Tab, {
+        name = "Otomatik Çiftlik Yumurtası Al",
         flag = "FarmWBuyEgg",
-        value = FarmW.AutoBuyFarmEgg,
-    }, function() return FarmW.AutoBuyFarmEgg end, function(v) FarmW.AutoBuyFarmEgg = v end)
+        value = FMW.AutoBuyFarmEgg,
+        description = "Çiftlik mağazasından stoktaki yumurtaları alır",
+    }, function()
+        return FMW.AutoBuyFarmEgg
+    end, function(v)
+        FMW.AutoBuyFarmEgg = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Place Farm Egg",
+    UI.createBoundToggle(Tab, {
+        name = "Çiftlik Yumurtalarını Ek (Place)",
         flag = "FarmWPlaceEgg",
-        value = FarmW.AutoPlaceFarmEgg,
-    }, function() return FarmW.AutoPlaceFarmEgg end, function(v) FarmW.AutoPlaceFarmEgg = v end)
+        value = FMW.AutoPlaceFarmEgg,
+        description = "Envanterdeki çiftlik yumurtalarını boş yuvalara koyar",
+    }, function()
+        return FMW.AutoPlaceFarmEgg
+    end, function(v)
+        FMW.AutoPlaceFarmEgg = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Harvest Farm Egg",
+    UI.createBoundToggle(Tab, {
+        name = "Büyüyen Yumurtaları Hasat Et (Harvest)",
         flag = "FarmWHarvestEgg",
-        value = FarmW.AutoHarvestFarmEgg,
-    }, function() return FarmW.AutoHarvestFarmEgg end, function(v) FarmW.AutoHarvestFarmEgg = v end)
+        value = FMW.AutoHarvestFarmEgg,
+        description = "Süresi dolan hazır çiftlik yumurtalarını toplar",
+    }, function()
+        return FMW.AutoHarvestFarmEgg
+    end, function(v)
+        FMW.AutoHarvestFarmEgg = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Buy Farm Supply",
+    UI.createBoundToggle(Tab, {
+        name = "Çiftlik Malzemeleri Satın Al (Supply)",
         flag = "FarmWBuySupply",
-        value = FarmW.AutoBuyFarmSupply,
-    }, function() return FarmW.AutoBuyFarmSupply end, function(v) FarmW.AutoBuyFarmSupply = v end)
+        value = FMW.AutoBuyFarmSupply,
+        description = "Mama, hızlandırıcı ve çiftlik malzemelerini alır",
+    }, function()
+        return FMW.AutoBuyFarmSupply
+    end, function(v)
+        FMW.AutoBuyFarmSupply = (v == true)
+    end)
 
-    tab:CreateSection({ name = "Pets, Crafting & Storage" })
-
-    createBoundToggle(tab, {
-        name = "Auto Feed Farm Pets",
+    UI.createBoundToggle(Tab, {
+        name = "Çiftlik Petlerini Besle (Feed)",
         flag = "FarmWFeedPets",
-        value = FarmW.AutoFeedFarmPets,
-    }, function() return FarmW.AutoFeedFarmPets end, function(v) FarmW.AutoFeedFarmPets = v end)
+        value = FMW.AutoFeedFarmPets,
+        description = "Çiftlik petlerine otomatik mama verir",
+    }, function()
+        return FMW.AutoFeedFarmPets
+    end, function(v)
+        FMW.AutoFeedFarmPets = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Sell Farm Pets",
+    UI.createBoundToggle(Tab, {
+        name = "Fazla Çiftlik Petlerini Sat",
         flag = "FarmWSellPets",
-        value = FarmW.AutoSellFarmPets,
-    }, function() return FarmW.AutoSellFarmPets end, function(v) FarmW.AutoSellFarmPets = v end)
+        value = FMW.AutoSellFarmPets,
+        description = "Dışarıda kalan fazla çiftlik petlerini satıp coin çevirir",
+    }, function()
+        return FMW.AutoSellFarmPets
+    end, function(v)
+        FMW.AutoSellFarmPets = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Craft Items/Pets",
+    Tab:CreateDivider()
+    Tab:CreateSection({ name = "Üretim (Craft), Depo & Görevler" })
+
+    UI.createBoundToggle(Tab, {
+        name = "Otomatik Üretim Yap (Craft)",
         flag = "FarmWCraft",
-        value = FarmW.AutoCraftItemsPets,
-    }, function() return FarmW.AutoCraftItemsPets end, function(v) FarmW.AutoCraftItemsPets = v end)
+        value = FMW.AutoCraftItemsPets,
+        description = "Çiftlik tezgahında mevcut tarifleri üretir",
+    }, function()
+        return FMW.AutoCraftItemsPets
+    end, function(v)
+        FMW.AutoCraftItemsPets = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Claim Farm Storage",
+    UI.createBoundToggle(Tab, {
+        name = "Çiftlik Deposunu Topla (Claim Storage)",
         flag = "FarmWClaimStorage",
-        value = FarmW.AutoClaimFarmStorage,
-    }, function() return FarmW.AutoClaimFarmStorage end, function(v) FarmW.AutoClaimFarmStorage = v end)
+        value = FMW.AutoClaimFarmStorage,
+        description = "Petlerin depoda biriktirdiği ürünleri alır",
+    }, function()
+        return FMW.AutoClaimFarmStorage
+    end, function(v)
+        FMW.AutoClaimFarmStorage = (v == true)
+    end)
 
-    tab:CreateSection({ name = "Quests, Slots & Pixel Rainbow Mail" })
-
-    createBoundToggle(tab, {
-        name = "Auto Claim Farming Quest Rewards",
+    UI.createBoundToggle(Tab, {
+        name = "Çiftlik Görev Ödüllerini Al",
         flag = "FarmWClaimQuests",
-        value = FarmW.AutoClaimFarmingQuestRewards,
-    }, function() return FarmW.AutoClaimFarmingQuestRewards end, function(v) FarmW.AutoClaimFarmingQuestRewards = v end)
+        value = FMW.AutoClaimFarmingQuestRewards,
+        description = "Tamamlanan çiftlik görevlerinin ödüllerini toplar",
+    }, function()
+        return FMW.AutoClaimFarmingQuestRewards
+    end, function(v)
+        FMW.AutoClaimFarmingQuestRewards = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Complete Farming Quest",
+    UI.createBoundToggle(Tab, {
+        name = "Çiftlik Görevlerini Otomatik Yap",
         flag = "FarmWCompleteQuests",
-        value = FarmW.AutoCompleteFarmingQuest,
-    }, function() return FarmW.AutoCompleteFarmingQuest end, function(v) FarmW.AutoCompleteFarmingQuest = v end)
+        value = FMW.AutoCompleteFarmingQuest,
+        description = "Aktif çiftlik görevlerini otomatik olarak tamamlar",
+    }, function()
+        return FMW.AutoCompleteFarmingQuest
+    end, function(v)
+        FMW.AutoCompleteFarmingQuest = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Buy Farm Pet Slot",
+    Tab:CreateDivider()
+    Tab:CreateSection({ name = "Slotlar & Pixel Posta Gönderimi" })
+
+    UI.createBoundToggle(Tab, {
+        name = "Çiftlik Pet Slotu Satın Al",
         flag = "FarmWBuyPetSlot",
-        value = FarmW.AutoBuyFarmPetSlot,
-    }, function() return FarmW.AutoBuyFarmPetSlot end, function(v) FarmW.AutoBuyFarmPetSlot = v end)
+        value = FMW.AutoBuyFarmPetSlot,
+        description = "Yeni çiftlik pet yerleştirme slotları açar",
+    }, function()
+        return FMW.AutoBuyFarmPetSlot
+    end, function(v)
+        FMW.AutoBuyFarmPetSlot = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Buy Farm Storage Slot",
+    UI.createBoundToggle(Tab, {
+        name = "Çiftlik Depo Slotu Satın Al",
         flag = "FarmWBuyStorageSlot",
-        value = FarmW.AutoBuyFarmStorageSlot,
-    }, function() return FarmW.AutoBuyFarmStorageSlot end, function(v) FarmW.AutoBuyFarmStorageSlot = v end)
+        value = FMW.AutoBuyFarmStorageSlot,
+        description = "Depo kapasitesini otomatik olarak genişletir",
+    }, function()
+        return FMW.AutoBuyFarmStorageSlot
+    end, function(v)
+        FMW.AutoBuyFarmStorageSlot = (v == true)
+    end)
 
-    createBoundToggle(tab, {
-        name = "Auto Mail Pixel Rainbow Items",
+    UI.createBoundToggle(Tab, {
+        name = "Pixel Rainbow Eşyalarını Mail At",
         flag = "FarmWMailPixel",
-        value = FarmW.AutoMailPixelRainbowItems,
-    }, function() return FarmW.AutoMailPixelRainbowItems end, function(v) FarmW.AutoMailPixelRainbowItems = v end)
+        value = FMW.AutoMailPixelRainbowItems,
+        description = "Pixel Rainbow eşyalarını aşağıdaki kullanıcıya otomatik yollar",
+    }, function()
+        return FMW.AutoMailPixelRainbowItems
+    end, function(v)
+        FMW.AutoMailPixelRainbowItems = (v == true)
+    end)
 
-    createBoundInput(tab, {
-        name = "Pixel Rainbow Mail Target Username",
+    UI.createBoundInput(Tab, {
+        name = "Pixel Mail Alıcı Kullanıcı Adı",
         flag = "FarmWPixelUser",
-        placeholder = "Target Roblox Username",
-        value = FarmW.PixelMailUsername,
-    }, function() return FarmW.PixelMailUsername end, function(v) FarmW.PixelMailUsername = v end)
+        placeholder = "Roblox kullanıcı adı...",
+        value = FMW.PixelMailUsername,
+    }, function()
+        return FMW.PixelMailUsername
+    end, function(v)
+        FMW.PixelMailUsername = tostring(v or "")
+    end)
 
     return FarmingWorldTab
 end
