@@ -56,6 +56,14 @@ function MovementController.Init(ctx)
         local myWalkId = Move._walkId
         Move._walking = true
 
+        local rayParams = RaycastParams.new()
+        rayParams.FilterType = Enum.RaycastFilterType.Exclude
+        rayParams.FilterDescendantsInstances = { char }
+        rayParams.IgnoreWater = true
+        rayParams.RespectCanCollide = true
+
+        local lastJumpAt = 0
+
         local function shouldStop()
             if not ctx.Lifecycle.IsCurrentGeneration() then return true end
             if Move._walkId ~= myWalkId then return true end
@@ -66,36 +74,115 @@ function MovementController.Init(ctx)
             return false
         end
 
-        local function directMove(dest)
-            local _, curHrp, curHum = Utils.getCharacterParts()
-            if not curHrp or not curHum then return false end
-            curHum:MoveTo(dest)
-            local started = os.clock()
-            local lastPos = curHrp.Position
-            local lastMoveCheck = os.clock()
-            while os.clock() - started < 6 do
-                if shouldStop() then return false end
-                if Utils.flatDist(curHrp.Position, dest) <= math.max(3.5, math.min(reqDist, 5)) then
-                    return true
-                end
-                if os.clock() - lastMoveCheck > 0.7 then
-                    if (curHrp.Position - lastPos).Magnitude < 0.8 then
-                        curHum.Jump = true
-                        curHum:MoveTo(dest)
-                    end
-                    lastPos = curHrp.Position
-                    lastMoveCheck = os.clock()
-                end
-                task.wait(0.08)
+        local function tryJump(curHum)
+            if not curHum then return end
+            local now = os.clock()
+            if now - lastJumpAt >= 0.28 and curHum:GetState() ~= Enum.HumanoidStateType.Freefall then
+                curHum.Jump = true
+                lastJumpAt = now
             end
-            return Utils.flatDist(curHrp.Position, dest) <= reqDist
+        end
+
+        -- Checks forward solid vertical obstacles (`RespectCanCollide = true`):
+        -- ignores walkable ramps/slopes (Normal.Y >= 0.58) so the character only jumps ledges/steps/walls.
+        local function probeAhead(curHrp, curHum, moveDest)
+            local flatVec = Vector3.new(moveDest.X - curHrp.Position.X, 0, moveDest.Z - curHrp.Position.Z)
+            if flatVec.Magnitude < 0.5 then
+                return false, false, nil
+            end
+            local unit = flatVec.Unit
+            local reach = 4.4
+            local rootToFloor = (curHum.HipHeight or 2) + (curHrp.Size.Y * 0.5)
+            local groundY = curHrp.Position.Y - rootToFloor
+            local shinOrigin = Vector3.new(curHrp.Position.X, groundY + 0.9, curHrp.Position.Z)
+            local waistOrigin = Vector3.new(curHrp.Position.X, groundY + 2.7, curHrp.Position.Z)
+            local headOrigin = Vector3.new(curHrp.Position.X, groundY + 6.0, curHrp.Position.Z)
+
+            local function isSteepObstacle(hit)
+                return hit ~= nil and math.abs(hit.Normal.Y) < 0.58
+            end
+
+            local shinHit = workspace:Raycast(shinOrigin, unit * reach, rayParams)
+            local waistHit = workspace:Raycast(waistOrigin, unit * reach, rayParams)
+            if not isSteepObstacle(shinHit) and not isSteepObstacle(waistHit) then
+                return false, false, unit
+            end
+
+            local headHit = workspace:Raycast(headOrigin, unit * reach, rayParams)
+            if not headHit then
+                return true, false, unit
+            end
+            return false, true, unit
+        end
+
+        local function driveSegment(segDest, arrivalThresh, maxSegSec, jumpAtStart)
+            local _, curHrp, curHum = Utils.getCharacterParts()
+            if not curHrp or not curHum then return false, false end
+
+            if jumpAtStart then
+                tryJump(curHum)
+            end
+            curHum:MoveTo(segDest)
+
+            local started = os.clock()
+            local lastSampleAt = started
+            local lastSamplePos = curHrp.Position
+            local sidestepSide = 1
+            local consecutiveStucks = 0
+
+            while os.clock() - started < maxSegSec do
+                if shouldStop() then return false, true end
+
+                _, curHrp, curHum = Utils.getCharacterParts()
+                if not curHrp or not curHum then return false, true end
+
+                if Utils.flatDist(curHrp.Position, targetPos) <= reqDist then
+                    return true, false
+                end
+                if arrivalThresh and Utils.flatDist(curHrp.Position, segDest) <= arrivalThresh then
+                    return false, false
+                end
+
+                local jumpAhead, tallBlocked, unit = probeAhead(curHrp, curHum, segDest)
+                if jumpAhead then
+                    tryJump(curHum)
+                end
+
+                local now = os.clock()
+                if now - lastSampleAt >= 0.24 then
+                    local movedFlat = Utils.flatDist(curHrp.Position, lastSamplePos)
+                    if movedFlat < 0.75 then
+                        consecutiveStucks = consecutiveStucks + 1
+                        tryJump(curHum)
+                        if tallBlocked or consecutiveStucks >= 2 then
+                            if unit then
+                                local right = Vector3.new(-unit.Z, 0, unit.X) * sidestepSide
+                                sidestepSide = -sidestepSide
+                                local nudgePos = curHrp.Position + (right * 5.5) + (unit * 3.0)
+                                curHum:MoveTo(nudgePos)
+                                task.wait(0.18)
+                                if shouldStop() then return false, true end
+                            end
+                        end
+                        curHum:MoveTo(segDest)
+                    else
+                        consecutiveStucks = 0
+                    end
+                    lastSamplePos = curHrp.Position
+                    lastSampleAt = now
+                end
+
+                task.wait(0.05)
+            end
+            return false, false
         end
 
         local path = PathfindingService:CreatePath({
-            AgentRadius = 2.2,
+            AgentRadius = 2.0,
             AgentHeight = 5,
             AgentCanJump = true,
-            WaypointSpacing = 7,
+            AgentCanClimb = true,
+            WaypointSpacing = 4,
         })
 
         local okPath = pcall(function()
@@ -110,33 +197,23 @@ function MovementController.Init(ctx)
             for idx = 2, #waypoints do
                 if shouldStop() or os.clock() > timeoutAt then break end
                 local wp = waypoints[idx]
-                if wp.Action == Enum.PathWaypointAction.Jump then
-                    hum.Jump = true
+                local hitFinal, aborted = driveSegment(
+                    wp.Position,
+                    3.4,
+                    math.min(2.6, math.max(0.4, timeoutAt - os.clock())),
+                    wp.Action == Enum.PathWaypointAction.Jump
+                )
+                if hitFinal then
+                    arrived = true
+                    break
                 end
-                hum:MoveTo(wp.Position)
-
-                local wpStart = os.clock()
-                while os.clock() - wpStart < 2.2 do
-                    if shouldStop() or os.clock() > timeoutAt then break end
-                    if Utils.flatDist(hrp.Position, targetPos) <= reqDist then
-                        arrived = true
-                        break
-                    end
-                    if Utils.flatDist(hrp.Position, wp.Position) <= 3.6 then
-                        break
-                    end
-                    if os.clock() - wpStart > 0.9 and hrp.AssemblyLinearVelocity.Magnitude < 1.2 then
-                        hum.Jump = true
-                        hum:MoveTo(wp.Position)
-                    end
-                    task.wait(0.05)
-                end
-                if arrived then break end
+                if aborted then break end
             end
         end
 
         if not arrived and not shouldStop() and os.clock() <= timeoutAt then
-            directMove(targetPos)
+            local remTime = math.max(1.5, timeoutAt - os.clock())
+            driveSegment(targetPos, math.max(3.2, math.min(reqDist, 4.5)), math.min(6.5, remTime), false)
         end
 
         Move._walking = false
