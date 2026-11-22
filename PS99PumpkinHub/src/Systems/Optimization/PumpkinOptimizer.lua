@@ -227,7 +227,8 @@ function PumpkinOptimizer.Init(ctx)
             return
         end
         local name = d.Name
-        if name:find("Tag", 1, true) or name:find("Sign", 1, true) or name:find("Board", 1, true)
+        if name == "TurkeyTag" or name == "TurkeyBreakRing" or name == "TurkeyBeacon" or name:find("Loot", 1, true)
+            or name:find("Tag", 1, true) or name:find("Sign", 1, true) or name:find("Board", 1, true)
             or name:find("Aura", 1, true) or (name:find("Host", 1, true) and not name:find("ParticleHost", 1, true)) then
             return
         end
@@ -338,11 +339,21 @@ function PumpkinOptimizer.Init(ctx)
         end
     end
 
+    local function isTurkeyBreakableModel(model)
+        if not model then return false end
+        if model:GetAttribute("PumpkinTurkey") == true then return true end
+        local areaId = model:GetAttribute("AreaID")
+        local brkId = model:GetAttribute("BreakableID")
+        if areaId == "TurkeyArena" then return true end
+        if type(brkId) == "string" and brkId:find("Turkey", 1, true) ~= nil then return true end
+        return false
+    end
+
     local function scrubForeignBreakableModel(model, myPlotCF, myPlotSize)
         if not Optimizer.Enabled or not Optimizer.InEventZone then return end
         if not model or not model.Parent or not model:IsA("Model") then return end
         if model:GetAttribute("ParentID") ~= "PumpkinTycoon" then return end
-        if model:GetAttribute("PumpkinTurkey") == true then return end
+        if isTurkeyBreakableModel(model) then return end
         if model:GetAttribute("OwnerUsername") == LocalPlayer.Name then return end
 
         local areaId = model:GetAttribute("AreaID")
@@ -918,6 +929,7 @@ function PumpkinOptimizer.Init(ctx)
     local function hideBreakableModel(model)
         if not ctx.States.Optimization.DisableBreakablesModel then return end
         if typeof(model) ~= "Instance" or not model.Parent then return end
+        if isTurkeyBreakableModel(model) then return end
         for _, d in ipairs(model:GetDescendants()) do
             if d:IsA("BasePart") then
                 saveAndSet(Optimizer._brkSaved, d, "LocalTransparencyModifier", 1)
