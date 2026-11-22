@@ -83,7 +83,7 @@ function EggTab.Init(ctx)
     createBoundToggle(tab, {
         name = "Auto Make Rainbow Pets",
         flag = "EggAutoRainbow",
-        value = Egg.AutoMakeRainbow end,
+        value = Egg.AutoMakeRainbow,
     }, function() return Egg.AutoMakeRainbow end, function(v) Egg.AutoMakeRainbow = v end)
 
     createBoundToggle(tab, {
