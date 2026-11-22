@@ -316,6 +316,38 @@ function NetworkBridge.Init(ctx)
         return nil
     end
 
+    --- Picks the pet net matching conservation policy & pet rarity tier.
+    function Net.SelectNetForTier(tierName, mode)
+        local ultraCount = Net.GetMiscCount("Ultra Pet Net")
+        local normalCount = Net.GetMiscCount("Pet Net")
+        local tier = tostring(tierName or "")
+        local isTitanicPlus = (tier == "Titanic" or tier == "Gargantuan")
+        local isHugePlus = isTitanicPlus or (tier == "Huge")
+        local pref = tostring(mode or "Ultra Titanic/Garg")
+
+        if pref == "Pet Net Only" then
+            return (normalCount > 0) and "Pet Net" or nil
+        elseif pref == "Ultra Titanic/Garg" then
+            if isTitanicPlus then
+                if ultraCount > 0 then return "Ultra Pet Net" end
+                if normalCount > 0 then return "Pet Net" end
+                return nil
+            end
+            -- Huge or normal wild pets: strictly save Ultra Pet Nets for Titanic & Gargantuan
+            return (normalCount > 0) and "Pet Net" or nil
+        elseif pref == "Ultra For Huge+" or pref == "Ultra All Rares" then
+            if isHugePlus then
+                if ultraCount > 0 then return "Ultra Pet Net" end
+                if normalCount > 0 then return "Pet Net" end
+                return nil
+            end
+            return (normalCount > 0) and "Pet Net" or nil
+        end
+
+        -- "Best Available"
+        return Net.GetBestNetName()
+    end
+
     function Net.GetTurkeyIslandFolder()
         local things = workspace:FindFirstChild("__THINGS")
         local instances = things and things:FindFirstChild("Instances")

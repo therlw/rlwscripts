@@ -137,12 +137,12 @@ function Context.New(opts)
             AutoHuntWildPets = false,
             HuntMinTier = "Rare",
             HuntVariantsOnly = false,
-            HuntUltraOnHuges = true,
+            HuntUltraOnHuges = false,
 
             AutoCatchWildPets = false,
             CatchWildMinTier = "Epic",
             CatchWildVariantsOnly = false,
-            CatchWildNetPreference = "Best Available",
+            CatchWildNetPreference = "Ultra Titanic/Garg",
 
             AutoBuyPetNets = false,
             BuyPetNetsMode = "Game Auto Nets + Shop",
@@ -152,6 +152,7 @@ function Context.New(opts)
             ReturnHomeAfterTurkey = true,
             AutoCatchRareSpawns = false,
             CatchRareTiers = { "Huge", "Titanic", "Gargantuan" },
+            RareSpawnNetMode = "Ultra Titanic/Garg",
         },
 
         Farm = {

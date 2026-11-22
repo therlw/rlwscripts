@@ -36,30 +36,33 @@ function WildAndTurkey.Init(ctx)
         return type(entry) == "table" and (entry.G == true or entry.R == true or entry.S == true)
     end
 
+    local function classifyRareTier(petName, slotName)
+        local n = tostring(petName or "")
+        local s = tostring(slotName or "")
+        if string.find(n, "Gargantuan", 1, true) or string.find(s, "Garg", 1, true) then return "Gargantuan" end
+        if string.find(n, "Titanic", 1, true) or string.find(s, "Titanic", 1, true) then return "Titanic" end
+        if string.find(n, "Huge", 1, true) or string.find(s, "Huge", 1, true) then return "Huge" end
+        return nil
+    end
+
     local function inferEntryTier(entry)
-        if type(entry) ~= "table" then return 0 end
+        if type(entry) ~= "table" then return 0, nil end
         local petId = tostring(entry.P or "")
-        if string.find(petId, "^Huge ") or string.find(petId, "^Titanic ") or string.find(petId, "^Gargantuan ") then
-            return 4
-        end
+        local rareTier = classifyRareTier(petId)
+        if rareTier == "Gargantuan" then return 6, "Gargantuan" end
+        if rareTier == "Titanic" then return 5, "Titanic" end
+        if rareTier == "Huge" then return 4, "Huge" end
+
         local Directory = Net.Mod.Directory
         if Directory and Directory.RoamingPets then
             for _, row in pairs(Directory.RoamingPets) do
                 if row.Table == "PumpkinTycoon" and row.PetId == petId then
-                    if row.Huge then return 4 end
-                    return tonumber(row.Tier) or 0
+                    if row.Huge then return 4, "Huge" end
+                    return tonumber(row.Tier) or 0, nil
                 end
             end
         end
-        return 0
-    end
-
-    local function classifyRareTier(petName)
-        local n = tostring(petName or "")
-        if string.find(n, "^Gargantuan ") or string.find(n, "Gargantuan") then return "Gargantuan" end
-        if string.find(n, "^Titanic ") or string.find(n, "Titanic") then return "Titanic" end
-        if string.find(n, "^Huge ") or string.find(n, "Huge") then return "Huge" end
-        return nil
+        return 0, nil
     end
 
     function WT.GetActiveRareSighting()
@@ -83,7 +86,7 @@ function WildAndTurkey.Init(ctx)
             id = shown.id,
             slot = shown.slot,
             pet = shown.pet,
-            tierName = classifyRareTier(shown.pet) or "Huge",
+            tierName = classifyRareTier(shown.pet, shown.slot) or "Huge",
             pos = pos,
             chance = decoded.chance,
         }
@@ -102,8 +105,8 @@ function WildAndTurkey.Init(ctx)
             return false
         end
 
-        -- Throws YOUR BEST NET (Ultra Pet Net first, fallback Pet Net)
-        local bestNet = Net.GetBestNetName()
+        -- Use conservation policy: save Ultra Pet Nets for Titanic & Gargantuan unless configured otherwise
+        local bestNet = Net.SelectNetForTier(sighting.tierName, PT.RareSpawnNetMode or "Ultra Titanic/Garg")
         if not bestNet then return false end
 
         local M = Net.Mod
@@ -340,6 +343,7 @@ function WildAndTurkey.Init(ctx)
         local bestScore = -1
         local bestEntry = nil
         local bestPos = nil
+        local bestRareName = nil
 
         for slot, obj in pairs(M.Wild.All() or {}) do
             local primary = obj.CustomPet and obj.CustomPet.primaryPart
@@ -347,7 +351,7 @@ function WildAndTurkey.Init(ctx)
                 local soldOut = M.Wild.SoldOut and M.Wild.SoldOut(slot)
                 if not soldOut then
                     local entry = obj.Entry
-                    local tier = inferEntryTier(entry)
+                    local tier, rareName = inferEntryTier(entry)
                     local variantOk = (not PT.CatchWildVariantsOnly) or isVariantEntry(entry)
                     if tier >= minTier and variantOk then
                         local score = tier * 100 + (isVariantEntry(entry) and 20 or 0)
@@ -356,6 +360,7 @@ function WildAndTurkey.Init(ctx)
                             bestSlot = slot
                             bestEntry = entry
                             bestPos = primary.Position
+                            bestRareName = rareName
                         end
                     end
                 end
@@ -364,19 +369,7 @@ function WildAndTurkey.Init(ctx)
 
         if not bestSlot or not bestPos then return false end
 
-        local tier = inferEntryTier(bestEntry)
-        local chosenNet = nil
-        if PT.CatchWildNetPreference == "Pet Net Only" then
-            if Net.GetMiscCount("Pet Net") > 0 then chosenNet = "Pet Net" end
-        elseif PT.CatchWildNetPreference == "Ultra For Huge+" then
-            if tier >= 4 and Net.GetMiscCount("Ultra Pet Net") > 0 then
-                chosenNet = "Ultra Pet Net"
-            elseif Net.GetMiscCount("Pet Net") > 0 then
-                chosenNet = "Pet Net"
-            end
-        else
-            chosenNet = Net.GetBestNetName()
-        end
+        local chosenNet = Net.SelectNetForTier(bestRareName, PT.CatchWildNetPreference or "Ultra Titanic/Garg")
         if not chosenNet then return false end
 
         local throwReach = Net.GetNumberFFlag("PumpkinTycoon_ThrowReach", CONFIG.DefaultThrowReach)

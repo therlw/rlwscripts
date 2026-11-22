@@ -284,11 +284,28 @@ function PumpkinTycoonTab.Init(ctx)
         name = "Nadir Spawn Yakala (Huge / Titanic+)",
         flag = "PTAutoCatchRare",
         value = PT.AutoCatchRareSpawns,
-        description = "Haritada Huge, Titanic veya Gargantuan çıktığında anında yakalamaya gider",
+        description = "Hindi veya nadir spawn çıktığında (Huge / Titanic / Gargantuan) otomatik yakalamaya gider",
     }, function()
         return PT.AutoCatchRareSpawns
     end, function(v)
         PT.AutoCatchRareSpawns = (v == true)
+    end)
+
+    UI.createBoundDropdown(Tab, {
+        name = "Nadir Spawn Ağı",
+        flag = "PTRareNetMode",
+        options = { "Ultra Titanic/Garg", "Ultra All Rares", "Pet Net Only" },
+        labels = {
+            ["Ultra Titanic/Garg"] = "Titanic/Garg Ultra (Huge Normal)",
+            ["Ultra All Rares"] = "Hepsine Ultra (Yoksa Normal)",
+            ["Pet Net Only"] = "Sadece Normal Pet Net",
+        },
+        value = PT.RareSpawnNetMode or "Ultra Titanic/Garg",
+        description = "Huge için Normal Net atar, Ultra Neti Titanic/Gargantuan'a saklar (Ultra biterse Normal atar)",
+    }, function()
+        return PT.RareSpawnNetMode
+    end, function(v)
+        PT.RareSpawnNetMode = v
     end)
 
     UI.createBoundToggle(Tab, {
@@ -300,6 +317,24 @@ function PumpkinTycoonTab.Init(ctx)
         return PT.AutoCatchWildPets
     end, function(v)
         PT.AutoCatchWildPets = (v == true)
+    end)
+
+    UI.createBoundDropdown(Tab, {
+        name = "Vahşi Pet Ağı",
+        flag = "PTCatchWildNetPref",
+        options = { "Ultra Titanic/Garg", "Pet Net Only", "Ultra For Huge+", "Best Available" },
+        labels = {
+            ["Ultra Titanic/Garg"] = "Titanic/Garg Ultra (Sakla)",
+            ["Pet Net Only"] = "Sadece Normal Pet Net",
+            ["Ultra For Huge+"] = "Huge ve Üstüne Ultra",
+            ["Best Available"] = "Eldeki En İyi Ağ",
+        },
+        value = PT.CatchWildNetPreference or "Ultra Titanic/Garg",
+        description = "Haritadaki vahşi petlerde atılacak ağ kuralı (Ultraları Titanic/Garg için saklayabilir)",
+    }, function()
+        return PT.CatchWildNetPreference
+    end, function(v)
+        PT.CatchWildNetPreference = v
     end)
 
     UI.createBoundToggle(Tab, {
@@ -501,7 +536,7 @@ function PumpkinTycoonTab.Init(ctx)
     end)
 
     UI.createBoundDropdown(Tab, {
-        name = "Avlama Minimum Seviyesi",
+        name = "Avlama Min Seviye",
         flag = "PTHuntMinTier",
         options = { "Any", "Uncommon", "Rare", "Epic", "Huge" },
         labels = {
@@ -530,10 +565,10 @@ function PumpkinTycoonTab.Init(ctx)
     end)
 
     UI.createBoundToggle(Tab, {
-        name = "Huge İçin Ultra Pet Ağı Kullan",
+        name = "Oto Av: Huge'de Ultra Ağ Kullan",
         flag = "PTHuntUltraHuge",
         value = PT.HuntUltraOnHuges,
-        description = "Huge veya üstü petlerde öncelikle Ultra Pet Net kullanır",
+        description = "Oyun içi Oto Av Huge bulduğunda Ultra Pet Net harcasın mı (Kapalı önerilir)",
     }, function()
         return PT.HuntUltraOnHuges
     end, function(v)
@@ -541,7 +576,7 @@ function PumpkinTycoonTab.Init(ctx)
     end)
 
     UI.createBoundDropdown(Tab, {
-        name = "Yakalama Minimum Seviyesi",
+        name = "Yakalama Min Seviye",
         flag = "PTCatchWildMinTier",
         options = { "Any", "Uncommon", "Rare", "Epic", "Huge" },
         labels = {
@@ -556,22 +591,6 @@ function PumpkinTycoonTab.Init(ctx)
         return PT.CatchWildMinTier
     end, function(v)
         PT.CatchWildMinTier = v
-    end)
-
-    UI.createBoundDropdown(Tab, {
-        name = "Vahşi Pet Ağ Tercihi",
-        flag = "PTCatchWildNetPref",
-        options = { "Best Available", "Pet Net Only", "Ultra For Huge+" },
-        labels = {
-            ["Best Available"] = "Eldeki En İyi Ağ",
-            ["Pet Net Only"] = "Sadece Normal Pet Net",
-            ["Ultra For Huge+"] = "Huge+ İçin Ultra Ağ",
-        },
-        value = PT.CatchWildNetPreference,
-    }, function()
-        return PT.CatchWildNetPreference
-    end, function(v)
-        PT.CatchWildNetPreference = v
     end)
 
     UI.createBoundToggle(Tab, {
