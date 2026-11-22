@@ -84,14 +84,13 @@ function MovementController.Init(ctx)
         local function tryJump(curHum)
             if not curHum then return end
             local now = os.clock()
-            if isGrounded(curHum) then
-                if now - lastJumpAt >= 0.16 then
-                    curHum.Jump = true
-                    lastJumpAt = now
-                end
-            elseif now - lastJumpAt >= 0.55 then
-                -- Queue Jump without burning cooldown while mid-air
+            -- In PS99, ControlModule overwrites Humanoid.Jump each frame; ChangeState(Jumping) while grounded executes a genuine single jump
+            if isGrounded(curHum) and now - lastJumpAt >= 0.42 then
                 curHum.Jump = true
+                pcall(function()
+                    curHum:ChangeState(Enum.HumanoidStateType.Jumping)
+                end)
+                lastJumpAt = now
             end
         end
 
@@ -112,8 +111,8 @@ function MovementController.Init(ctx)
                 return hit ~= nil and math.abs(hit.Normal.Y) < 0.62
             end
 
-            local shinOrigin = Vector3.new(curHrp.Position.X, groundY + 1.85, curHrp.Position.Z) + backStart
-            local chestOrigin = Vector3.new(curHrp.Position.X, groundY + 4.15, curHrp.Position.Z) + backStart
+            local shinOrigin = Vector3.new(curHrp.Position.X, groundY + 1.65, curHrp.Position.Z) + backStart
+            local chestOrigin = Vector3.new(curHrp.Position.X, groundY + 3.90, curHrp.Position.Z) + backStart
 
             local shinHit = workspace:Spherecast(shinOrigin, 1.25, unit * reach, rayParams)
             local chestHit = workspace:Spherecast(chestOrigin, 1.15, unit * reach, rayParams)
