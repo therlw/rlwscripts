@@ -339,15 +339,24 @@ function AutoFarmSystem.Init(ctx)
                                 end
                             end
 
-                            -- Skip kept pumpkins inside PumpkinTycoon
+                            -- Skip kept/locked pedestal pumpkins inside PumpkinTycoon; optionally include unkept pedestals when AutoBreakPumpkins is ON
                             local keptPumpkin = false
-                            if inInst and type(ca) == "table" and type(ca.PumpkinPedestal) == "number" and keepBelow > 0 then
-                                if type(ca.PumpkinRung) == "number" and ca.PumpkinRung >= keepBelow then
+                            local isUnkeptPedestal = false
+                            if inInst and type(ca) == "table" and type(ca.PumpkinPedestal) == "number" then
+                                local pedLocked = M.AutoBreak and M.AutoBreak.Locked and M.AutoBreak.Locked(ca.PumpkinPedestal)
+                                local keptByRule = keepBelow > 0 and type(ca.PumpkinRung) == "number" and ca.PumpkinRung >= keepBelow
+                                if pedLocked or keptByRule then
                                     keptPumpkin = true
+                                elseif States.PumpkinTycoon.AutoBreakPumpkins and plotCF and plotSize and checkPos and M.PT_Types and M.PT_Types.OnIsland then
+                                    local okOn, resOn = pcall(M.PT_Types.OnIsland, plotCF, plotSize, checkPos)
+                                    if okOn and resOn == true then
+                                        isUnkeptPedestal = true
+                                    end
                                 end
                             end
 
-                            if parentOk and inActiveArea and not manual and not vipBlocked and not ownerBlocked and not keptPumpkin then
+                            local areaMatch = inActiveArea or isUnkeptPedestal
+                            if parentOk and areaMatch and not manual and not vipBlocked and not ownerBlocked and not keptPumpkin then
                                 local maxHp = math.max(hp, (type(brk) == "table" and tonumber(brk.maxHealth)) or hp)
                                 local avgRatio = getAvgDamageRatio(bAreaId or bParentId or parentId, cls)
                                 local estSingleDmg = math.max(1, maxHp * avgRatio)
@@ -375,7 +384,7 @@ function AutoFarmSystem.Init(ctx)
         if #candidates == 0 then
             if zoneChanged then
                 for _, pet in ipairs(petList) do
-                    if pet.AIHold == nil or pet.AIHold == "FastFarm" then
+                    if pet.AIHold == nil or pet.AIHold == "FastFarm" or pet.AIHold == "PumpkinAutoBreak" then
                         local curT = pet.GetTarget and pet:GetTarget()
                         if typeof(curT) == "Instance" and curT ~= LocalPlayer.Character then
                             pcall(function()
@@ -395,7 +404,7 @@ function AutoFarmSystem.Init(ctx)
         local bulkJoin = {}
 
         for _, pet in ipairs(petList) do
-            if pet.AIHold == nil or pet.AIHold == "FastFarm" then
+            if pet.AIHold == nil or pet.AIHold == "FastFarm" or pet.AIHold == "PumpkinAutoBreak" then
                 pet.AIHold = "FastFarm"
                 local curT = pet.GetTarget and pet:GetTarget()
                 local targetEntry = typeof(curT) == "Instance" and candidateByModel[curT] or nil
