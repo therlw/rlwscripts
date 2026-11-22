@@ -44,7 +44,7 @@ function PumpkinTycoonTab.Init(ctx)
     })
 
     UI.OptimizePTToggle = UI.createBoundToggle(Tab, {
-        name = "Etkinlik Alanını Optimize Et (RAM / FPS)",
+        name = "Alanı Optimize Et (RAM / FPS)",
         flag = "PTOptimize",
         value = PT.OptimizePumpkinTycoon,
         description = "Gereksiz dekorasyonları, ağaçları ve diğer adaları gizleyip RAM kullanımını düşürür",
