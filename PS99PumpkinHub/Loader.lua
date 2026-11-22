@@ -34,7 +34,7 @@ local Loader = {
     Branch = branch,
     Retries = math.max(1, tonumber(userCfg.Retries) or 3),
     RetryDelay = tonumber(userCfg.RetryDelay) or 0.4,
-    CacheBust = userCfg.CacheBust == true,
+    CacheBust = userCfg.CacheBust ~= false,
     UseMemoryCache = userCfg.UseMemoryCache == true,
     LocalFolder = userCfg.LocalFolder,
     Manifest = nil,
