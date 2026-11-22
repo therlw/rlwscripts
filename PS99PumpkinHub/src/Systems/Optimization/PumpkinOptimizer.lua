@@ -639,16 +639,32 @@ function PumpkinOptimizer.Init(ctx)
     end
 
     local function runFullEventOptimization()
-        if not Optimizer.Enabled then return end
-        purgeDebrisAndLighting()
-        if Optimizer.InEventZone then
-            parkMainWorldBloat()
-            purgeTurkeyIsland()
-            purgeIslandsAndPlots()
-            purgeOtherPlayersAndPets()
-            pcall(function() collectgarbage("step", 250) end)
-        end
-        updateStats()
+        if not Optimizer.Enabled or Optimizer._purgeRunning then return end
+        Optimizer._purgeRunning = true
+        task.spawn(function()
+            local ok, err = pcall(function()
+                if not Optimizer.Enabled then return end
+                purgeDebrisAndLighting()
+                if Optimizer.InEventZone then
+                    parkMainWorldBloat()
+                    task.wait()
+                    if not Optimizer.Enabled or not Optimizer.InEventZone then return end
+                    purgeTurkeyIsland()
+                    task.wait()
+                    if not Optimizer.Enabled or not Optimizer.InEventZone then return end
+                    purgeIslandsAndPlots()
+                    task.wait()
+                    if not Optimizer.Enabled or not Optimizer.InEventZone then return end
+                    purgeOtherPlayersAndPets()
+                    pcall(function() collectgarbage("step", 300) end)
+                end
+                updateStats()
+            end)
+            Optimizer._purgeRunning = false
+            if not ok then
+                pcall(ctx.Utils.debugWarn, "PumpkinOptimizer", err)
+            end
+        end)
     end
 
     local function syncEventZoneState(forceSweep)
@@ -738,8 +754,8 @@ function PumpkinOptimizer.Init(ctx)
 
         if Optimizer.InEventZone then
             bindEventWatchers()
-            runFullEventOptimization()
-            task.delay(1.5, function()
+            task.defer(runFullEventOptimization)
+            task.delay(1.8, function()
                 if Optimizer.Enabled and Optimizer.InEventZone then
                     runFullEventOptimization()
                 end
