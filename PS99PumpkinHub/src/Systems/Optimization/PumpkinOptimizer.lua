@@ -227,25 +227,25 @@ function PumpkinOptimizer.Init(ctx)
             return
         end
         local name = d.Name
-        if name:find("Tag", 1, true) or name:find("Sign", 1, true) or name:find("Board", 1, true) or name:find("Host", 1, true) then
-            if not name:find("ParticleHost", 1, true) then
-                return
-            end
+        if name:find("Tag", 1, true) or name:find("Sign", 1, true) or name:find("Board", 1, true)
+            or name:find("Aura", 1, true) or (name:find("Host", 1, true) and not name:find("ParticleHost", 1, true)) then
+            return
         end
         if FLASH_NAMES[name] or name:find("ParticleHost", 1, true) or name:find("Confetti", 1, true)
-            or name:find("Flash", 1, true) or name:find("Shockwave", 1, true) or name:find("Feathers", 1, true)
-            or d:IsA("ParticleEmitter") or d:IsA("Explosion") or d:IsA("Beam") or d:IsA("Trail") then
+            or name:find("Flash", 1, true) or name:find("Shockwave", 1, true) or name:find("Feathers", 1, true) then
+            if d:FindFirstChild("Aura", true) then return end
             local cnt = #d:GetDescendants() + 1
             if pcall(function() d:Destroy() end) then
                 trackDestroyed(cnt)
             end
             return
         end
-        if d:IsA("BasePart") and (d.Transparency >= 0.99 or d:FindFirstChildOfClass("ParticleEmitter")) then
-            if not d:FindFirstChildWhichIsA("BillboardGui") and not d:FindFirstChildWhichIsA("SurfaceGui") then
-                local cnt = #d:GetDescendants() + 1
-                if pcall(function() d:Destroy() end) then
-                    trackDestroyed(cnt)
+        if d:IsA("ParticleEmitter") or d:IsA("Trail") or d:IsA("Beam") then
+            pcall(function() d.Enabled = false end)
+        elseif d:IsA("BasePart") then
+            for _, sub in ipairs(d:GetDescendants()) do
+                if sub:IsA("ParticleEmitter") or sub:IsA("Trail") or sub:IsA("Beam") then
+                    pcall(function() sub.Enabled = false end)
                 end
             end
         end
@@ -295,19 +295,20 @@ function PumpkinOptimizer.Init(ctx)
     local function stripCharacterVisuals(plr, char)
         if not Optimizer.Enabled or not Optimizer.InEventZone then return end
         if not plr or plr == LocalPlayer or not char or not char.Parent then return end
+        -- Hide visuals reversibly without destroying Attachments/ParticleEmitters (e.g. Rebirth VFX Aura1.Aura)
         for _, d in ipairs(char:GetDescendants()) do
             if d.Parent then
-                if d:IsA("Accessory") or d:IsA("Hat") or d:IsA("Shirt") or d:IsA("Pants")
-                    or d:IsA("ShirtGraphic") or d:IsA("CharacterMesh") or d:IsA("BodyColors")
-                    or d:IsA("SurfaceAppearance") or d:IsA("ParticleEmitter") or d:IsA("Trail")
-                    or d:IsA("Beam") or d:IsA("Light") or d:IsA("Decal") or d:IsA("Sound") then
-                    local cnt = #d:GetDescendants() + 1
-                    if pcall(function() d:Destroy() end) then
-                        trackDestroyed(cnt)
-                    end
-                elseif d:IsA("BasePart") then
+                if d:IsA("BasePart") then
                     saveAndSet(Optimizer._savedProps, d, "LocalTransparencyModifier", 1)
                     saveAndSet(Optimizer._savedProps, d, "CastShadow", false)
+                elseif d:IsA("ParticleEmitter") or d:IsA("Trail") or d:IsA("Beam")
+                    or d:IsA("Fire") or d:IsA("Smoke") or d:IsA("Sparkles")
+                    or d:IsA("Light") or d:IsA("LayerCollector") then
+                    saveAndSet(Optimizer._savedProps, d, "Enabled", false)
+                elseif d:IsA("Decal") or d:IsA("Texture") then
+                    saveAndSet(Optimizer._savedProps, d, "Transparency", 1)
+                elseif d:IsA("Sound") then
+                    saveAndSet(Optimizer._savedProps, d, "Volume", 0)
                 end
             end
         end
