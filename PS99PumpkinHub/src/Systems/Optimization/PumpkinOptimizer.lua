@@ -54,9 +54,7 @@ function PumpkinOptimizer.Init(ctx)
     }
 
     local THINGS_PARK_NAMES = {
-        "Ornaments",
         "Ski Chairs",
-        "BalloonGifts",
         "VictoryScene",
     }
 
@@ -404,8 +402,9 @@ function PumpkinOptimizer.Init(ctx)
         local front = decor:FindFirstChild("Front")
         if front then
             local lb = front:FindFirstChild("PumpkinLeaderboardCatches")
-            if lb then
-                clearChildrenSafe(lb)
+            local lbMain = lb and lb:FindFirstChild("Main")
+            if lbMain then
+                clearChildrenSafe(lbMain)
             end
             -- Only strip lights/particles/shadows on Front pads & _Look machines without destroying functional visuals
             stripVisualsOnTree(front, false)
@@ -460,6 +459,24 @@ function PumpkinOptimizer.Init(ctx)
         end
     end
 
+    local function purgeForeignIslandDecor(islandFolder)
+        if not Optimizer.Enabled or not Optimizer.InEventZone or not islandFolder or not islandFolder.Parent then return end
+        -- Leave BillboardGui/SurfaceGui (PumpkinTimer_*, PumpkinSign_*, PumpkinIsland_*) & Front signs intact so Signs/Billboard never warn
+        for _, sub in ipairs(islandFolder:GetChildren()) do
+            if sub:IsA("LayerCollector") or sub:IsA("BillboardGui") or sub:IsA("SurfaceGui") or sub:IsA("ScreenGui") then
+                -- Keep UI intact to prevent Signs/Billboard missing-child errors
+            elseif sub.Name == "Props" or sub.Name == "Ground" or sub.Name == "ShoreFill" or sub.Name:match("^%d+ |") then
+                clearChildrenSafe(sub)
+            elseif sub.Name == "Front" then
+                local lb = sub:FindFirstChild("PumpkinLeaderboardCatches")
+                local lbMain = lb and lb:FindFirstChild("Main")
+                if lbMain then
+                    clearChildrenSafe(lbMain)
+                end
+            end
+        end
+    end
+
     local function purgeIslandsAndPlots()
         if not Optimizer.Enabled or not Optimizer.InEventZone then return end
         local myUidStr = tostring(LocalPlayer.UserId)
@@ -471,7 +488,7 @@ function PumpkinOptimizer.Init(ctx)
                 if islandFolder.Name == myUidStr then
                     purgeOwnDecor(islandFolder)
                 elseif islandFolder.Name ~= "Shared" then
-                    clearChildrenSafe(islandFolder)
+                    purgeForeignIslandDecor(islandFolder)
                 end
             end
         end
@@ -548,6 +565,16 @@ function PumpkinOptimizer.Init(ctx)
                     parkInstance(inst)
                 end
             end
+            -- Hide Ornaments visuals in-place instead of reparenting so WaitForChild("Ornaments") never yields
+            local ornaments = things:FindFirstChild("Ornaments")
+            if ornaments then
+                for _, d in ipairs(ornaments:GetDescendants()) do
+                    if d:IsA("BasePart") then
+                        saveAndSet(Optimizer._savedProps, d, "LocalTransparencyModifier", 1)
+                        saveAndSet(Optimizer._savedProps, d, "CastShadow", false)
+                    end
+                end
+            end
         end
     end
 
@@ -579,7 +606,7 @@ function PumpkinOptimizer.Init(ctx)
             if not pti then return end
             table.insert(Optimizer._eventConns, Lifecycle.TrackConnection(pti.ChildAdded:Connect(function(child)
                 if not Optimizer.Enabled or not Optimizer.InEventZone then return end
-                task.defer(function()
+                task.delay(0.45, function()
                     if not Optimizer.Enabled or not Optimizer.InEventZone or not child.Parent then return end
                     if child.Name == myUidStr then
                         purgeOwnDecor(child)
@@ -587,7 +614,7 @@ function PumpkinOptimizer.Init(ctx)
                             scheduleDecorSweep(child)
                         end)))
                     elseif child.Name ~= "Shared" then
-                        clearChildrenSafe(child)
+                        purgeForeignIslandDecor(child)
                     end
                 end)
             end)))
