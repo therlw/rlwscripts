@@ -36,12 +36,15 @@ function PumpkinTycoonTab.Init(ctx)
     UI.OptimizePTToggle = createBoundToggle(tab, {
         name = "Optimize Pumpkin Tycoon",
         flag = "PTOptimize",
-        description = "Cleans Turkey island & removes Turkey + pumpkin flashes for less lag",
+        description = "Frees RAM in event zone: deletes trees/props/clutter, other islands/plots/breakables, debris & unused world bloat",
         value = PT.OptimizePumpkinTycoon,
     }, function() return PT.OptimizePumpkinTycoon end, function(v)
         PT.OptimizePumpkinTycoon = v
         if ctx.Optimizer and ctx.Optimizer.SetEnabled then
             ctx.Optimizer.SetEnabled(v == true)
+        end
+        if UI.OptOptimizePTToggle and UI.OptOptimizePTToggle.Set then
+            pcall(function() UI.OptOptimizePTToggle:Set(v == true, true) end)
         end
     end)
 

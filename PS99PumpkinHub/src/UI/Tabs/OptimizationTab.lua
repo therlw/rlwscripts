@@ -62,10 +62,10 @@ function OptimizationTab.Init(ctx)
         end
     end)
 
-    createBoundToggle(tab, {
+    UI.OptOptimizePTToggle = createBoundToggle(tab, {
         name = "Optimize Pumpkin Tycoon",
         flag = "OptOptimizePT",
-        description = "Syncs with Current Event Pumpkin Tycoon + Turkey island flash cleanup",
+        description = "Event-zone RAM & FPS optimizer: deletes clutter models/props/orchards/other plots, debris & parks Spawn map",
         value = Opt.OptimizePumpkinTycoon,
     }, function() return Opt.OptimizePumpkinTycoon end, function(v)
         Opt.OptimizePumpkinTycoon = v
