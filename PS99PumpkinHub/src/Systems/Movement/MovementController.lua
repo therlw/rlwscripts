@@ -74,26 +74,37 @@ function MovementController.Init(ctx)
             return false
         end
 
+        local function isGrounded(curHum)
+            if not curHum then return false end
+            if curHum.FloorMaterial == Enum.Material.Air then return false end
+            local st = curHum.GetState and curHum:GetState()
+            return st ~= Enum.HumanoidStateType.Freefall and st ~= Enum.HumanoidStateType.Jumping
+        end
+
         local function tryJump(curHum)
             if not curHum then return end
             local now = os.clock()
-            if now - lastJumpAt >= 0.30 then
+            if isGrounded(curHum) then
+                if now - lastJumpAt >= 0.16 then
+                    curHum.Jump = true
+                    lastJumpAt = now
+                end
+            elseif now - lastJumpAt >= 0.55 then
+                -- Queue Jump without burning cooldown while mid-air
                 curHum.Jump = true
-                lastJumpAt = now
             end
         end
 
-        -- 3-ray fan forward obstacle detector (`RespectCanCollide = true`):
-        -- catches diagonal plank edges/curbs at ankle/shin/waist height while ignoring walkable ramps.
+        -- Volume-swept Spherecast obstacle detector (`RespectCanCollide = true`):
+        -- catches thin horizontal fence rails, angled steps, and retaining walls up to ~6.6 studs tall.
         local function probeAhead(curHrp, curHum, moveDest)
             local flatVec = Vector3.new(moveDest.X - curHrp.Position.X, 0, moveDest.Z - curHrp.Position.Z)
             if flatVec.Magnitude < 0.5 then
-                return false, false, nil
+                return false, false, nil, nil
             end
             local unit = flatVec.Unit
-            local right = Vector3.new(-unit.Z, 0, unit.X)
-            local backStart = -unit * 0.7
-            local reach = 5.2
+            local backStart = -unit * 0.85
+            local reach = 5.4
             local rootToFloor = (curHum.HipHeight or 2.2) + (curHrp.Size.Y * 0.5)
             local groundY = curHrp.Position.Y - rootToFloor
 
@@ -101,40 +112,41 @@ function MovementController.Init(ctx)
                 return hit ~= nil and math.abs(hit.Normal.Y) < 0.62
             end
 
-            local sawStepOrLow = false
-            local sawHeadBlock = false
-            for _, lat in ipairs({ 0, -1.25, 1.25 }) do
-                local latOff = (right * lat) + backStart
-                local lowOrigin = Vector3.new(curHrp.Position.X, groundY + 0.65, curHrp.Position.Z) + latOff
-                local shinOrigin = Vector3.new(curHrp.Position.X, groundY + 1.55, curHrp.Position.Z) + latOff
-                local waistOrigin = Vector3.new(curHrp.Position.X, groundY + 2.85, curHrp.Position.Z) + latOff
-                local headOrigin = Vector3.new(curHrp.Position.X, groundY + 6.2, curHrp.Position.Z) + latOff
+            local shinOrigin = Vector3.new(curHrp.Position.X, groundY + 1.85, curHrp.Position.Z) + backStart
+            local chestOrigin = Vector3.new(curHrp.Position.X, groundY + 4.15, curHrp.Position.Z) + backStart
 
-                local lowHit = workspace:Raycast(lowOrigin, unit * reach, rayParams)
-                local shinHit = workspace:Raycast(shinOrigin, unit * reach, rayParams)
-                local waistHit = workspace:Raycast(waistOrigin, unit * reach, rayParams)
+            local shinHit = workspace:Spherecast(shinOrigin, 1.25, unit * reach, rayParams)
+            local chestHit = workspace:Spherecast(chestOrigin, 1.15, unit * reach, rayParams)
 
-                if isSteepObstacle(lowHit) or isSteepObstacle(shinHit) or isSteepObstacle(waistHit) then
-                    sawStepOrLow = true
-                end
-                local headHit = workspace:Raycast(headOrigin, unit * reach, rayParams)
-                if isSteepObstacle(headHit) then
-                    sawHeadBlock = true
-                end
+            local blockHit = nil
+            if isSteepObstacle(shinHit) then
+                blockHit = shinHit
+            end
+            if isSteepObstacle(chestHit) and (not blockHit or chestHit.Distance < blockHit.Distance) then
+                blockHit = chestHit
             end
 
-            if sawStepOrLow and not sawHeadBlock then
-                return true, false, unit
+            if not blockHit then
+                return false, false, unit, nil
             end
-            if sawHeadBlock then
-                return false, true, unit
+
+            -- Check above jump apex (~6.45+ studs) to distinguish jumpable ledges/walls from true high walls
+            local highReach = math.min(reach, blockHit.Distance + 1.4)
+            local highOrigin = Vector3.new(curHrp.Position.X, groundY + 6.85, curHrp.Position.Z) + backStart
+            local highHit = workspace:Spherecast(highOrigin, 0.40, unit * highReach, rayParams)
+
+            local blockedHigh = isSteepObstacle(highHit)
+                and (highHit.Instance == blockHit.Instance or math.abs(highHit.Distance - blockHit.Distance) <= 1.8)
+
+            if not blockedHigh then
+                return true, false, unit, blockHit.Normal
             end
-            return false, false, unit
+            return false, true, unit, blockHit.Normal
         end
 
         local function driveSegment(segDest, arrivalThresh, maxSegSec, jumpAtStart, maxStucksAbort)
             local _, curHrp, curHum = Utils.getCharacterParts()
-            if not curHrp or not curHum then return false, false end
+            if not curHrp or not curHum then return false, false, false end
 
             if jumpAtStart then
                 tryJump(curHum)
@@ -144,54 +156,75 @@ function MovementController.Init(ctx)
             local started = os.clock()
             local lastSampleAt = started
             local lastSamplePos = curHrp.Position
+            local lastSampleDist = Utils.flatDist(curHrp.Position, segDest)
             local sidestepSide = 1
             local consecutiveStucks = 0
 
             while os.clock() - started < maxSegSec do
-                if shouldStop() then return false, true end
+                if shouldStop() then return false, true, false end
 
                 _, curHrp, curHum = Utils.getCharacterParts()
-                if not curHrp or not curHum then return false, true end
+                if not curHrp or not curHum then return false, true, false end
 
                 if Utils.flatDist(curHrp.Position, targetPos) <= reqDist then
-                    return true, false
+                    return true, false, false
                 end
                 if arrivalThresh and Utils.flatDist(curHrp.Position, segDest) <= arrivalThresh then
-                    return false, false
+                    return false, false, false
                 end
 
-                local jumpAhead, tallBlocked, unit = probeAhead(curHrp, curHum, segDest)
+                local jumpAhead, tallBlocked, unit, hitNormal = probeAhead(curHrp, curHum, segDest)
                 if jumpAhead then
                     tryJump(curHum)
                 end
 
                 local now = os.clock()
                 if now - lastSampleAt >= 0.18 then
+                    local curSegDist = Utils.flatDist(curHrp.Position, segDest)
                     local movedFlat = Utils.flatDist(curHrp.Position, lastSamplePos)
-                    if movedFlat < 0.65 then
+                    local segProgress = lastSampleDist - curSegDist
+                    local stalled = movedFlat < 0.70
+                        or (segProgress < math.max(0.40, movedFlat * 0.22) and lastSampleDist > (arrivalThresh or 4) + 1.0)
+
+                    if stalled then
                         consecutiveStucks = consecutiveStucks + 1
                         tryJump(curHum)
                         if maxStucksAbort and consecutiveStucks >= maxStucksAbort then
-                            return false, false
+                            return false, false, false
+                        end
+                        if consecutiveStucks >= 4 then
+                            return false, false, true
                         end
                         if (tallBlocked or consecutiveStucks >= 2) and unit then
-                            local right = Vector3.new(-unit.Z, 0, unit.X) * sidestepSide
-                            sidestepSide = -sidestepSide
-                            curHum:MoveTo(curHrp.Position + (right * 5.0) + (unit * 3.0))
+                            local nudgeVec
+                            if hitNormal and Vector2.new(hitNormal.X, hitNormal.Z).Magnitude > 0.1 and consecutiveStucks <= 2 then
+                                local nFlat = Vector3.new(hitNormal.X, 0, hitNormal.Z).Unit
+                                local slideDir = Vector3.new(-nFlat.Z, 0, nFlat.X)
+                                if slideDir:Dot(unit) < 0 then
+                                    slideDir = -slideDir
+                                end
+                                nudgeVec = (nFlat * 2.5) + (slideDir.Unit * 5.5)
+                            else
+                                local right = Vector3.new(-unit.Z, 0, unit.X) * sidestepSide
+                                sidestepSide = -sidestepSide
+                                nudgeVec = (right * 5.5) + (unit * 3.0)
+                            end
+                            curHum:MoveTo(curHrp.Position + nudgeVec)
                             task.wait(0.18)
-                            if shouldStop() then return false, true end
+                            if shouldStop() then return false, true, false end
                         end
                         curHum:MoveTo(segDest)
                     else
                         consecutiveStucks = 0
                     end
                     lastSamplePos = curHrp.Position
+                    lastSampleDist = Utils.flatDist(curHrp.Position, segDest)
                     lastSampleAt = now
                 end
 
                 task.wait(0.05)
             end
-            return false, false
+            return false, false, false
         end
 
         local flatTotal = Utils.flatDist(hrp.Position, targetPos)
@@ -200,7 +233,7 @@ function MovementController.Init(ctx)
             AgentHeight = 5,
             AgentCanJump = true,
             AgentCanClimb = true,
-            WaypointSpacing = 7,
+            WaypointSpacing = 6,
         })
 
         local okPath = pcall(function()
@@ -208,12 +241,14 @@ function MovementController.Init(ctx)
         end)
 
         local arrived = false
-        local timeoutAt = os.clock() + (States.Movement.WalkTimeout or 18)
         local waypoints = (okPath and path.Status == Enum.PathStatus.Success) and path:GetWaypoints() or {}
+        local estDist = math.max(flatTotal, #waypoints * 6)
+        local walkTimeBudget = math.max(States.Movement.WalkTimeout or 22, math.min(60, (estDist / math.max(18, hum.WalkSpeed or 16)) * 1.9 + 8))
+        local timeoutAt = os.clock() + walkTimeBudget
 
         -- Fast straight hop-walk only when path failed or detours >3x on open low-ledge terrain
         local _, tallAtStart = probeAhead(hrp, hum, targetPos)
-        if not tallAtStart and flatTotal <= 75 and (#waypoints == 0 or (#waypoints * 7) > math.max(60, flatTotal * 3.0)) then
+        if not tallAtStart and flatTotal <= 75 and (#waypoints == 0 or (#waypoints * 6) > math.max(60, flatTotal * 3.0)) then
             local directHit, aborted = driveSegment(targetPos, math.max(3.2, math.min(reqDist, 4.5)), math.min(4.5, math.max(1.5, timeoutAt - os.clock())), false, 3)
             if directHit or Utils.flatDist((select(2, Utils.getCharacterParts()) or hrp).Position, targetPos) <= reqDist then
                 arrived = true
@@ -223,11 +258,13 @@ function MovementController.Init(ctx)
             end
         end
 
-        if not arrived and #waypoints >= 2 then
+        local repathsLeft = 2
+        while not arrived and #waypoints >= 2 and not shouldStop() and os.clock() <= timeoutAt do
+            local needRepath = false
             for idx = 2, #waypoints do
                 if shouldStop() or os.clock() > timeoutAt then break end
                 local wp = waypoints[idx]
-                local hitFinal, aborted = driveSegment(
+                local hitFinal, aborted, segRepath = driveSegment(
                     wp.Position,
                     4.4,
                     math.min(2.4, math.max(0.4, timeoutAt - os.clock())),
@@ -237,7 +274,26 @@ function MovementController.Init(ctx)
                     arrived = true
                     break
                 end
-                if aborted then break end
+                if aborted then
+                    repathsLeft = 0
+                    break
+                end
+                if segRepath then
+                    needRepath = true
+                    break
+                end
+            end
+
+            if needRepath and repathsLeft > 0 then
+                repathsLeft = repathsLeft - 1
+                local _, curHrp = Utils.getCharacterParts()
+                if not curHrp then break end
+                local okRe = pcall(function()
+                    path:ComputeAsync(curHrp.Position, targetPos)
+                end)
+                waypoints = (okRe and path.Status == Enum.PathStatus.Success) and path:GetWaypoints() or {}
+            else
+                break
             end
         end
 

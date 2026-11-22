@@ -24,6 +24,8 @@ function AutoFarmSystem.Init(ctx)
         _lastSpeedSyncAt = 0,
         _wasSpeedModified = false,
         _lastFastFarmAt = 0,
+        _lastAfResetAt = 0,
+        _lastZoneSig = nil,
         _lastOrbAt = 0,
         _lastUltAt = 0,
         _lastAreaAt = 0,
@@ -68,6 +70,58 @@ function AutoFarmSystem.Init(ctx)
         end
     end
 
+    local function isPointNearZonePart(part, pos, margin)
+        if not part or not part:IsA("BasePart") or not pos then return false end
+        local okRel, rel = pcall(function() return part.CFrame:PointToObjectSpace(pos) end)
+        if not okRel or not rel then return false end
+        local m = margin or 0
+        return math.abs(rel.X) <= (part.Size.X * 0.5) + m
+            and math.abs(rel.Z) <= (part.Size.Z * 0.5) + m
+            and math.abs(rel.Y) <= math.max(28, (part.Size.Y * 0.5) + 18)
+    end
+
+    local function getActiveBreakZonePart(inInst, parentId, hrpPos)
+        local M = Net.Mod
+        if inInst then
+            local parts = Net.GetPumpkinBreakZoneParts and Net.GetPumpkinBreakZoneParts() or {}
+            local nearest, nearestDist = nil, math.huge
+            for _, zp in ipairs(parts) do
+                if hrpPos and ((M.AutoFarmReach and M.AutoFarmReach.OnZone and M.AutoFarmReach.OnZone(zp, hrpPos))
+                    or Utils.isPointInZonePart(zp, hrpPos)) then
+                    return zp
+                end
+                if hrpPos then
+                    local d = Utils.flatDist(hrpPos, zp.Position)
+                    if d < nearestDist then
+                        nearestDist = d
+                        nearest = zp
+                    end
+                end
+            end
+            if nearest and nearestDist <= 115 then
+                return nearest
+            end
+            return nil
+        end
+
+        if parentId and M.ZonesUtil and M.ZonesUtil.GetBreakableZones then
+            local okBz, bzFolder = pcall(M.ZonesUtil.GetBreakableZones, parentId)
+            if okBz and bzFolder then
+                local fallback = nil
+                for _, zp in ipairs(bzFolder:GetChildren()) do
+                    if zp:IsA("BasePart") then
+                        fallback = fallback or zp
+                        if hrpPos and Utils.isPointInZonePart(zp, hrpPos) then
+                            return zp
+                        end
+                    end
+                end
+                return fallback
+            end
+        end
+        return nil
+    end
+
     local function stepEfficientFarm()
         if not States.Farm.AutoEfficientFarm then return end
         if os.clock() - FarmSys._lastFastFarmAt < 0.35 then return end
@@ -76,28 +130,82 @@ function AutoFarmSystem.Init(ctx)
         local M = Net.Mod
         if not M.BreakableFrontend or not M.PlayerPet then return end
 
+        local _, hrp = Utils.getCharacterParts()
+        local hrpPos = hrp and hrp.Position
         local inInst = M.InstancingCmds and M.InstancingCmds.IsInInstance and M.InstancingCmds.IsInInstance()
         local parentId = inInst and M.InstancingCmds.GetInstanceID() or (M.MapCmds and M.MapCmds.GetCurrentZone())
+        local inDotted = M.MapCmds and M.MapCmds.IsInDottedBox and M.MapCmds.IsInDottedBox() == true
+        local activeZonePart = getActiveBreakZonePart(inInst, parentId, hrpPos)
 
-        -- Enable native AutoFarm in non-PumpkinTycoon or supported dotted zones
+        -- Refresh native AutoFarmCmds whenever player switches zone/world/instance/section
         if M.AutoFarmCmds and M.AutoFarmCmds.Enable and M.AutoFarmCmds.IsEnabled then
             pcall(function()
-                if not M.AutoFarmCmds.IsEnabled() and M.MapCmds and M.MapCmds.IsInDottedBox and M.MapCmds.IsInDottedBox() then
+                local afEnabled = M.AutoFarmCmds.IsEnabled()
+                local insideZone = inDotted or (activeZonePart ~= nil and hrpPos ~= nil and isPointNearZonePart(activeZonePart, hrpPos, 2))
+                if afEnabled then
+                    local afParent = M.AutoFarmCmds.GetTargetParentId and M.AutoFarmCmds.GetTargetParentId()
+                    local afZone = M.AutoFarmCmds.GetWholeFarmZone and M.AutoFarmCmds.GetWholeFarmZone()
+                    local afStart = M.AutoFarmCmds.GetStartingPosition and M.AutoFarmCmds.GetStartingPosition()
+
+                    local parentMismatch = (parentId ~= nil and afParent ~= nil and afParent ~= parentId)
+                    local zoneMismatch = (activeZonePart ~= nil and afZone ~= nil and afZone ~= activeZonePart)
+                    local distMismatch = (hrpPos ~= nil and afStart ~= nil and insideZone and Utils.flatDist(hrpPos, afStart) > 95)
+
+                    if (parentMismatch or zoneMismatch or distMismatch) and os.clock() - FarmSys._lastAfResetAt >= 1.2 then
+                        FarmSys._lastAfResetAt = os.clock()
+                        if M.AutoFarmCmds.Disable then
+                            M.AutoFarmCmds.Disable()
+                        end
+                        if (M.MapCmds and M.MapCmds.IsInDottedBox and M.MapCmds.IsInDottedBox()) or insideZone then
+                            M.AutoFarmCmds.Enable()
+                        end
+                    end
+                elseif insideZone and os.clock() - FarmSys._lastAfResetAt >= 0.8 then
+                    FarmSys._lastAfResetAt = os.clock()
                     M.AutoFarmCmds.Enable()
                 end
             end)
         end
 
+        local zoneSig = tostring(parentId) .. "|" .. (activeZonePart and activeZonePart:GetFullName() or "none")
+        local zoneChanged = (FarmSys._lastZoneSig ~= nil and FarmSys._lastZoneSig ~= zoneSig)
+        FarmSys._lastZoneSig = zoneSig
+
+        local plotCF, plotSize = nil, nil
+        if inInst then
+            local plotModel = Net.GetPlotModel and Net.GetPlotModel()
+            if plotModel then
+                local okBox, cf, sz = pcall(plotModel.GetBoundingBox, plotModel)
+                if okBox then
+                    plotCF, plotSize = cf, sz
+                end
+            end
+        end
+
         local candidates = {}
+        local candidateSet = {}
         local getter = inInst and M.BreakableFrontend.AllByInstanceAndClass or M.BreakableFrontend.AllByZoneAndClass
         if getter then
             for _, cls in ipairs({ "Chest", "Normal" }) do
                 local ok, pool = (inInst and pcall(getter, cls) or pcall(getter, parentId, cls))
                 if ok and type(pool) == "table" then
                     for _, brk in pairs(pool) do
-                        local model, ca, _, _, disabled = Utils.unpackBreakable(brk)
+                        local model, ca, _, bPos, disabled = Utils.unpackBreakable(brk)
                         if model and model.Parent and not disabled then
                             local manual = model:GetAttribute("ManualDamage") == true
+                            local bParentId = model:GetAttribute("ParentID")
+                            local parentOk = (not parentId) or (bParentId == nil) or (bParentId == parentId)
+
+                            -- Scope breakables to active section/zone and own island
+                            local inActiveArea = true
+                            local checkPos = bPos or Utils.getInstancePos(model)
+                            if activeZonePart and checkPos then
+                                inActiveArea = isPointNearZonePart(activeZonePart, checkPos, 10)
+                            elseif inInst and plotCF and plotSize and checkPos and M.PT_Types and M.PT_Types.OnIsland then
+                                local okOn, resOn = pcall(M.PT_Types.OnIsland, plotCF, plotSize, checkPos)
+                                if okOn then inActiveArea = resOn == true end
+                            end
+
                             -- Skip kept pumpkins inside PumpkinTycoon
                             local keptPumpkin = false
                             if inInst and type(ca) == "table" and type(ca.PumpkinPedestal) == "number" and States.PumpkinTycoon.AutoKeepPumpkins then
@@ -106,8 +214,10 @@ function AutoFarmSystem.Init(ctx)
                                     keptPumpkin = true
                                 end
                             end
-                            if not manual and not keptPumpkin then
+
+                            if parentOk and inActiveArea and not manual and not keptPumpkin then
                                 table.insert(candidates, model)
+                                candidateSet[model] = true
                             end
                         end
                     end
@@ -115,17 +225,34 @@ function AutoFarmSystem.Init(ctx)
             end
         end
 
-        if #candidates == 0 then return end
         local pets = M.PlayerPet.GetByPlayer(LocalPlayer) or {}
-        if #pets == 0 then return end
+        if not next(pets) then return end
 
-        -- Spread unassigned/retreating pets round-robin across available breakables
+        -- If no valid breakables found yet after zone transition, release stale old-zone pet targets
+        if #candidates == 0 then
+            if zoneChanged then
+                for _, pet in pairs(pets) do
+                    if pet.AIHold == nil or pet.AIHold == "FastFarm" then
+                        local curT = pet.GetTarget and pet:GetTarget()
+                        if typeof(curT) == "Instance" and curT ~= LocalPlayer.Character then
+                            pcall(function()
+                                if pet.SetAnchored then pet:SetAnchored(false) end
+                                if pet.SetTarget and LocalPlayer.Character then pet:SetTarget(LocalPlayer.Character) end
+                            end)
+                        end
+                    end
+                end
+            end
+            return
+        end
+
+        -- Spread unassigned/retreating/stale-zone pets round-robin across current zone breakables
         local takenModels = {}
         local freePets = {}
-        for _, pet in ipairs(pets) do
+        for _, pet in pairs(pets) do
             if pet.AIHold == nil or pet.AIHold == "FastFarm" then
                 local curT = pet.GetTarget and pet:GetTarget()
-                if typeof(curT) == "Instance" and curT.Parent and curT:GetAttribute("DisableDamage") ~= true then
+                if typeof(curT) == "Instance" and curT.Parent and curT:GetAttribute("DisableDamage") ~= true and candidateSet[curT] then
                     takenModels[curT] = (takenModels[curT] or 0) + 1
                 else
                     table.insert(freePets, pet)
@@ -279,6 +406,7 @@ function AutoFarmSystem.Init(ctx)
             if questsDone and canAfford then
                 local ok = Net.NetworkInvoke("Zones_RequestPurchase", nextUnowned.id)
                 if ok then
+                    FarmSys._lastAfResetAt = 0
                     ctx.Runtime.Status.Farm = "Bought Area: " .. nextUnowned.id
                     return
                 end
@@ -291,6 +419,7 @@ function AutoFarmSystem.Init(ctx)
             local curNum = (type(curWorld) == "table" and curWorld.WorldNumber) or tonumber(curWorld) or 1
             if bestOwned.world > curNum then
                 FarmSys._lastWorldAt = os.clock()
+                FarmSys._lastAfResetAt = 0
                 local worldRemote = "World" .. tostring(bestOwned.world) .. "Teleport"
                 Net.NetworkInvoke(worldRemote)
                 ctx.Runtime.Status.Farm = "Teleporting to World " .. tostring(bestOwned.world)
@@ -309,15 +438,32 @@ function AutoFarmSystem.Init(ctx)
                 if not tpOk then
                     Net.NetworkInvoke("Teleports_RequestTeleport", bestOwned.id)
                 end
+                FarmSys._lastAfResetAt = 0
                 ctx.Runtime.Status.Farm = "Moved to Best Area: " .. bestOwned.id
             else
-                -- Move character inside best area's BreakableZone pad when AutoCompleteGateQuest / AutoAreaQuest is enabled
-                if (States.Farm.AutoCompleteGateQuest or States.Farm.AutoAreaQuest) and M.ZonesUtil and M.ZonesUtil.GetBreakableZones then
-                    local bzFolder = M.ZonesUtil.GetBreakableZones(bestOwned.id)
-                    local part = bzFolder and bzFolder:FindFirstChildWhichIsA("BasePart")
+                -- Step inside best area's BreakableZone when quest-farming or transitioning via AutoTeleportBestArea + AutoEfficientFarm
+                local shouldEnterZone = States.Farm.AutoCompleteGateQuest
+                    or States.Farm.AutoAreaQuest
+                    or (States.Farm.AutoEfficientFarm and States.Farm.AutoTeleportBestArea)
+                if shouldEnterZone and not Move._walking and M.ZonesUtil and M.ZonesUtil.GetBreakableZones then
+                    local okBz, bzFolder = pcall(M.ZonesUtil.GetBreakableZones, bestOwned.id)
                     local _, hrp = Utils.getCharacterParts()
-                    if part and hrp and not Utils.isPointInZonePart(part, hrp.Position) then
-                        Move.MoveTo(part.Position, math.min(12, part.Size.X * 0.35), 3.2)
+                    if okBz and bzFolder and hrp then
+                        local bzParts = {}
+                        local alreadyInside = false
+                        for _, zp in ipairs(bzFolder:GetChildren()) do
+                            if zp:IsA("BasePart") then
+                                table.insert(bzParts, zp)
+                                if Utils.isPointInZonePart(zp, hrp.Position) then
+                                    alreadyInside = true
+                                    break
+                                end
+                            end
+                        end
+                        if not alreadyInside and #bzParts > 0 then
+                            local dest = Utils.computeBreakableZoneStandPos(hrp.Position, bzParts, 9999, 4.0) or bzParts[1].Position
+                            Move.MoveTo(dest, 6, 3.2)
+                        end
                     end
                 end
             end

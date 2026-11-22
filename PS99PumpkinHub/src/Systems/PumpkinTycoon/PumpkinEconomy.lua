@@ -333,11 +333,11 @@ function PumpkinEconomy.Init(ctx)
         if #candidates == 0 then return false end
 
         local pets = M.PlayerPet.GetByPlayer(LocalPlayer) or {}
-        if #pets == 0 then return false end
+        if not next(pets) then return false end
 
         local idx = 1
         local dispatched = 0
-        for _, pet in ipairs(pets) do
+        for _, pet in pairs(pets) do
             if pet.AIHold == nil or pet.AIHold == "PumpkinAutoBreak" then
                 local curTarget = pet.GetTarget and pet:GetTarget()
                 local targetValid = false

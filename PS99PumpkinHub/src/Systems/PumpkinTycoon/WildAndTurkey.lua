@@ -201,7 +201,7 @@ function WildAndTurkey.Init(ctx)
         -- Dispatch all available pets onto Turkey
         local M = Net.Mod
         if M.PlayerPet and M.PlayerPet.GetByPlayer then
-            for _, pet in ipairs(M.PlayerPet.GetByPlayer(LocalPlayer) or {}) do
+            for _, pet in pairs(M.PlayerPet.GetByPlayer(LocalPlayer) or {}) do
                 local cur = pet.GetTarget and pet:GetTarget()
                 if cur ~= turkeyModel then
                     pcall(function()
