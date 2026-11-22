@@ -12,6 +12,7 @@ local PumpkinOptimizer = {}
 
 function PumpkinOptimizer.Init(ctx)
     local Lighting = ctx.Roblox.Lighting
+    local CollectionService = game:GetService("CollectionService")
     local Players = ctx.Roblox.Players
     local LocalPlayer = Players.LocalPlayer
     local Net = ctx.Net
@@ -46,7 +47,6 @@ function PumpkinOptimizer.Init(ctx)
     }
 
     local MAIN_WORLD_PARK_TARGETS = {
-        { parent = workspace, name = "PSX Portal" },
         { parent = workspace, name = "Border" },
         { parent = workspace, name = "PSX Hall" },
         { parent = workspace, name = "FlyBorder" },
@@ -391,6 +391,30 @@ function PumpkinOptimizer.Init(ctx)
         end
     end
 
+    local function hasGameTag(inst)
+        if not inst then return false end
+        if #CollectionService:GetTags(inst) > 0 then return true end
+        for _, d in ipairs(inst:GetDescendants()) do
+            if #CollectionService:GetTags(d) > 0 then return true end
+        end
+        return false
+    end
+
+    local function hideLeaderboardVisuals(frontFolder)
+        if not frontFolder then return end
+        for _, lbName in ipairs({ "PumpkinLeaderboardCatches", "PumpkinLeaderboard" }) do
+            local lb = frontFolder:FindFirstChild(lbName)
+            local lbMain = lb and lb:FindFirstChild("Main")
+            if lbMain then
+                for _, d in ipairs(lbMain:GetDescendants()) do
+                    if d:IsA("SurfaceGui") or d:IsA("BillboardGui") then
+                        saveAndSet(Optimizer._savedProps, d, "Enabled", false)
+                    end
+                end
+            end
+        end
+    end
+
     local function purgeOwnDecor(decor)
         if not Optimizer.Enabled or not Optimizer.InEventZone or not decor or not decor.Parent then return end
 
@@ -401,12 +425,8 @@ function PumpkinOptimizer.Init(ctx)
 
         local front = decor:FindFirstChild("Front")
         if front then
-            local lb = front:FindFirstChild("PumpkinLeaderboardCatches")
-            local lbMain = lb and lb:FindFirstChild("Main")
-            if lbMain then
-                clearChildrenSafe(lbMain)
-            end
-            -- Only strip lights/particles/shadows on Front pads & _Look machines without destroying functional visuals
+            hideLeaderboardVisuals(front)
+            -- Only strip lights/particles/shadows on Front pads & _Look machines without destroying SurfaceGuis
             stripVisualsOnTree(front, false)
         end
 
@@ -416,8 +436,8 @@ function PumpkinOptimizer.Init(ctx)
         end
 
         local function processZoneItem(item)
-            if isWalkableOrFunctional(item) then
-                stripVisualsOnTree(item, true)
+            if isWalkableOrFunctional(item) or hasGameTag(item) then
+                stripVisualsOnTree(item, false)
             elseif item:IsA("Model") or item:IsA("Folder") then
                 -- Keep top container shell empty so Sections.reveal stays safe if unbought button unlocks later
                 clearChildrenSafe(item)
@@ -472,12 +492,16 @@ function PumpkinOptimizer.Init(ctx)
                 for _, item in ipairs(sub:GetChildren()) do
                     if item.Name == "Pieces" then
                         for _, subItem in ipairs(item:GetChildren()) do
-                            if subItem:IsA("Model") or subItem:IsA("Folder") then
+                            if hasGameTag(subItem) then
+                                stripVisualsOnTree(subItem, false)
+                            elseif subItem:IsA("Model") or subItem:IsA("Folder") then
                                 clearChildrenSafe(subItem)
                             elseif pcall(function() subItem:Destroy() end) then
                                 trackDestroyed(1)
                             end
                         end
+                    elseif hasGameTag(item) then
+                        stripVisualsOnTree(item, false)
                     elseif item:IsA("Model") or item:IsA("Folder") then
                         clearChildrenSafe(item)
                     elseif pcall(function() item:Destroy() end) then
@@ -485,11 +509,7 @@ function PumpkinOptimizer.Init(ctx)
                     end
                 end
             elseif sub.Name == "Front" then
-                local lb = sub:FindFirstChild("PumpkinLeaderboardCatches")
-                local lbMain = lb and lb:FindFirstChild("Main")
-                if lbMain then
-                    clearChildrenSafe(lbMain)
-                end
+                hideLeaderboardVisuals(sub)
             end
         end
     end
@@ -582,13 +602,16 @@ function PumpkinOptimizer.Init(ctx)
                     parkInstance(inst)
                 end
             end
-            -- Hide Ornaments visuals in-place instead of reparenting so WaitForChild("Ornaments") never yields
-            local ornaments = things:FindFirstChild("Ornaments")
-            if ornaments then
-                for _, d in ipairs(ornaments:GetDescendants()) do
+        end
+        -- Hide PSX Portal & Ornaments visuals in-place instead of reparenting so WaitForChild & Mini Leaderboards never warn/error
+        for _, root in ipairs({ workspace:FindFirstChild("PSX Portal"), things and things:FindFirstChild("Ornaments") }) do
+            if root then
+                for _, d in ipairs(root:GetDescendants()) do
                     if d:IsA("BasePart") then
                         saveAndSet(Optimizer._savedProps, d, "LocalTransparencyModifier", 1)
                         saveAndSet(Optimizer._savedProps, d, "CastShadow", false)
+                    elseif d:IsA("SurfaceGui") or d:IsA("BillboardGui") then
+                        saveAndSet(Optimizer._savedProps, d, "Enabled", false)
                     end
                 end
             end
