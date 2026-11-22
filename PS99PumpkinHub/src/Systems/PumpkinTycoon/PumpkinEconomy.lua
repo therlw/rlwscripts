@@ -26,6 +26,7 @@ function PumpkinEconomy.Init(ctx)
         _lastAutoPlaceAttemptAt = 0,
         _lastKeepAttemptAt = 0,
         _lastAutoBreakAt = 0,
+        _lastCocoaTripAt = 0,
     }
 
     local LADDER_INDEX_BY_NAME = {}
@@ -460,63 +461,103 @@ function PumpkinEconomy.Init(ctx)
         local PT = States.PumpkinTycoon
         if not PT.AutoBuyCocoaBoosts or not Net.IsInPumpkinTycoon() then return false end
         if os.clock() - Cooldowns.LastCocoaBuyAt < CONFIG.CocoaPurchaseCooldown then return false end
+        if os.clock() - Econ._lastCocoaTripAt < 45 then return false end
 
         local M = Net.Mod
         if not M.Cocoa or not M.Cocoa.Unlocked or not M.Cocoa.Unlocked() then return false end
         if not M.Util_Cocoa or not M.PT_Types then return false end
 
+        local TRIGGER_SEC = 180          -- Only leave farming to visit Cocoa Stand when <= 3m remaining
+        local BUNDLE_THRESHOLD_SEC = 600 -- While already at stand, also top up any other selected boost < 10m
+        local MAX_TOPUP_MIN = 30         -- Buy up to +30m per boost per trip instead of draining coins for 12h
+
         local tankSec = M.Util_Cocoa.TankSeconds and M.Util_Cocoa.TankSeconds() or (720 * 60)
-        local stepMin = M.Util_Cocoa.StepMinutes and M.Util_Cocoa.StepMinutes() or 10
-        local minRoomMin = math.min(math.max(1, stepMin), math.max(1, math.floor(tankSec / 60)))
+        local triggerSec = math.min(TRIGGER_SEC, math.floor(tankSec * 0.5))
+        local bundleSec = math.min(BUNDLE_THRESHOLD_SEC, math.floor(tankSec * 0.85))
         local coins = Net.GetPumpkinCoins()
 
-        -- Pick the selected axis with the LOWEST remaining tank time first so full tanks never starve empty ones,
-        -- and quote using affordable minutes (Quote arg #3 is minutes, NOT coins) with at least stepMin missing.
-        local best = nil
+        local lowList = {}
+        local hasUrgent = false
+
         for orderIdx, axis in ipairs(PT.SelectedCocoaBoosts or {}) do
             local key = COCOA_KEY_MAP[axis]
             local offer = key and M.Util_Cocoa.Offer and M.Util_Cocoa.Offer(key)
             if key and offer then
                 local rem = (M.Cocoa.Remaining and M.Cocoa.Remaining(key)) or 0
                 local roomMin = math.floor(math.max(0, tankSec - rem) / 60)
-                if roomMin >= minRoomMin then
+                if rem < bundleSec and roomMin >= 1 then
                     local costPerMin = (M.Util_Cocoa.CostPerMinute and M.Util_Cocoa.CostPerMinute(offer.Tier)) or 100000000
-                    local affordableMin = (costPerMin > 0) and math.floor(coins / costPerMin) or 0
-                    local wantMin = math.min(roomMin, affordableMin)
-                    if wantMin >= 1 then
-                        local okQ, quote = pcall(M.Util_Cocoa.Quote, offer, rem, wantMin)
-                        local minutes = (okQ and type(quote) == "table" and quote.seconds and (quote.seconds // 60)) or 0
-                        local cost = (okQ and type(quote) == "table" and quote.cost) or math.huge
-                        if okQ and type(quote) == "table" and not quote.reason and minutes >= 1 and coins >= cost then
-                            if not best or rem < best.rem or (rem == best.rem and orderIdx < best.orderIdx) then
-                                best = {
-                                    axis = axis,
-                                    key = key,
-                                    rem = rem,
-                                    orderIdx = orderIdx,
-                                    minutes = minutes,
-                                }
-                            end
+                    local affMin = (costPerMin > 0) and math.floor(coins / costPerMin) or 0
+                    if affMin >= 1 then
+                        table.insert(lowList, {
+                            axis = axis,
+                            key = key,
+                            offer = offer,
+                            rem = rem,
+                            roomMin = roomMin,
+                            costPerMin = costPerMin,
+                            orderIdx = orderIdx,
+                        })
+                        if rem <= triggerSec and (rem <= 45 or affMin >= 5 or affMin >= roomMin) then
+                            hasUrgent = true
                         end
                     end
                 end
             end
         end
 
-        if not best then return false end
+        -- Nobody is close to running out -> stay at farming/eggs/buttons without trekking to Cocoa Stand
+        if not hasUrgent or #lowList == 0 then
+            return false
+        end
+
+        table.sort(lowList, function(a, b)
+            if a.rem ~= b.rem then
+                return a.rem < b.rem
+            end
+            return a.orderIdx < b.orderIdx
+        end)
 
         local range = Net.GetNumberFFlag("PumpkinTycoon_CocoaRange", CONFIG.DefaultCocoaRange)
         local padPos = Move.FindMachinePad(M.Util_Cocoa.MACHINE or "PumpkinTycoonCocoaStand")
-        if padPos then
-            Move.ReturnToOwnIsland()
-            if Move.MoveTo(padPos, math.max(5, range - 3), 3.0) then
-                Cooldowns.LastCocoaBuyAt = os.clock()
-                local ok = Net.PlotInvoke(M.PT_Types.NET.CocoaBuyTime, best.key, best.minutes)
-                if ok then
-                    ctx.Runtime.Status.Event = string.format("Bought Cocoa Boost %s (+%dm)", best.axis, best.minutes)
-                    return true
+        if not padPos then return false end
+
+        Move.ReturnToOwnIsland()
+        if not Move.MoveTo(padPos, math.max(5, range - 3), 3.0) then
+            return false
+        end
+
+        Econ._lastCocoaTripAt = os.clock()
+        local boughtSummary = {}
+        local remainingNeedCount = #lowList
+
+        for _, entry in ipairs(lowList) do
+            local liveCoins = Net.GetPumpkinCoins()
+            local remNow = (M.Cocoa.Remaining and M.Cocoa.Remaining(entry.key)) or entry.rem
+            local roomMin = math.floor(math.max(0, tankSec - remNow) / 60)
+            local affMin = (entry.costPerMin > 0) and math.floor(liveCoins / entry.costPerMin) or 0
+            local shareMin = math.max(1, math.floor(affMin / math.max(1, remainingNeedCount)))
+            local wantMin = math.min(roomMin, affMin, math.min(MAX_TOPUP_MIN, shareMin))
+
+            if wantMin >= 1 then
+                local okQ, quote = pcall(M.Util_Cocoa.Quote, entry.offer, remNow, wantMin)
+                local minutes = (okQ and type(quote) == "table" and quote.seconds and (quote.seconds // 60)) or 0
+                local cost = (okQ and type(quote) == "table" and quote.cost) or math.huge
+                if okQ and type(quote) == "table" and not quote.reason and minutes >= 1 and liveCoins >= cost then
+                    Cooldowns.LastCocoaBuyAt = os.clock()
+                    local ok = Net.PlotInvoke(M.PT_Types.NET.CocoaBuyTime, entry.key, minutes)
+                    if ok then
+                        table.insert(boughtSummary, string.format("%s +%dm", entry.axis, minutes))
+                        task.wait(0.25)
+                    end
                 end
             end
+            remainingNeedCount = remainingNeedCount - 1
+        end
+
+        if #boughtSummary > 0 then
+            ctx.Runtime.Status.Event = "Cocoa Refilled: " .. table.concat(boughtSummary, ", ")
+            return true
         end
         return false
     end

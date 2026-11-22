@@ -292,7 +292,7 @@ function PumpkinTycoonTab.Init(ctx)
     createBoundToggle(tab, {
         name = "Auto Buy Selected Hot Cocoa Boosts",
         flag = "PTAutoBuyCocoa",
-        description = "Buys time at Cocoa Stand within 20 studs",
+        description = "Refills low boosts (+30m max per visit) only when <= 3m remaining",
         value = PT.AutoBuyCocoaBoosts,
     }, function() return PT.AutoBuyCocoaBoosts end, function(v) PT.AutoBuyCocoaBoosts = v end)
 
