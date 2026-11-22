@@ -67,6 +67,7 @@ function NetworkBridge.Init(ctx)
         GUIFX = safeReq(Client, "GUIFX"),
         GUI = safeReq(Client, "GUI"),
         TabController = safeReq(Client, "TabController"),
+        MachineCmds = safeReq(Client, "MachineCmds"),
         Signal = safeReq(Library, "Signal"),
         Directory = safeReq(Library, "Directory"),
         Types = Types,

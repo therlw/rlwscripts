@@ -22,6 +22,7 @@ function AutoFarmSystem.Init(ctx)
 
     local FarmSys = {
         _lastSpeedSyncAt = 0,
+        _lastSpeedAppliedMult = nil,
         _wasSpeedModified = false,
         _fastFarmDirty = false,
         _lastFastFarmAt = 0,
@@ -29,6 +30,11 @@ function AutoFarmSystem.Init(ctx)
         _wasFastFarmActive = false,
         _lastAfResetAt = 0,
         _lastZoneSig = nil,
+        _cachedPlotModel = nil,
+        _cachedPlotCF = nil,
+        _cachedPlotSize = nil,
+        _cachedBzAt = 0,
+        _cachedBzParts = {},
         _petAssignAt = {},
         _zoneDmgRatios = {},
         _ownsVip = false,
@@ -43,12 +49,19 @@ function AutoFarmSystem.Init(ctx)
     }
 
     local function syncPetSpeed()
+        local now = os.clock()
+        if FarmSys._wasSpeedModified and (now - FarmSys._lastSpeedSyncAt) < 1.0 and FarmSys._lastSpeedAppliedMult == States.Farm.PetSpeedMult and States.Farm.InfinitePetSpeed == true then
+            return
+        end
+        FarmSys._lastSpeedSyncAt = now
+
         local PlayerPet = Net.Mod.PlayerPet
         if not PlayerPet or not PlayerPet.GetByPlayer then return end
         local enabled = States.Farm.InfinitePetSpeed == true
         local mult = math.clamp(tonumber(States.Farm.PetSpeedMult) or 25, 2, 100)
 
         if not enabled then
+            FarmSys._lastSpeedAppliedMult = nil
             if FarmSys._wasSpeedModified then
                 FarmSys._wasSpeedModified = false
                 for _, pet in pairs(PlayerPet.GetByPlayer(LocalPlayer) or {}) do
@@ -65,6 +78,7 @@ function AutoFarmSystem.Init(ctx)
         end
 
         FarmSys._wasSpeedModified = true
+        FarmSys._lastSpeedAppliedMult = States.Farm.PetSpeedMult
         for _, pet in pairs(PlayerPet.GetByPlayer(LocalPlayer) or {}) do
             pcall(function()
                 if pet.speedMult ~= mult then
@@ -90,7 +104,12 @@ function AutoFarmSystem.Init(ctx)
     local function getActiveBreakZonePart(inInst, parentId, hrpPos)
         local M = Net.Mod
         if inInst then
-            local parts = Net.GetPumpkinBreakZoneParts and Net.GetPumpkinBreakZoneParts() or {}
+            local now = os.clock()
+            if (now - FarmSys._cachedBzAt) >= 2.0 or #FarmSys._cachedBzParts == 0 then
+                FarmSys._cachedBzAt = now
+                FarmSys._cachedBzParts = Net.GetPumpkinBreakZoneParts and Net.GetPumpkinBreakZoneParts() or {}
+            end
+            local parts = FarmSys._cachedBzParts
             local nearest, nearestDist = nil, math.huge
             for _, zp in ipairs(parts) do
                 if hrpPos and ((M.AutoFarmReach and M.AutoFarmReach.OnZone and M.AutoFarmReach.OnZone(zp, hrpPos))
@@ -227,8 +246,8 @@ function AutoFarmSystem.Init(ctx)
         end
 
         local now = os.clock()
-        if now - FarmSys._lastFastFarmAt < 0.045 then return end
-        if not FarmSys._fastFarmDirty and (now - FarmSys._lastFastWatchdogAt) < 0.25 then return end
+        if now - FarmSys._lastFastFarmAt < 0.12 then return end
+        if not FarmSys._fastFarmDirty and (now - FarmSys._lastFastWatchdogAt) < 0.30 then return end
         FarmSys._lastFastFarmAt = now
         FarmSys._lastFastWatchdogAt = now
         FarmSys._fastFarmDirty = false
@@ -280,12 +299,21 @@ function AutoFarmSystem.Init(ctx)
         FarmSys._lastZoneSig = zoneSig
 
         local plotCF, plotSize = nil, nil
+        local plotSuffix = nil
         if inInst then
             local plotModel = Net.GetPlotModel and Net.GetPlotModel()
             if plotModel then
-                local okBox, cf, sz = pcall(plotModel.GetBoundingBox, plotModel)
-                if okBox then
-                    plotCF, plotSize = cf, sz
+                plotSuffix = "_" .. plotModel.Name
+                if FarmSys._cachedPlotModel == plotModel and FarmSys._cachedPlotCF and FarmSys._cachedPlotSize then
+                    plotCF, plotSize = FarmSys._cachedPlotCF, FarmSys._cachedPlotSize
+                else
+                    local okBox, cf, sz = pcall(plotModel.GetBoundingBox, plotModel)
+                    if okBox then
+                        plotCF, plotSize = cf, sz
+                        FarmSys._cachedPlotModel = plotModel
+                        FarmSys._cachedPlotCF = cf
+                        FarmSys._cachedPlotSize = sz
+                    end
                 end
             end
         end
@@ -300,6 +328,7 @@ function AutoFarmSystem.Init(ctx)
 
         local ownsVip = ownsVIPGamepass()
         local keepBelow = (inInst and States.PumpkinTycoon.AutoKeepPumpkins and M.AutoBreak and M.AutoBreak.Below and M.AutoBreak.Below()) or 0
+        local lpName = LocalPlayer.Name
 
         local candidates = {}
         local candidateByUid = {}
@@ -315,6 +344,37 @@ function AutoFarmSystem.Init(ctx)
                 end
                 if ok and type(pool) == "table" then
                     for mapKey, brk in pairs(pool) do
+                        -- Fast Lua pre-filter: skip foreign breakables, dead targets & Turkey before Instance calls
+                        if type(brk) == "table" then
+                            local rawHp = tonumber(rawget(brk, "health")) or 1
+                            if rawHp <= 0 or rawget(brk, "disableDamage") == true then
+                                continue
+                            end
+                            local rawCA = rawget(brk, "clientAttributes")
+                            if inInst and type(rawCA) == "table" and rawCA.PumpkinTurkey == true then
+                                continue
+                            end
+                            local rawAreaId = rawget(brk, "areaID")
+                            local isPedRaw = inInst and type(rawCA) == "table" and type(rawCA.PumpkinPedestal) == "number"
+                            if inInst and not isPedRaw then
+                                if curBreakZoneId and rawAreaId and rawAreaId ~= curBreakZoneId then
+                                    continue
+                                end
+                                if plotSuffix and type(rawAreaId) == "string" and rawAreaId:match("_%d+$") and rawAreaId:sub(-#plotSuffix) ~= plotSuffix then
+                                    continue
+                                end
+                            elseif isPedRaw then
+                                local rawMod = rawget(brk, "modifier")
+                                local rawModOwner = type(rawMod) == "table" and rawMod.Owner or nil
+                                if rawModOwner ~= nil and rawModOwner ~= lpName then
+                                    continue
+                                end
+                                if plotSuffix and type(rawAreaId) == "string" and rawAreaId:match("_%d+$") and rawAreaId:sub(-#plotSuffix) ~= plotSuffix then
+                                    continue
+                                end
+                            end
+                        end
+
                         local model, ca, dir, bPos, disabled = Utils.unpackBreakable(brk)
                         local uid = getBreakableUID(brk, mapKey, model)
                         local hp = (type(brk) == "table" and tonumber(brk.health)) or 1
@@ -525,7 +585,7 @@ function AutoFarmSystem.Init(ctx)
 
     local function stepCollectOrbs()
         if not States.Farm.AutoCollectOrbs then return end
-        if os.clock() - FarmSys._lastOrbAt < 0.20 then return end
+        if os.clock() - FarmSys._lastOrbAt < 0.35 then return end
         FarmSys._lastOrbAt = os.clock()
 
         local things = workspace:FindFirstChild("__THINGS")
@@ -811,7 +871,16 @@ function AutoFarmSystem.Init(ctx)
             end))
         end
 
-        Lifecycle.SpawnLoop("AutoFarmWorker", 0.20, function()
+        Lifecycle.SpawnLoop("AutoFarmWorker", function()
+            local f = States.Farm
+            if f.AutoCollectOrbs or f.AutoUseUltimate or f.AutoTeleportBestArea or f.AutoBuyNextArea
+                or f.AutoCompleteGateQuest or f.AutoAreaQuest or f.AutoRebirth or f.AutoTeleportBestWorld
+                or f.AutoUseMiscItems or f.AutoUseSprinkler or f.AutoUseTNTCrate
+                or f.AutoBuyPetEquipSlots or f.AutoBuyEggBundleSlots or f.InfinitePetSpeed then
+                return 0.35
+            end
+            return 2.0
+        end, function()
             syncPetSpeed()
             stepCollectOrbs()
             stepUseUltimate()

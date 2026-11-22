@@ -170,9 +170,15 @@ function EventCoordinator.Init(ctx)
         return out
     end
 
-    local function safeStat(statEl, value)
+    local uiTextCache = {}
+    local uiStatCache = {}
+
+    local function safeStat(key, statEl, value)
+        local num = tonumber(value) or 0
+        if uiStatCache[key] == num then return end
         if statEl and statEl.Set then
-            pcall(function() statEl:Set(tonumber(value) or 0) end)
+            uiStatCache[key] = num
+            pcall(function() statEl:Set(num) end)
         end
     end
 
@@ -205,33 +211,35 @@ function EventCoordinator.Init(ctx)
 
     function EventCoordinator.Start()
         Lifecycle.SpawnLoop("PumpkinEventCoordinator", function()
-            return ctx.Config.MainWorkerInterval or 0.35
+            return ctx.Config.MainWorkerInterval or 0.40
         end, function()
             Coordinator.StepOnce()
         end)
 
-        Lifecycle.SpawnLoop("PumpkinStatusUpdater", 0.75, function()
+        Lifecycle.SpawnLoop("PumpkinStatusUpdater", 1.25, function()
             local UI = ctx.UI
             if not UI then return end
             local st = ctx.Runtime.Status
             local te = ctx.Runtime.Telemetry
-            local function safeSet(el, txt)
+            local function safeSet(key, el, txt)
+                if uiTextCache[key] == txt then return end
                 if el and el.Set then
+                    uiTextCache[key] = txt
                     pcall(function() el:Set(txt) end)
                 end
             end
-            safeSet(UI.PumpkinStatusText, translateSummaryBlock(Coordinator.FormatStatusSummary()))
-            safeStat(UI.PTStatTokens, Net.GetPumpkinTokens())
-            safeStat(UI.PTStatNets, Net.GetMiscCount("Pet Net"))
-            safeStat(UI.PTStatButtons, te.ButtonsBought)
-            safeSet(UI.FarmStatusText, string.format("%s | Vuruş: %d", translateStatus(st.Farm), te.TurkeyHits))
-            safeSet(UI.MainStatusText, translateStatus(st.Main))
-            safeSet(UI.EggStatusText, translateStatus(st.Egg))
-            safeSet(UI.AutomaticStatusText, translateStatus(st.Automatic))
-            safeSet(UI.FishingStatusText, string.format("%s | Tutulan: %d", translateStatus(st.Fishing), te.FishCaught))
-            safeSet(UI.FarmingStatusText, translateStatus(st.Farming))
-            safeSet(UI.MailboxStatusText, string.format("%s | Gönderilen: %d", translateStatus(st.Mailbox), te.PetsMailed))
-            safeSet(UI.WebhookStatusText, string.format("%s | Gönderilen: %d", translateStatus(st.Webhook), te.WebhooksSent))
+            safeSet("pt", UI.PumpkinStatusText, translateSummaryBlock(Coordinator.FormatStatusSummary()))
+            safeStat("tok", UI.PTStatTokens, Net.GetPumpkinTokens())
+            safeStat("net", UI.PTStatNets, Net.GetMiscCount("Pet Net"))
+            safeStat("btn", UI.PTStatButtons, te.ButtonsBought)
+            safeSet("farm", UI.FarmStatusText, string.format("%s | Vuruş: %d", translateStatus(st.Farm), te.TurkeyHits))
+            safeSet("main", UI.MainStatusText, translateStatus(st.Main))
+            safeSet("egg", UI.EggStatusText, translateStatus(st.Egg))
+            safeSet("auto", UI.AutomaticStatusText, translateStatus(st.Automatic))
+            safeSet("fish", UI.FishingStatusText, string.format("%s | Tutulan: %d", translateStatus(st.Fishing), te.FishCaught))
+            safeSet("farming", UI.FarmingStatusText, translateStatus(st.Farming))
+            safeSet("mail", UI.MailboxStatusText, string.format("%s | Gönderilen: %d", translateStatus(st.Mailbox), te.PetsMailed))
+            safeSet("wh", UI.WebhookStatusText, string.format("%s | Gönderilen: %d", translateStatus(st.Webhook), te.WebhooksSent))
         end)
     end
 

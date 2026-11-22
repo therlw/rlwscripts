@@ -240,7 +240,12 @@ function FishingWorldSystem.Init(ctx)
     end
 
     function FishingWorldSystem.Start()
-        Lifecycle.SpawnLoop("FishingWorldWorker", 0.45, function()
+        Lifecycle.SpawnLoop("FishingWorldWorker", function()
+            if isInFishingEvent() then
+                return 0.45
+            end
+            return 2.5
+        end, function()
             if not isInFishingEvent() then
                 if States.FishingWorld.AutoEventFishing or States.FishingWorld.AutoBuyNearestEgg then
                     ctx.Runtime.Status.Fishing = "Waiting: Enter Fishing Event instance"

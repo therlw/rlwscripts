@@ -256,6 +256,7 @@ function Context.New(opts)
             DisablePetsRendering = false,
             DisableConfettiRendering = false,
             OptimizeGame = false,
+            HideMachineGuis = true,
         },
 
         Webhook = {

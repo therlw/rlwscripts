@@ -13,9 +13,20 @@ function AutoTapEngine.Init(ctx)
 
     local Engine = {
         _lastTapAt = 0,
+        _cachedInterval = 0.125,
+        _cachedIntervalAt = 0,
+        _cachedTargetUid = nil,
+        _cachedTargetAt = 0,
+        _cachedTargetIsTurkey = false,
     }
 
     local function computeLegitTapInterval()
+        local now = os.clock()
+        if now - Engine._cachedIntervalAt < 2.0 then
+            return Engine._cachedInterval
+        end
+        Engine._cachedIntervalAt = now
+
         local M = Net.Mod
         local cps = 8
         if M.EnchantCmds and M.EnchantCmds.GetPower then
@@ -35,7 +46,8 @@ function AutoTapEngine.Init(ctx)
         end
 
         local scale = math.clamp(tonumber(States.Farm.TapRateScale) or 1.0, 0.35, 1.0)
-        return 1 / math.max(1, cps * scale)
+        Engine._cachedInterval = 1 / math.max(1, cps * scale)
+        return Engine._cachedInterval
     end
 
     local function isBreakableTapAllowed(model, ca, dir, pos, disabled, hrpPos, maxDist)
@@ -90,6 +102,11 @@ function AutoTapEngine.Init(ctx)
             end
         end
 
+        local myPlot = inInst and Net.GetPlotModel and Net.GetPlotModel() or nil
+        local plotSuffix = myPlot and ("_" .. myPlot.Name) or nil
+        local curBreakZoneId = (inInst and M.MapCmds and M.MapCmds.GetCurrentBreakZone and M.MapCmds.GetCurrentBreakZone()) or nil
+        local turkeyPriorityMode = (States.Farm.TapTargetMode == "Best / Turkey Priority")
+
         local pool = {}
         if inInst then
             for _, cls in ipairs({ "Chest", "Normal" }) do
@@ -116,10 +133,26 @@ function AutoTapEngine.Init(ctx)
         local nearestDist = math.huge
 
         for uid, brk in pairs(pool) do
+            -- Fast raw pre-filter: skip foreign players' breakables in O(1) without Instance calls
+            if type(brk) == "table" then
+                if rawget(brk, "disableDamage") == true then continue end
+                local rawCA = rawget(brk, "clientAttributes")
+                local isTurkeyRaw = (type(rawCA) == "table" and rawCA.PumpkinTurkey == true)
+                local rawArea = rawget(brk, "areaID")
+                if inInst and not isTurkeyRaw then
+                    local isPedRaw = (type(rawCA) == "table" and type(rawCA.PumpkinPedestal) == "number")
+                    if not isPedRaw and curBreakZoneId and rawArea and rawArea ~= curBreakZoneId then
+                        continue
+                    elseif plotSuffix and type(rawArea) == "string" and rawArea:match("_%d+$") and rawArea:sub(-#plotSuffix) ~= plotSuffix then
+                        continue
+                    end
+                end
+            end
+
             local model, ca, dir, pos, disabled = Utils.unpackBreakable(brk)
             local okAllowed, dist = isBreakableTapAllowed(model, ca, dir, pos, disabled, hrp.Position, maxDist)
             if okAllowed then
-                if States.Farm.TapTargetMode == "Best / Turkey Priority" and type(ca) == "table" and ca.PumpkinTurkey == true then
+                if turkeyPriorityMode and type(ca) == "table" and ca.PumpkinTurkey == true then
                     priorityTurkey = uid
                     break
                 end
@@ -134,12 +167,28 @@ function AutoTapEngine.Init(ctx)
             end
         end
 
-        return priorityTurkey or priorityChest or nearestUid
+        local chosen = priorityTurkey or priorityChest or nearestUid
+        Engine._cachedTargetIsTurkey = (priorityTurkey ~= nil)
+        return chosen, maxDist
+    end
+
+    local function isCachedTargetValid(uid, maxDist)
+        if not uid then return false end
+        local M = Net.Mod
+        if not M.BreakableFrontend or not M.BreakableFrontend.Get then return false end
+        local okGet, brk = pcall(M.BreakableFrontend.Get, uid)
+        if not okGet or not brk then return false end
+        local _, hrp = Utils.getCharacterParts()
+        if not hrp then return false end
+        local model, ca, dir, pos, disabled = Utils.unpackBreakable(brk)
+        local okAllowed = isBreakableTapAllowed(model, ca, dir, pos, disabled, hrp.Position, maxDist or (ctx.Config.DefaultMaxClickDist or 150))
+        return okAllowed == true
     end
 
     function Engine.Step()
         if not States.Farm.AutoTap then
             ctx.Runtime.Status.Farm = "Auto Tap off"
+            Engine._cachedTargetUid = nil
             return
         end
 
@@ -149,17 +198,29 @@ function AutoTapEngine.Init(ctx)
         if isFlying then return end
 
         local interval = computeLegitTapInterval()
-        if os.clock() - Engine._lastTapAt < interval then
+        local now = os.clock()
+        if now - Engine._lastTapAt < interval then
             return
         end
 
-        local uid = selectBestTarget()
+        local uid = Engine._cachedTargetUid
+        if not uid or (now - Engine._cachedTargetAt) >= 0.25 or not isCachedTargetValid(uid) then
+            local selected, maxDist = selectBestTarget()
+            uid = selected
+            Engine._cachedTargetUid = uid
+            Engine._cachedTargetAt = now
+            if uid and not isCachedTargetValid(uid, maxDist) then
+                uid = nil
+                Engine._cachedTargetUid = nil
+            end
+        end
+
         if not uid then
             ctx.Runtime.Status.Farm = "Auto Tap: scanning breakables in reach..."
             return
         end
 
-        Engine._lastTapAt = os.clock()
+        Engine._lastTapAt = now
         ctx.Runtime.Telemetry.TurkeyHits = ctx.Runtime.Telemetry.TurkeyHits + 1
         ctx.Runtime.Status.Farm = string.format("Tapping UID %s (%.1f cps)", tostring(uid), 1 / interval)
 
@@ -170,7 +231,20 @@ function AutoTapEngine.Init(ctx)
     end
 
     function AutoTapEngine.Start()
-        Lifecycle.SpawnLoop("AutoTapEngine", 0.04, function()
+        local BF = Net.Mod.BreakableFrontend
+        if BF and BF.Destroyed and BF.Destroyed.Connect then
+            Lifecycle.TrackConnection(BF.Destroyed:Connect(function()
+                Engine._cachedTargetUid = nil
+                Engine._cachedTargetAt = 0
+            end))
+        end
+
+        Lifecycle.SpawnLoop("AutoTapEngine", function()
+            if not States.Farm.AutoTap then
+                return 1.5
+            end
+            return math.max(0.075, (Engine._cachedInterval or 0.125) - 0.005)
+        end, function()
             Engine.Step()
         end)
     end

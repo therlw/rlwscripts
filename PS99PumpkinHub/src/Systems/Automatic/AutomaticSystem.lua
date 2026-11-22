@@ -297,7 +297,16 @@ function AutomaticSystem.Init(ctx)
     end
 
     function AutomaticSystem.Start()
-        Lifecycle.SpawnLoop("AutomaticWorker", 0.85, function()
+        Lifecycle.SpawnLoop("AutomaticWorker", function()
+            local a = States.Automatic
+            if a.AutoBuyBoosts or a.AutoBuyWingsUpgrades or a.AutoEatFruits or a.AutoUseToys
+                or a.AutoUsePotions or a.AutoOpenGifts or a.AutoOpenLootboxes or a.AutoCombineKeys
+                or a.AutoOpenChests or a.AutoSpinWheels or a.AutoUpgradeFruits
+                or a.AutoUpgradePotions or a.AutoUpgradeEnchants then
+                return 0.85
+            end
+            return 2.5
+        end, function()
             stepUpgradesAndWings()
             stepConsumablesFruitsToysPotions()
             stepOpenGiftsAndLootboxes()

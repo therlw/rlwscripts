@@ -21,12 +21,21 @@ function PumpkinOptimizer.Init(ctx)
     local Optimizer = {
         Enabled = false,
         InEventZone = false,
+        HideMachineGuis = false,
         _savedProps = {},
         _connections = {},
         _eventConns = {},
+        _machGuiConns = {},
+        _origOpenTab = nil,
         _parkedMainWorld = {},
+        _cleanedPlots = setmetatable({}, { __mode = "k" }),
+        _pendingForeignBrk = {},
+        _foreignBrkScheduled = false,
+        _lastDebrisSweepAt = 0,
+        _cachedPlotModel = nil,
+        _cachedPlotCF = nil,
+        _cachedPlotSize = nil,
         _eventPurgeAt = 0,
-        _decorRescanScheduled = false,
         _destroyedCount = 0,
         LastStats = {
             destroyed = 0,
@@ -242,6 +251,20 @@ function PumpkinOptimizer.Init(ctx)
         end
     end
 
+    local function isDebrisCandidate(d)
+        local name = d.Name
+        if name == "TurkeyTag" or name == "TurkeyBreakRing" or name == "TurkeyBeacon" or name:find("Loot", 1, true)
+            or name:find("Tag", 1, true) or name:find("Sign", 1, true) or name:find("Board", 1, true)
+            or name:find("Aura", 1, true) or (name:find("Host", 1, true) and not name:find("ParticleHost", 1, true)) then
+            return false
+        end
+        if FLASH_NAMES[name] or name:find("ParticleHost", 1, true) or name:find("Confetti", 1, true)
+            or name:find("Flash", 1, true) or name:find("Shockwave", 1, true) or name:find("Feathers", 1, true) then
+            return true
+        end
+        return d:IsA("ParticleEmitter") or d:IsA("Trail") or d:IsA("Beam")
+    end
+
     local function scrubDebrisChild(d)
         if not Optimizer.Enabled or not d or not d.Parent then return end
         if d:IsA("LayerCollector") or d:IsA("BillboardGui") or d:IsA("SurfaceGui") or d:IsA("ScreenGui") then
@@ -370,7 +393,24 @@ function PumpkinOptimizer.Init(ctx)
         return false
     end
 
-    local function scrubForeignBreakableModel(model, myPlotCF, myPlotSize)
+    local function getCachedPlotBox()
+        local myPlot = Net.GetPlotModel()
+        if not myPlot then return nil, nil, nil, nil end
+        local suffix = "_" .. myPlot.Name
+        if Optimizer._cachedPlotModel == myPlot and Optimizer._cachedPlotCF and Optimizer._cachedPlotSize then
+            return myPlot, suffix, Optimizer._cachedPlotCF, Optimizer._cachedPlotSize
+        end
+        local okBox, myCF, mySize = pcall(myPlot.GetBoundingBox, myPlot)
+        if okBox and myCF and mySize then
+            Optimizer._cachedPlotModel = myPlot
+            Optimizer._cachedPlotCF = myCF
+            Optimizer._cachedPlotSize = mySize
+            return myPlot, suffix, myCF, mySize
+        end
+        return myPlot, suffix, nil, nil
+    end
+
+    local function scrubForeignBreakableModel(model, myPlotCF, myPlotSize, myPlotSuffix)
         if not Optimizer.Enabled or not Optimizer.InEventZone then return end
         if not model or not model.Parent or not model:IsA("Model") then return end
         if model:GetAttribute("ParentID") ~= "PumpkinTycoon" then return end
@@ -378,8 +418,7 @@ function PumpkinOptimizer.Init(ctx)
         if model:GetAttribute("OwnerUsername") == LocalPlayer.Name then return end
 
         local areaId = model:GetAttribute("AreaID")
-        local myPlot = Net.GetPlotModel()
-        if type(areaId) == "string" and myPlot and areaId:sub(-#myPlot.Name - 1) == ("_" .. myPlot.Name) then
+        if type(areaId) == "string" and myPlotSuffix and areaId:sub(-#myPlotSuffix) == myPlotSuffix then
             return
         end
 
@@ -401,7 +440,7 @@ function PumpkinOptimizer.Init(ctx)
             return
         end
 
-        -- Foreign player breakable: purge meshes, SurfaceAppearance, ClickDetector, FX; keep lightweight PrimaryPart if any
+        -- Foreign player breakable: strip heavy meshes/FX reversibly or destroy non-primary visual children cleanly
         local primary = model.PrimaryPart
         for _, d in ipairs(model:GetChildren()) do
             if d ~= primary then
@@ -639,7 +678,8 @@ function PumpkinOptimizer.Init(ctx)
                         local sub = plotModel:FindFirstChild(subName)
                         if sub then clearChildrenSafe(sub, budget) end
                     end
-                else
+                elseif not Optimizer._cleanedPlots[plotModel] then
+                    Optimizer._cleanedPlots[plotModel] = true
                     for _, d in ipairs(plotModel:GetDescendants()) do
                         if budget and not stepBudget(budget) then return end
                         if d:IsA("BasePart") then
@@ -668,11 +708,11 @@ function PumpkinOptimizer.Init(ctx)
         -- 4. Foreign breakables inside __THINGS.Breakables
         local brkFolder = things and things:FindFirstChild("Breakables")
         if brkFolder and myPlot then
-            local okBox, myCF, mySize = pcall(myPlot.GetBoundingBox, myPlot)
-            if okBox and myCF and mySize then
+            local _, mySuffix, myCF, mySize = getCachedPlotBox()
+            if myCF and mySize then
                 for _, model in ipairs(brkFolder:GetChildren()) do
                     if budget and not stepBudget(budget) then return end
-                    scrubForeignBreakableModel(model, myCF, mySize)
+                    scrubForeignBreakableModel(model, myCF, mySize, mySuffix)
                 end
             end
         end
@@ -723,28 +763,109 @@ function PumpkinOptimizer.Init(ctx)
 
         local myUidStr = tostring(LocalPlayer.UserId)
 
-        local function scheduleDecorSweep(decor)
-            if Optimizer._decorRescanScheduled then return end
-            Optimizer._decorRescanScheduled = true
-            task.delay(2.5, function()
-                Optimizer._decorRescanScheduled = false
-                if Optimizer.Enabled and Optimizer.InEventZone and decor and decor.Parent then
-                    purgeOwnDecor(decor, makeBudget())
+        local function cleanDecorBatchItem(item, budget)
+            if not Optimizer.Enabled or not Optimizer.InEventZone or not item or not item.Parent then return end
+            if item.Name == "Props" then
+                purgeDecorContentsKeepShells(item, budget)
+            elseif item.Name == "Ground" then
+                stripVisualsOnTree(item, true)
+            elseif item.Name == "Front" then
+                hideLeaderboardVisuals(item)
+                stripVisualsOnTree(item, false)
+            elseif item.Name:match("^%d+ |") then
+                for _, sub in ipairs(item:GetChildren()) do
+                    if sub.Name == "Pieces" then
+                        for _, subItem in ipairs(sub:GetChildren()) do
+                            if budget and not stepBudget(budget) then return end
+                            if isWalkableOrFunctional(subItem) or hasGameTag(subItem) then
+                                stripVisualsOnTree(subItem, false)
+                            elseif subItem:IsA("Model") or subItem:IsA("Folder") or isSectionTrackedNodeFast(subItem) or #subItem:GetChildren() > 0 then
+                                purgeDecorContentsKeepShells(subItem, budget)
+                            elseif pcall(function() subItem:Destroy() end) then
+                                trackDestroyed(1)
+                            end
+                        end
+                    else
+                        if budget and not stepBudget(budget) then return end
+                        if isWalkableOrFunctional(sub) or hasGameTag(sub) then
+                            stripVisualsOnTree(sub, false)
+                        elseif sub:IsA("Model") or sub:IsA("Folder") or isSectionTrackedNodeFast(sub) or #sub:GetChildren() > 0 then
+                            purgeDecorContentsKeepShells(sub, budget)
+                        elseif pcall(function() sub:Destroy() end) then
+                            trackDestroyed(1)
+                        end
+                    end
+                end
+            elseif isWalkableOrFunctional(item) or hasGameTag(item) then
+                stripVisualsOnTree(item, false)
+            elseif item:IsA("Model") or item:IsA("Folder") or isSectionTrackedNodeFast(item) or #item:GetChildren() > 0 then
+                purgeDecorContentsKeepShells(item, budget)
+            elseif pcall(function() item:Destroy() end) then
+                trackDestroyed(1)
+            end
+        end
+
+        local pendingDecorQueue = {}
+        local decorFlushScheduled = false
+        local function enqueueDecorClean(inst)
+            if not Optimizer.Enabled or not Optimizer.InEventZone or not inst then return end
+            table.insert(pendingDecorQueue, inst)
+            if decorFlushScheduled then return end
+            decorFlushScheduled = true
+            task.delay(1.5, function()
+                decorFlushScheduled = false
+                if not Optimizer.Enabled or not Optimizer.InEventZone then
+                    table.clear(pendingDecorQueue)
+                    return
+                end
+                local batch = pendingDecorQueue
+                pendingDecorQueue = {}
+                local budget = makeBudget()
+                for _, node in ipairs(batch) do
+                    if not stepBudget(budget) then break end
+                    cleanDecorBatchItem(node, budget)
                 end
             end)
+        end
+
+        local function watchZoneChildFolder(zoneFolder)
+            if not zoneFolder then return end
+            table.insert(Optimizer._eventConns, Lifecycle.TrackConnection(zoneFolder.ChildAdded:Connect(function(c)
+                if c.Name == "Pieces" then
+                    watchZoneChildFolder(c)
+                end
+                enqueueDecorClean(c)
+            end)))
+            local pieces = zoneFolder:FindFirstChild("Pieces")
+            if pieces then
+                table.insert(Optimizer._eventConns, Lifecycle.TrackConnection(pieces.ChildAdded:Connect(enqueueDecorClean)))
+            end
+        end
+
+        local function watchOwnDecorIncremental(decor)
+            if not decor then return end
+            table.insert(Optimizer._eventConns, Lifecycle.TrackConnection(decor.ChildAdded:Connect(function(ch)
+                if ch.Name:match("^%d+ |") or ch.Name == "Props" then
+                    watchZoneChildFolder(ch)
+                end
+                enqueueDecorClean(ch)
+            end)))
+            for _, ch in ipairs(decor:GetChildren()) do
+                if ch.Name:match("^%d+ |") or ch.Name == "Props" then
+                    watchZoneChildFolder(ch)
+                end
+            end
         end
 
         local function attachPTIWatcher(pti)
             if not pti then return end
             table.insert(Optimizer._eventConns, Lifecycle.TrackConnection(pti.ChildAdded:Connect(function(child)
                 if not Optimizer.Enabled or not Optimizer.InEventZone then return end
-                task.delay(0.45, function()
+                task.delay(0.5, function()
                     if not Optimizer.Enabled or not Optimizer.InEventZone or not child.Parent then return end
                     if child.Name == myUidStr then
                         purgeOwnDecor(child, makeBudget())
-                        table.insert(Optimizer._eventConns, Lifecycle.TrackConnection(child.DescendantAdded:Connect(function()
-                            scheduleDecorSweep(child)
-                        end)))
+                        watchOwnDecorIncremental(child)
                     elseif child.Name ~= "Shared" then
                         purgeForeignIslandDecor(child, makeBudget())
                     end
@@ -752,9 +873,7 @@ function PumpkinOptimizer.Init(ctx)
             end)))
             local myDecor = pti:FindFirstChild(myUidStr)
             if myDecor then
-                table.insert(Optimizer._eventConns, Lifecycle.TrackConnection(myDecor.DescendantAdded:Connect(function()
-                    scheduleDecorSweep(myDecor)
-                end)))
+                watchOwnDecorIncremental(myDecor)
             end
         end
 
@@ -771,14 +890,31 @@ function PumpkinOptimizer.Init(ctx)
         if brkFolder then
             table.insert(Optimizer._eventConns, Lifecycle.TrackConnection(brkFolder.ChildAdded:Connect(function(model)
                 if not Optimizer.Enabled or not Optimizer.InEventZone then return end
-                task.delay(0.25, function()
-                    if not Optimizer.Enabled or not Optimizer.InEventZone or not model.Parent then return end
-                    local myPlot = Net.GetPlotModel()
-                    if myPlot then
-                        local okBox, myCF, mySize = pcall(myPlot.GetBoundingBox, myPlot)
-                        if okBox and myCF and mySize then
-                            scrubForeignBreakableModel(model, myCF, mySize)
-                        end
+                local _, suffix = getCachedPlotBox()
+                local areaId = model:GetAttribute("AreaID")
+                if suffix and type(areaId) == "string" and areaId:sub(-#suffix) == suffix then
+                    return
+                end
+                if isTurkeyBreakableModel(model) or model:GetAttribute("OwnerUsername") == LocalPlayer.Name then
+                    return
+                end
+                table.insert(Optimizer._pendingForeignBrk, model)
+                if Optimizer._foreignBrkScheduled then return end
+                Optimizer._foreignBrkScheduled = true
+                task.delay(3.0, function()
+                    Optimizer._foreignBrkScheduled = false
+                    if not Optimizer.Enabled or not Optimizer.InEventZone then
+                        table.clear(Optimizer._pendingForeignBrk)
+                        return
+                    end
+                    local batch = Optimizer._pendingForeignBrk
+                    Optimizer._pendingForeignBrk = {}
+                    local _, curSuffix, myCF, mySize = getCachedPlotBox()
+                    if not (myCF and mySize) then return end
+                    local budget = makeBudget()
+                    for _, m in ipairs(batch) do
+                        if not stepBudget(budget) then break end
+                        scrubForeignBreakableModel(m, myCF, mySize, curSuffix)
                     end
                 end)
             end)))
@@ -804,7 +940,7 @@ function PumpkinOptimizer.Init(ctx)
         end
     end
 
-    local function updateStats()
+    local function updateStats(includeWorkspaceCount)
         local memMB = 0
         pcall(function()
             memMB = math.floor(game:GetService("Stats"):GetTotalMemoryUsageMb() * 10 + 0.5) / 10
@@ -816,7 +952,7 @@ function PumpkinOptimizer.Init(ctx)
         Optimizer.LastStats = {
             destroyed = Optimizer._destroyedCount,
             parked = parkedCount,
-            workspaceDesc = #workspace:GetDescendants(),
+            workspaceDesc = includeWorkspaceCount and #workspace:GetDescendants() or (Optimizer.LastStats.workspaceDesc or 0),
             memoryMB = memMB,
         }
     end
@@ -827,6 +963,7 @@ function PumpkinOptimizer.Init(ctx)
         task.spawn(function()
             local ok, err = pcall(function()
                 if not Optimizer.Enabled then return end
+                Optimizer._lastDebrisSweepAt = os.clock()
                 purgeDebrisAndLighting()
                 if Optimizer.InEventZone then
                     local budget = makeBudget()
@@ -840,9 +977,8 @@ function PumpkinOptimizer.Init(ctx)
                     task.wait()
                     if not Optimizer.Enabled or not Optimizer.InEventZone then return end
                     purgeOtherPlayersAndPets()
-                    pcall(function() collectgarbage("step", 300) end)
                 end
-                updateStats()
+                updateStats(false)
             end)
             Optimizer._purgeRunning = false
             if not ok then
@@ -930,7 +1066,7 @@ function PumpkinOptimizer.Init(ctx)
         local debris = workspace:FindFirstChild("__DEBRIS")
         if debris then
             table.insert(Optimizer._connections, Lifecycle.TrackConnection(debris.ChildAdded:Connect(function(child)
-                if Optimizer.Enabled then
+                if Optimizer.Enabled and isDebrisCandidate(child) then
                     task.defer(scrubDebrisChild, child)
                 end
             end)))
@@ -1079,13 +1215,159 @@ function PumpkinOptimizer.Init(ctx)
                 end
             end
             table.insert(Optimizer._gameConns, Lifecycle.TrackConnection(debris.ChildAdded:Connect(function(ch)
-                if ctx.States.Optimization.OptimizeGame then
+                if ctx.States.Optimization.OptimizeGame and (ch:IsA("ParticleEmitter") or ch.Name:find("Flash", 1, true) or ch.Name:find("Confetti", 1, true)) then
                     task.defer(function()
-                        if ch.Parent and (ch:IsA("ParticleEmitter") or ch.Name:find("Flash") or ch.Name:find("Confetti")) then
+                        if ch.Parent then
                             pcall(function() ch:Destroy() end)
                         end
                     end)
                 end
+            end)))
+        end
+    end
+
+    local SUPPRESSED_MACHINE_SCREENS = {
+        Merchant = true,
+        PumpkinMerchant = true,
+        PumpkinTycoonUpgradeMachine = true,
+        PumpkinTycoonCocoaStand = true,
+        GoldMachine = true,
+        RainbowMachine = true,
+        FuseMachine = true,
+        TycoonTeleportMachine = true,
+        UpgradePotionsMachine = true,
+        UpgradeEnchantsMachine = true,
+        UpgradeFruitsMachine = true,
+        PetEquipMachine = true,
+        EggSlotsMachine = true,
+        TransferMachine = true,
+    }
+
+    local GUARDED_MACHINE_NAMES = {
+        "PetNetStore",
+        "PumpkinMerchant",
+        "PumpkinTycoonUpgradeMachine",
+        "PumpkinTycoonCocoaStand",
+        "GoldMachine",
+        "RainbowMachine",
+        "FuseMachine",
+        "TycoonTeleportMachine",
+        "UpgradePotionsMachine",
+        "UpgradeEnchantsMachine",
+        "UpgradeFruitsMachine",
+        "PetEquipMachine",
+        "EggSlotsMachine",
+        "TransferMachine",
+    }
+
+    local function suppressMachineScreenGui(gui)
+        if not Optimizer.HideMachineGuis or not gui or not gui:IsA("ScreenGui") then return end
+        if not SUPPRESSED_MACHINE_SCREENS[gui.Name] then return end
+        if gui.Enabled then
+            pcall(function() gui.Enabled = false end)
+        end
+        table.insert(Optimizer._machGuiConns, Lifecycle.TrackConnection(gui:GetPropertyChangedSignal("Enabled"):Connect(function()
+            if Optimizer.HideMachineGuis and gui.Enabled then
+                pcall(function() gui.Enabled = false end)
+                local TC = Net.Mod.TabController
+                if TC and TC.Get and TC.CloseTab and SUPPRESSED_MACHINE_SCREENS[TC.Get()] then
+                    pcall(TC.CloseTab)
+                end
+            end
+        end)))
+    end
+
+    function Optimizer.SetHideMachineGuis(enable)
+        local target = enable == true
+        ctx.States.Optimization.HideMachineGuis = target
+        Optimizer.HideMachineGuis = target
+        clearWatchers(Optimizer._machGuiConns)
+
+        local TC = Net.Mod.TabController
+        local MC = Net.Mod.MachineCmds
+
+        local function collectGuardedNames()
+            local set = {}
+            for _, n in ipairs(GUARDED_MACHINE_NAMES) do set[n] = true end
+            local dirMerch = Net.Mod.Directory and Net.Mod.Directory.Merchants
+            if type(dirMerch) == "table" then
+                for _, row in pairs(dirMerch) do
+                    if type(row) == "table" and type(row.MachineName) == "string" then
+                        set[row.MachineName] = true
+                    end
+                end
+            end
+            return set
+        end
+
+        if not target then
+            if TC and Optimizer._origOpenTab and TC.OpenTab ~= Optimizer._origOpenTab then
+                TC.OpenTab = Optimizer._origOpenTab
+                Optimizer._origOpenTab = nil
+            end
+            if MC then
+                for name in pairs(collectGuardedNames()) do
+                    if MC.AllowOpen then pcall(MC.AllowOpen, name) end
+                    if MC.SetOpenGuard then pcall(MC.SetOpenGuard, name, nil) end
+                end
+            end
+            return
+        end
+
+        -- 1. Block MachineCmds pad triggers cleanly
+        if MC then
+            local denyGuard = function()
+                return not Optimizer.HideMachineGuis
+            end
+            for name in pairs(collectGuardedNames()) do
+                if MC.PreventOpen then pcall(MC.PreventOpen, name) end
+                if MC.SetOpenGuard then pcall(MC.SetOpenGuard, name, denyGuard) end
+            end
+        end
+
+        -- 2. Wrap TabController.OpenTab so Merchant/PetNetStore & machines never blur/open screen
+        if TC and type(TC.OpenTab) == "function" then
+            if not Optimizer._origOpenTab then
+                Optimizer._origOpenTab = TC.OpenTab
+            end
+            local origOpen = Optimizer._origOpenTab
+            TC.OpenTab = function(tabId, ...)
+                if Optimizer.HideMachineGuis and SUPPRESSED_MACHINE_SCREENS[tabId] then
+                    return false
+                end
+                return origOpen(tabId, ...)
+            end
+
+            -- Close immediately if already open right now
+            if TC.Get and TC.CloseTab then
+                local cur = TC.Get()
+                if cur and SUPPRESSED_MACHINE_SCREENS[cur] then
+                    pcall(TC.CloseTab)
+                end
+            end
+
+            if TC.Opened and TC.Opened.Connect then
+                table.insert(Optimizer._machGuiConns, Lifecycle.TrackConnection(TC.Opened:Connect(function(tabId)
+                    if Optimizer.HideMachineGuis and SUPPRESSED_MACHINE_SCREENS[tabId] then
+                        task.defer(function()
+                            if Optimizer.HideMachineGuis and TC.IsOpen and TC.IsOpen(tabId) then
+                                pcall(TC.CloseTab)
+                            end
+                        end)
+                    end
+                end)))
+            end
+        end
+
+        -- 3. Guard PlayerGui._MACHINES ScreenGuis as a final safety net
+        local pg = ctx.Roblox.PlayerGui
+        local machinesFolder = pg and pg:FindFirstChild("_MACHINES")
+        if machinesFolder then
+            for _, child in ipairs(machinesFolder:GetChildren()) do
+                suppressMachineScreenGui(child)
+            end
+            table.insert(Optimizer._machGuiConns, Lifecycle.TrackConnection(machinesFolder.ChildAdded:Connect(function(child)
+                suppressMachineScreenGui(child)
             end)))
         end
     end
@@ -1097,9 +1379,12 @@ function PumpkinOptimizer.Init(ctx)
         Optimizer.SetDisablePetsRendering(Opt.DisablePetsRendering)
         Optimizer.SetDisableConfettiRendering(Opt.DisableConfettiRendering)
         Optimizer.SetOptimizeGame(Opt.OptimizeGame)
+        Optimizer.SetHideMachineGuis(Opt.HideMachineGuis ~= false)
     end
 
     function PumpkinOptimizer.Start()
+        Optimizer.SetHideMachineGuis(ctx.States.Optimization.HideMachineGuis ~= false)
+
         -- Monitor event-zone entry/exit immediately via __INSTANCE_CONTAINER.Active
         local things = workspace:FindFirstChild("__THINGS")
         local ic = things and things:FindFirstChild("__INSTANCE_CONTAINER")
@@ -1117,12 +1402,18 @@ function PumpkinOptimizer.Init(ctx)
             end))
         end
 
-        Lifecycle.SpawnLoop("PumpkinOptimizerSweep", 4.0, function()
+        Lifecycle.SpawnLoop("PumpkinOptimizerSweep", function()
+            return Optimizer.Enabled and 10.0 or 3.0
+        end, function()
             if not Optimizer.Enabled then return end
             syncEventZoneState(false)
-            purgeDebrisAndLighting()
-            if Optimizer.InEventZone and os.clock() - Optimizer._eventPurgeAt >= 30.0 then
-                Optimizer._eventPurgeAt = os.clock()
+            local now = os.clock()
+            if now - Optimizer._lastDebrisSweepAt >= 60.0 then
+                Optimizer._lastDebrisSweepAt = now
+                purgeDebrisAndLighting()
+            end
+            if Optimizer.InEventZone and now - Optimizer._eventPurgeAt >= 120.0 then
+                Optimizer._eventPurgeAt = now
                 runFullEventOptimization()
             end
         end)
@@ -1133,11 +1424,17 @@ function PumpkinOptimizer.Init(ctx)
             Optimizer.SetDisablePetsRendering(false)
             Optimizer.SetDisableConfettiRendering(false)
             Optimizer.SetOptimizeGame(false)
+            Optimizer.SetHideMachineGuis(false)
         end)
     end
 
     ctx.Optimizer = Optimizer
     ctx.API.setOptimizePumpkinTycoon = Optimizer.SetEnabled
+    ctx.API.setHideMachineGuis = Optimizer.SetHideMachineGuis
+    ctx.API.getOptimizerStats = function()
+        updateStats(true)
+        return Optimizer.LastStats
+    end
     return Optimizer
 end
 

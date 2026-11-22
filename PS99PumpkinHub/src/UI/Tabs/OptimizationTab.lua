@@ -99,6 +99,21 @@ function OptimizationTab.Init(ctx)
         end
     end)
 
+    UI.createBoundToggle(Tab, {
+        name = "Makine & Tüccar GUI'lerini Gizle",
+        flag = "OptHideMachineGuis",
+        value = Opt.HideMachineGuis ~= false,
+        description = "Gidilen makine, tüccar, kakao ve yükseltme pencerelerinin ekranda açılmasını engeller",
+    }, function()
+        return Opt.HideMachineGuis ~= false
+    end, function(v)
+        Opt.HideMachineGuis = (v == true)
+    end, function(v)
+        if ctx.Optimizer and ctx.Optimizer.SetHideMachineGuis then
+            ctx.Optimizer.SetHideMachineGuis(v == true)
+        end
+    end)
+
     return OptimizationTab
 end
 

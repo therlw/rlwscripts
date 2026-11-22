@@ -225,7 +225,7 @@ function MainFeaturesSystem.Init(ctx)
             end))
         end
 
-        Lifecycle.SpawnLoop("MainFeaturesWorker", 0.7, function()
+        Lifecycle.SpawnLoop("MainFeaturesWorker", 1.5, function()
             pulseAntiAFK()
             Sys.TryLeaveStairway()
             Sys.TryClaimFreeGifts()

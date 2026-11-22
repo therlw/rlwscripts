@@ -262,7 +262,13 @@ function FarmingWorldSystem.Init(ctx)
     end
 
     function FarmingWorldSystem.Start()
-        Lifecycle.SpawnLoop("FarmingWorldWorker", 0.55, function()
+        Lifecycle.SpawnLoop("FarmingWorldWorker", function()
+            local Inst = Net.Mod.InstancingCmds
+            if Inst and Inst.IsInInstance and Inst.IsInInstance("FarmingWorld") then
+                return 0.55
+            end
+            return 2.5
+        end, function()
             local Inst = Net.Mod.InstancingCmds
             local inFarm = Inst and Inst.IsInInstance and Inst.IsInInstance("FarmingWorld")
             if not inFarm then

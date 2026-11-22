@@ -377,7 +377,10 @@ function EggAndPetSystem.Init(ctx)
     function EggAndPetSystem.Start()
         EggSys.SetDisableEggAnimation(States.Egg.DisableEggAnimation == true)
 
-        Lifecycle.SpawnLoop("EggAndPetWorker", 0.35, function()
+        Lifecycle.SpawnLoop("EggAndPetWorker", function()
+            local e = States.Egg
+            return (e.AutoBuyEgg or e.AutoMakeGold or e.AutoMakeRainbow or e.AutoFusePets or e.AutoCharmPets) and 0.40 or 2.5
+        end, function()
             stepAutoBuyWorldEgg()
             stepMachinesAndCharms()
         end)

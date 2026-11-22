@@ -107,7 +107,10 @@ function MailboxSystem.Init(ctx)
     end
 
     function MailboxSystem.Start()
-        Lifecycle.SpawnLoop("MailboxWorker", 1.25, function()
+        Lifecycle.SpawnLoop("MailboxWorker", function()
+            local m = States.Mailbox
+            return (m.AutoClaimMailbox or m.AutoMailPets) and 1.25 or 3.0
+        end, function()
             stepAutoClaimMailbox()
             stepAutoMailPets()
         end)
