@@ -81,6 +81,11 @@ function MovementController.Init(ctx)
             return st ~= Enum.HumanoidStateType.Freefall and st ~= Enum.HumanoidStateType.Jumping
         end
 
+        local function isSwimming(curHum)
+            if not curHum or not curHum.GetState then return false end
+            return curHum:GetState() == Enum.HumanoidStateType.Swimming
+        end
+
         local function tryJump(curHum)
             if not curHum then return end
             local now = os.clock()
@@ -91,6 +96,14 @@ function MovementController.Init(ctx)
                     curHum:ChangeState(Enum.HumanoidStateType.Jumping)
                 end)
                 lastJumpAt = now
+            elseif isSwimming(curHum) then
+                curHum.Jump = true
+                if now - lastJumpAt >= 0.36 then
+                    pcall(function()
+                        curHum:ChangeState(Enum.HumanoidStateType.Jumping)
+                    end)
+                    lastJumpAt = now
+                end
             end
         end
 
@@ -147,6 +160,16 @@ function MovementController.Init(ctx)
             local _, curHrp, curHum = Utils.getCharacterParts()
             if not curHrp or not curHum then return false, false, false end
 
+            local usingSwimMove = false
+            local function clearSwimMove(h)
+                if usingSwimMove then
+                    usingSwimMove = false
+                    if h then
+                        pcall(function() h:Move(Vector3.zero, false) end)
+                    end
+                end
+            end
+
             if jumpAtStart then
                 tryJump(curHum)
             end
@@ -160,21 +183,49 @@ function MovementController.Init(ctx)
             local consecutiveStucks = 0
 
             while os.clock() - started < maxSegSec do
-                if shouldStop() then return false, true, false end
+                if shouldStop() then
+                    clearSwimMove(curHum)
+                    return false, true, false
+                end
 
                 _, curHrp, curHum = Utils.getCharacterParts()
-                if not curHrp or not curHum then return false, true, false end
+                if not curHrp or not curHum then
+                    clearSwimMove(nil)
+                    return false, true, false
+                end
 
                 if Utils.flatDist(curHrp.Position, targetPos) <= reqDist then
+                    clearSwimMove(curHum)
                     return true, false, false
                 end
                 if arrivalThresh and Utils.flatDist(curHrp.Position, segDest) <= arrivalThresh then
+                    clearSwimMove(curHum)
                     return false, false, false
                 end
 
                 local jumpAhead, tallBlocked, unit, hitNormal = probeAhead(curHrp, curHum, segDest)
-                if jumpAhead then
-                    tryJump(curHum)
+                local swimmingNow = isSwimming(curHum)
+
+                if swimmingNow then
+                    local swimUnit = unit
+                    if not swimUnit then
+                        local fv = Vector3.new(segDest.X - curHrp.Position.X, 0, segDest.Z - curHrp.Position.Z)
+                        swimUnit = (fv.Magnitude > 0.1) and fv.Unit or Vector3.new(0, 0, -1)
+                    end
+                    curHum:Move(Vector3.new(swimUnit.X, 0.95, swimUnit.Z).Unit, false)
+                    curHum.Jump = true
+                    usingSwimMove = true
+                    if jumpAhead or os.clock() - lastJumpAt >= 0.36 then
+                        tryJump(curHum)
+                    end
+                else
+                    if usingSwimMove then
+                        clearSwimMove(curHum)
+                        curHum:MoveTo(segDest)
+                    end
+                    if jumpAhead then
+                        tryJump(curHum)
+                    end
                 end
 
                 local now = os.clock()
@@ -189,9 +240,12 @@ function MovementController.Init(ctx)
                         consecutiveStucks = consecutiveStucks + 1
                         tryJump(curHum)
                         if maxStucksAbort and consecutiveStucks >= maxStucksAbort then
+                            clearSwimMove(curHum)
                             return false, false, false
                         end
-                        if consecutiveStucks >= 4 then
+                        local repathLimit = swimmingNow and 5 or 4
+                        if consecutiveStucks >= repathLimit then
+                            clearSwimMove(curHum)
                             return false, false, true
                         end
                         if (tallBlocked or consecutiveStucks >= 2) and unit then
@@ -208,11 +262,25 @@ function MovementController.Init(ctx)
                                 sidestepSide = -sidestepSide
                                 nudgeVec = (right * 5.5) + (unit * 3.0)
                             end
-                            curHum:MoveTo(curHrp.Position + nudgeVec)
-                            task.wait(0.18)
-                            if shouldStop() then return false, true, false end
+                            if swimmingNow then
+                                local nUnit = Vector3.new(nudgeVec.X, 0, nudgeVec.Z).Unit
+                                curHum:Move(Vector3.new(nUnit.X, 0.95, nUnit.Z).Unit, false)
+                                curHum.Jump = true
+                                usingSwimMove = true
+                                task.wait(0.22)
+                            else
+                                curHum:MoveTo(curHrp.Position + nudgeVec)
+                                task.wait(0.18)
+                            end
+                            if shouldStop() then
+                                clearSwimMove(curHum)
+                                return false, true, false
+                            end
                         end
-                        curHum:MoveTo(segDest)
+                        if not isSwimming(curHum) then
+                            clearSwimMove(curHum)
+                            curHum:MoveTo(segDest)
+                        end
                     else
                         consecutiveStucks = 0
                     end
@@ -223,6 +291,7 @@ function MovementController.Init(ctx)
 
                 task.wait(0.05)
             end
+            clearSwimMove(curHum)
             return false, false, false
         end
 
@@ -245,13 +314,17 @@ function MovementController.Init(ctx)
         local walkTimeBudget = math.max(States.Movement.WalkTimeout or 22, math.min(60, (estDist / math.max(18, hum.WalkSpeed or 16)) * 1.9 + 8))
         local timeoutAt = os.clock() + walkTimeBudget
 
-        -- Fast straight hop-walk only when path failed or detours >3x on open low-ledge terrain
+        -- Fast straight hop-walk only when path failed or detours >3x on dry open low-ledge terrain
         local _, tallAtStart = probeAhead(hrp, hum, targetPos)
-        if not tallAtStart and flatTotal <= 75 and (#waypoints == 0 or (#waypoints * 6) > math.max(60, flatTotal * 3.0)) then
+        if not tallAtStart and not isSwimming(hum) and flatTotal <= 75 and (#waypoints == 0 or (#waypoints * 6) > math.max(60, flatTotal * 3.0)) then
             local directHit, aborted = driveSegment(targetPos, math.max(3.2, math.min(reqDist, 4.5)), math.min(4.5, math.max(1.5, timeoutAt - os.clock())), false, 3)
             if directHit or Utils.flatDist((select(2, Utils.getCharacterParts()) or hrp).Position, targetPos) <= reqDist then
                 arrived = true
             elseif aborted then
+                pcall(function()
+                    local _, _, h = Utils.getCharacterParts()
+                    if h then h:Move(Vector3.zero, false) end
+                end)
                 Move._walking = false
                 return false
             end
@@ -301,6 +374,10 @@ function MovementController.Init(ctx)
             driveSegment(targetPos, math.max(3.2, math.min(reqDist, 4.5)), math.min(6.0, remTime), false)
         end
 
+        pcall(function()
+            local _, _, curHumEnd = Utils.getCharacterParts()
+            if curHumEnd then curHumEnd:Move(Vector3.zero, false) end
+        end)
         Move._walking = false
         local _, curHrp = Utils.getCharacterParts()
         return curHrp ~= nil and Utils.flatDist(curHrp.Position, targetPos) <= reqDist
