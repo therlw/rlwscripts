@@ -307,7 +307,12 @@ function AutoFarmSystem.Init(ctx)
         local getter = inInst and M.BreakableFrontend.AllByInstanceAndClass or M.BreakableFrontend.AllByZoneAndClass
         if getter then
             for _, cls in ipairs({ "Chest", "Normal" }) do
-                local ok, pool = (inInst and pcall(getter, cls) or pcall(getter, parentId, cls))
+                local ok, pool
+                if inInst then
+                    ok, pool = pcall(getter, cls)
+                else
+                    ok, pool = pcall(getter, parentId, cls)
+                end
                 if ok and type(pool) == "table" then
                     for mapKey, brk in pairs(pool) do
                         local model, ca, dir, bPos, disabled = Utils.unpackBreakable(brk)
