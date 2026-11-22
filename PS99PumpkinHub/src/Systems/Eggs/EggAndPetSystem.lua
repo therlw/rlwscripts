@@ -1,7 +1,7 @@
 -- src/Systems/Eggs/EggAndPetSystem.lua
 -- Egg Tab Backend:
 --   - Auto Buy Egg (Best / Nearest / Selected World Egg + BreakableZone edge positioning)
---   - Disable Egg Animation (suppresses 3D hatch anim while firing mandatory SM_Unmask & CompletedHatching)
+--   - Disable Egg Animation (pure client skip inside Egg Opening Frontend so game natively unmasks & completes)
 --   - Auto Make Pets (Gold & Rainbow Machines)
 --   - Auto Fuse Pets
 --   - Auto Charm Pets
@@ -20,6 +20,7 @@ function EggAndPetSystem.Init(ctx)
         _lastMachineAt = 0,
         _lastCharmAt = 0,
         _animDisabled = false,
+        _origAnimFns = nil,
         _disabledConns = {},
         _ourAnimConn = nil,
     }
@@ -128,22 +129,66 @@ function EggAndPetSystem.Init(ctx)
         end
     end
 
+    local function findEggFrontendScript()
+        local lp = ctx.Roblox.LocalPlayer
+        local ps = lp and lp:FindFirstChild("PlayerScripts")
+        if not ps then return nil end
+        local scriptsFolder = ps:FindFirstChild("Scripts")
+        local gameFolder = scriptsFolder and scriptsFolder:FindFirstChild("Game")
+        return (gameFolder and gameFolder:FindFirstChild("Egg Opening Frontend"))
+            or ps:FindFirstChild("Egg Opening Frontend", true)
+    end
+
     function EggSys.SetDisableEggAnimation(enable)
         local target = enable == true
         States.Egg.DisableEggAnimation = target
         if target == EggSys._animDisabled then return end
         EggSys._animDisabled = target
 
-        local Network = Net.Mod.Network
-        local sig = Network and Network.Fired and Network.Fired("Eggs_PlayOpenAnimation")
-        local getConns = (type(getconnections) == "function") and getconnections or nil
-
         local ui = ctx.Roblox.PlayerGui:FindFirstChild("EggOpenAnimation")
         if ui and ui:IsA("ScreenGui") then
             ui.Enabled = not target
         end
 
+        local getsenvFn = (type(getsenv) == "function") and getsenv or nil
+        local eggScript = getsenvFn and findEggFrontendScript()
+        local scriptEnv = nil
+        if eggScript and getsenvFn then
+            local okEnv, e = pcall(getsenvFn, eggScript)
+            if okEnv and type(e) == "table" then
+                scriptEnv = e
+            end
+        end
+
         if target then
+            -- Preferred pure client-side skip: no-op the visual renderers inside Egg Opening Frontend
+            -- so the game script itself natively fires SM_Unmask + CompletedHatching without our script sending remotes.
+            if scriptEnv and (type(scriptEnv.PlayNormalEggAnimation) == "function" or type(scriptEnv.PlayEggAnimation) == "function") then
+                if not EggSys._origAnimFns then
+                    EggSys._origAnimFns = {
+                        env = scriptEnv,
+                        normal = scriptEnv.PlayNormalEggAnimation,
+                        egg = scriptEnv.PlayEggAnimation,
+                        td = scriptEnv.PlayTowerDefenseAnimations,
+                    }
+                end
+                local noOp = function() end
+                if type(scriptEnv.PlayNormalEggAnimation) == "function" then
+                    scriptEnv.PlayNormalEggAnimation = noOp
+                end
+                if type(scriptEnv.PlayEggAnimation) == "function" then
+                    scriptEnv.PlayEggAnimation = noOp
+                end
+                if type(scriptEnv.PlayTowerDefenseAnimations) == "function" then
+                    scriptEnv.PlayTowerDefenseAnimations = noOp
+                end
+                return
+            end
+
+            -- Fallback only if getsenv isn't available on the executor
+            local Network = Net.Mod.Network
+            local sig = Network and Network.Fired and Network.Fired("Eggs_PlayOpenAnimation")
+            local getConns = (type(getconnections) == "function") and getconnections or nil
             if sig and getConns then
                 for _, conn in ipairs(getConns(sig)) do
                     if conn ~= EggSys._ourAnimConn then
@@ -181,6 +226,13 @@ function EggAndPetSystem.Init(ctx)
                 EggSys._ourAnimConn = Lifecycle.TrackConnection(conn)
             end
         else
+            if EggSys._origAnimFns and type(EggSys._origAnimFns.env) == "table" then
+                local orig = EggSys._origAnimFns
+                if orig.normal then orig.env.PlayNormalEggAnimation = orig.normal end
+                if orig.egg then orig.env.PlayEggAnimation = orig.egg end
+                if orig.td then orig.env.PlayTowerDefenseAnimations = orig.td end
+                EggSys._origAnimFns = nil
+            end
             for _, conn in ipairs(EggSys._disabledConns) do
                 pcall(function() conn:Enable() end)
             end

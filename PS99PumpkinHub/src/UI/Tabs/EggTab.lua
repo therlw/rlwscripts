@@ -63,7 +63,7 @@ function EggTab.Init(ctx)
     createBoundToggle(tab, {
         name = "Disable Egg Animation",
         flag = "EggDisableAnim",
-        description = "Skips 3D egg opening animation while properly firing SM_Unmask",
+        description = "Skips 3D egg opening animation cleanly on the client so game natively unmasks pets",
         value = Egg.DisableEggAnimation,
     }, function() return Egg.DisableEggAnimation end, function(v)
         Egg.DisableEggAnimation = v
