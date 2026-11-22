@@ -77,45 +77,61 @@ function MovementController.Init(ctx)
         local function tryJump(curHum)
             if not curHum then return end
             local now = os.clock()
-            if now - lastJumpAt >= 0.28 and curHum:GetState() ~= Enum.HumanoidStateType.Freefall then
+            if now - lastJumpAt >= 0.30 then
                 curHum.Jump = true
                 lastJumpAt = now
             end
         end
 
-        -- Checks forward solid vertical obstacles (`RespectCanCollide = true`):
-        -- ignores walkable ramps/slopes (Normal.Y >= 0.58) so the character only jumps ledges/steps/walls.
+        -- 3-ray fan forward obstacle detector (`RespectCanCollide = true`):
+        -- catches diagonal plank edges/curbs at ankle/shin/waist height while ignoring walkable ramps.
         local function probeAhead(curHrp, curHum, moveDest)
             local flatVec = Vector3.new(moveDest.X - curHrp.Position.X, 0, moveDest.Z - curHrp.Position.Z)
             if flatVec.Magnitude < 0.5 then
                 return false, false, nil
             end
             local unit = flatVec.Unit
-            local reach = 4.4
-            local rootToFloor = (curHum.HipHeight or 2) + (curHrp.Size.Y * 0.5)
+            local right = Vector3.new(-unit.Z, 0, unit.X)
+            local reach = 4.8
+            local rootToFloor = (curHum.HipHeight or 2.2) + (curHrp.Size.Y * 0.5)
             local groundY = curHrp.Position.Y - rootToFloor
-            local shinOrigin = Vector3.new(curHrp.Position.X, groundY + 0.9, curHrp.Position.Z)
-            local waistOrigin = Vector3.new(curHrp.Position.X, groundY + 2.7, curHrp.Position.Z)
-            local headOrigin = Vector3.new(curHrp.Position.X, groundY + 6.0, curHrp.Position.Z)
 
             local function isSteepObstacle(hit)
-                return hit ~= nil and math.abs(hit.Normal.Y) < 0.58
+                return hit ~= nil and math.abs(hit.Normal.Y) < 0.62
             end
 
-            local shinHit = workspace:Raycast(shinOrigin, unit * reach, rayParams)
-            local waistHit = workspace:Raycast(waistOrigin, unit * reach, rayParams)
-            if not isSteepObstacle(shinHit) and not isSteepObstacle(waistHit) then
-                return false, false, unit
+            local sawStepOrLow = false
+            local sawHeadBlock = false
+            for _, lat in ipairs({ 0, -1.25, 1.25 }) do
+                local latOff = right * lat
+                local lowOrigin = Vector3.new(curHrp.Position.X, groundY + 0.65, curHrp.Position.Z) + latOff
+                local shinOrigin = Vector3.new(curHrp.Position.X, groundY + 1.55, curHrp.Position.Z) + latOff
+                local waistOrigin = Vector3.new(curHrp.Position.X, groundY + 2.85, curHrp.Position.Z) + latOff
+                local headOrigin = Vector3.new(curHrp.Position.X, groundY + 6.2, curHrp.Position.Z) + latOff
+
+                local lowHit = workspace:Raycast(lowOrigin, unit * reach, rayParams)
+                local shinHit = workspace:Raycast(shinOrigin, unit * reach, rayParams)
+                local waistHit = workspace:Raycast(waistOrigin, unit * reach, rayParams)
+
+                if isSteepObstacle(lowHit) or isSteepObstacle(shinHit) or isSteepObstacle(waistHit) then
+                    sawStepOrLow = true
+                end
+                local headHit = workspace:Raycast(headOrigin, unit * reach, rayParams)
+                if isSteepObstacle(headHit) then
+                    sawHeadBlock = true
+                end
             end
 
-            local headHit = workspace:Raycast(headOrigin, unit * reach, rayParams)
-            if not headHit then
+            if sawStepOrLow and not sawHeadBlock then
                 return true, false, unit
             end
-            return false, true, unit
+            if sawHeadBlock then
+                return false, true, unit
+            end
+            return false, false, unit
         end
 
-        local function driveSegment(segDest, arrivalThresh, maxSegSec, jumpAtStart)
+        local function driveSegment(segDest, arrivalThresh, maxSegSec, jumpAtStart, maxStucksAbort)
             local _, curHrp, curHum = Utils.getCharacterParts()
             if not curHrp or not curHum then return false, false end
 
@@ -149,20 +165,20 @@ function MovementController.Init(ctx)
                 end
 
                 local now = os.clock()
-                if now - lastSampleAt >= 0.24 then
+                if now - lastSampleAt >= 0.18 then
                     local movedFlat = Utils.flatDist(curHrp.Position, lastSamplePos)
-                    if movedFlat < 0.75 then
+                    if movedFlat < 0.65 then
                         consecutiveStucks = consecutiveStucks + 1
                         tryJump(curHum)
-                        if tallBlocked or consecutiveStucks >= 2 then
-                            if unit then
-                                local right = Vector3.new(-unit.Z, 0, unit.X) * sidestepSide
-                                sidestepSide = -sidestepSide
-                                local nudgePos = curHrp.Position + (right * 5.5) + (unit * 3.0)
-                                curHum:MoveTo(nudgePos)
-                                task.wait(0.18)
-                                if shouldStop() then return false, true end
-                            end
+                        if maxStucksAbort and consecutiveStucks >= maxStucksAbort then
+                            return false, false
+                        end
+                        if (tallBlocked or consecutiveStucks >= 2) and unit then
+                            local right = Vector3.new(-unit.Z, 0, unit.X) * sidestepSide
+                            sidestepSide = -sidestepSide
+                            curHum:MoveTo(curHrp.Position + (right * 5.0) + (unit * 3.0))
+                            task.wait(0.18)
+                            if shouldStop() then return false, true end
                         end
                         curHum:MoveTo(segDest)
                     else
@@ -177,12 +193,13 @@ function MovementController.Init(ctx)
             return false, false
         end
 
+        local flatTotal = Utils.flatDist(hrp.Position, targetPos)
         local path = PathfindingService:CreatePath({
             AgentRadius = 2.0,
             AgentHeight = 5,
             AgentCanJump = true,
             AgentCanClimb = true,
-            WaypointSpacing = 4,
+            WaypointSpacing = 5,
         })
 
         local okPath = pcall(function()
@@ -191,16 +208,27 @@ function MovementController.Init(ctx)
 
         local arrived = false
         local timeoutAt = os.clock() + (States.Movement.WalkTimeout or 18)
+        local waypoints = (okPath and path.Status == Enum.PathStatus.Success) and path:GetWaypoints() or {}
 
-        if okPath and path.Status == Enum.PathStatus.Success then
-            local waypoints = path:GetWaypoints()
+        -- Fast straight hop-walk when short path has an excessive detour (e.g. stepping onto a nearby deck)
+        if flatTotal <= 75 and (#waypoints == 0 or (#waypoints * 5) > math.max(50, flatTotal * 2.2)) then
+            local directHit, aborted = driveSegment(targetPos, math.max(3.2, math.min(reqDist, 4.5)), math.min(5.0, math.max(1.5, timeoutAt - os.clock())), false, 4)
+            if directHit or Utils.flatDist((select(2, Utils.getCharacterParts()) or hrp).Position, targetPos) <= reqDist then
+                arrived = true
+            elseif aborted then
+                Move._walking = false
+                return false
+            end
+        end
+
+        if not arrived and #waypoints >= 2 then
             for idx = 2, #waypoints do
                 if shouldStop() or os.clock() > timeoutAt then break end
                 local wp = waypoints[idx]
                 local hitFinal, aborted = driveSegment(
                     wp.Position,
-                    3.4,
-                    math.min(2.6, math.max(0.4, timeoutAt - os.clock())),
+                    3.6,
+                    math.min(2.4, math.max(0.4, timeoutAt - os.clock())),
                     wp.Action == Enum.PathWaypointAction.Jump
                 )
                 if hitFinal then
@@ -213,7 +241,7 @@ function MovementController.Init(ctx)
 
         if not arrived and not shouldStop() and os.clock() <= timeoutAt then
             local remTime = math.max(1.5, timeoutAt - os.clock())
-            driveSegment(targetPos, math.max(3.2, math.min(reqDist, 4.5)), math.min(6.5, remTime), false)
+            driveSegment(targetPos, math.max(3.2, math.min(reqDist, 4.5)), math.min(6.0, remTime), false)
         end
 
         Move._walking = false
