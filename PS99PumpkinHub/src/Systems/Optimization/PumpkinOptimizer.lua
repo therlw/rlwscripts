@@ -401,6 +401,58 @@ function PumpkinOptimizer.Init(ctx)
         return false
     end
 
+    local function isSectionTrackedNode(inst)
+        if not inst then return false end
+        if inst:GetAttribute("Button") ~= nil or inst:GetAttribute("TycoonSection") ~= nil then
+            return true
+        end
+        if isProtectedInstance(inst) or #CollectionService:GetTags(inst) > 0 then
+            return true
+        end
+        if inst:IsA("LayerCollector") or inst:IsA("BillboardGui") or inst:IsA("SurfaceGui") or inst:IsA("ScreenGui")
+            or inst:IsA("TouchTransmitter") or inst:IsA("ClickDetector") or inst:IsA("ProximityPrompt") then
+            return true
+        end
+        return false
+    end
+
+    local function hasProtectedDescendantOrAttr(inst)
+        for _, d in ipairs(inst:GetDescendants()) do
+            if isSectionTrackedNode(d) then
+                return true
+            end
+        end
+        return false
+    end
+
+    --- Frees heavy decorative children while keeping Model/Folder shells and Button/Section-tracked nodes
+    --- intact so PumpkinTycoonCmds.Sections never hits locked-Parent warnings on rebirth or unlock.
+    local function purgeDecorContentsKeepShells(container)
+        if not container or not container.Parent then return end
+        for _, child in ipairs(container:GetChildren()) do
+            if child.Parent then
+                if child:IsA("Model") or child:IsA("Folder") then
+                    purgeDecorContentsKeepShells(child)
+                elseif isSectionTrackedNode(child) then
+                    if child:IsA("BasePart") and not isWalkableOrFunctional(child) then
+                        saveAndSet(Optimizer._savedProps, child, "Transparency", 1)
+                        saveAndSet(Optimizer._savedProps, child, "CanCollide", false)
+                        saveAndSet(Optimizer._savedProps, child, "CanQuery", false)
+                        saveAndSet(Optimizer._savedProps, child, "CastShadow", false)
+                    end
+                    stripVisualsOnTree(child, true)
+                elseif hasProtectedDescendantOrAttr(child) then
+                    purgeDecorContentsKeepShells(child)
+                else
+                    local cnt = #child:GetDescendants() + 1
+                    if pcall(function() child:Destroy() end) then
+                        trackDestroyed(cnt)
+                    end
+                end
+            end
+        end
+    end
+
     local function hideLeaderboardVisuals(frontFolder)
         if not frontFolder then return end
         for _, lbName in ipairs({ "PumpkinLeaderboardCatches", "PumpkinLeaderboard" }) do
@@ -421,7 +473,7 @@ function PumpkinOptimizer.Init(ctx)
 
         local props = decor:FindFirstChild("Props")
         if props then
-            clearChildrenSafe(props)
+            purgeDecorContentsKeepShells(props)
         end
 
         local front = decor:FindFirstChild("Front")
@@ -439,10 +491,10 @@ function PumpkinOptimizer.Init(ctx)
         local function processZoneItem(item)
             if isWalkableOrFunctional(item) or hasGameTag(item) then
                 stripVisualsOnTree(item, false)
-            elseif item:IsA("Model") or item:IsA("Folder") then
-                -- Keep top container shell empty so Sections.reveal stays safe if unbought button unlocks later
-                clearChildrenSafe(item)
-            elseif not item:GetAttribute("Button") then
+            elseif item:IsA("Model") or item:IsA("Folder") or isSectionTrackedNode(item) or hasProtectedDescendantOrAttr(item) then
+                -- Keep tracked shells intact so Sections.reveal never fails on unlocked/rebirthed islands
+                purgeDecorContentsKeepShells(item)
+            else
                 if pcall(function() item:Destroy() end) then
                     trackDestroyed(1)
                 end
@@ -483,28 +535,28 @@ function PumpkinOptimizer.Init(ctx)
     local function purgeForeignIslandDecor(islandFolder)
         if not Optimizer.Enabled or not Optimizer.InEventZone or not islandFolder or not islandFolder.Parent then return end
         -- Leave BillboardGui/SurfaceGui (PumpkinTimer_*, PumpkinSign_*, PumpkinIsland_*) intact so Signs/Billboard never warn,
-        -- and clear contents inside named Models rather than destroying top button-tracked Model shells so Sections never errors on unlock.
+        -- and keep tracked Model/Folder shells inside Props/Ground/ShoreFill/Zones so Sections never warns on foreign unlocks/rebirths.
         for _, sub in ipairs(islandFolder:GetChildren()) do
             if sub:IsA("LayerCollector") or sub:IsA("BillboardGui") or sub:IsA("SurfaceGui") or sub:IsA("ScreenGui") then
                 -- Keep UI intact
             elseif sub.Name == "Props" or sub.Name == "Ground" or sub.Name == "ShoreFill" then
-                clearChildrenSafe(sub)
+                purgeDecorContentsKeepShells(sub)
             elseif sub.Name:match("^%d+ |") then
                 for _, item in ipairs(sub:GetChildren()) do
                     if item.Name == "Pieces" then
                         for _, subItem in ipairs(item:GetChildren()) do
                             if hasGameTag(subItem) then
                                 stripVisualsOnTree(subItem, false)
-                            elseif subItem:IsA("Model") or subItem:IsA("Folder") then
-                                clearChildrenSafe(subItem)
+                            elseif subItem:IsA("Model") or subItem:IsA("Folder") or isSectionTrackedNode(subItem) or hasProtectedDescendantOrAttr(subItem) then
+                                purgeDecorContentsKeepShells(subItem)
                             elseif pcall(function() subItem:Destroy() end) then
                                 trackDestroyed(1)
                             end
                         end
                     elseif hasGameTag(item) then
                         stripVisualsOnTree(item, false)
-                    elseif item:IsA("Model") or item:IsA("Folder") then
-                        clearChildrenSafe(item)
+                    elseif item:IsA("Model") or item:IsA("Folder") or isSectionTrackedNode(item) or hasProtectedDescendantOrAttr(item) then
+                        purgeDecorContentsKeepShells(item)
                     elseif pcall(function() item:Destroy() end) then
                         trackDestroyed(1)
                     end
