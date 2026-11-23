@@ -23,18 +23,18 @@ function PumpkinTycoonTab.Init(ctx)
 
     local statsRow = Tab:CreateGroup({ direction = "row" })
     UI.PTStatRebirthPct = statsRow:CreateStat({
-        name = "Rebirth",
+        name = "Ada",
         value = 0,
         suffix = "%",
         numberEasing = false,
     })
     UI.PTStatRemaining = statsRow:CreateStat({
-        name = "Kalan Yer",
+        name = "Kalan",
         value = 0,
         numberEasing = false,
     })
     UI.PTStatNets = statsRow:CreateStat({
-        name = "Ağ",
+        name = "Pet Ağı",
         value = 0,
         numberEasing = false,
     })
