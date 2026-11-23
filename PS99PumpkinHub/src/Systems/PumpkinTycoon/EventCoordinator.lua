@@ -160,12 +160,15 @@ function EventCoordinator.Init(ctx)
     end
 
     local function translateSummaryBlock(summary)
-        local out = summary:gsub("(İşlem: )([^\n]+)", function(pfx, val)
-            return pfx .. translateStatus(val)
-        end)
-        out = out:gsub("(Coin Tasarrufu: )([^|]+)( | )", function(pfx, val, sep)
+        local out = summary:gsub("(İşlem: )([^|\n]+)", function(pfx, val)
             local trimmed = val:gsub("^%s+", ""):gsub("%s+$", "")
-            return pfx .. translateStatus(trimmed) .. sep
+            local trail = val:match("%s+$") or ""
+            return pfx .. translateStatus(trimmed) .. trail
+        end)
+        out = out:gsub("(Coin Tasarrufu: )([^|\n]+)", function(pfx, val)
+            local trimmed = val:gsub("^%s+", ""):gsub("%s+$", "")
+            local trail = val:match("%s+$") or ""
+            return pfx .. translateStatus(trimmed) .. trail
         end)
         return out
     end
@@ -182,6 +185,25 @@ function EventCoordinator.Init(ctx)
         end
     end
 
+    local function getRebirthProgressMetrics()
+        local M = Net.Mod
+        if not Net.IsInPumpkinTycoon() or not M.Util_Buttons or not M.PT_Types or not M.Util_Buttons.RebirthProgress then
+            return 0, 0, 0, 0
+        end
+        local buttonsState = Net.PlotSave(M.PT_Types.VAR.Buttons)
+        if type(buttonsState) ~= "table" then
+            return 0, 0, 0, 0
+        end
+        local ok, bought, total, ratio = pcall(M.Util_Buttons.RebirthProgress, buttonsState)
+        if not ok or type(total) ~= "number" or total <= 0 then
+            return 0, 0, 0, 0
+        end
+        local b = tonumber(bought) or 0
+        local t = tonumber(total) or 0
+        local r = math.clamp(tonumber(ratio) or 0, 0, 1)
+        return b, t, r, math.max(0, t - b)
+    end
+
     function Coordinator.FormatStatusSummary()
         local coins = Net.GetPumpkinCoins()
         local tokens = Net.GetPumpkinTokens()
@@ -192,20 +214,27 @@ function EventCoordinator.Init(ctx)
         local uNets = Net.GetMiscCount("Ultra Pet Net")
         local te = ctx.Runtime.Telemetry
         local part2Txt = Net.OwnPlotPart2() and "Bölüm 2 Açık" or "Bölüm 1"
+        local bought, total, ratio, remaining = getRebirthProgressMetrics()
+        local pctTxt = total > 0 and string.format("%%%.1f (%d/%d · Kalan: %d)", ratio * 100, bought, total, remaining) or "-"
 
         return string.format(
-            "%s | Rebirth: %s | Coin: %s | Token: %s | Ağ: %d (Ultra: %d)\nİşlem: %s\nCoin Tasarrufu: %s | Buton: %d | Yumurta: %d | Nadir: %d",
+            "%s | Rebirth: %s | İlerleme: %s\nCoin: %s | Token: %s | Ağ: %d (Ultra: %d) | Atılan Ağ: %d\nHuge Ağ: %d (Yakalanan: %d · Kaçan: %d) | Titanic/Garg Ağ: %d (Yakalanan: %d · Kaçan: %d)\nİşlem: %s | Coin Tasarrufu: %s",
             part2Txt,
             rebTxt,
+            pctTxt,
             Utils.formatCompact(coins),
             Utils.formatCompact(tokens),
             pNets,
             uNets,
+            te.NetsThrown or 0,
+            te.HugeNetsThrown or 0,
+            te.HugeCaught or 0,
+            te.HugeEscaped or 0,
+            te.TitanicGargNetsThrown or 0,
+            te.TitanicGargCaught or 0,
+            te.TitanicGargEscaped or 0,
             tostring(ctx.Runtime.Status.Event),
-            tostring(te.CoinSaveReason),
-            te.ButtonsBought,
-            te.EggsHatched,
-            te.RareAttempts
+            tostring(te.CoinSaveReason)
         )
     end
 
@@ -228,10 +257,13 @@ function EventCoordinator.Init(ctx)
                     pcall(function() el:Set(txt) end)
                 end
             end
+            local _, _, ratio, remaining = getRebirthProgressMetrics()
+            local pctRounded = math.clamp(math.floor(ratio * 100 + 0.5), 0, 100)
+            local totalNets = Net.GetMiscCount("Pet Net") + Net.GetMiscCount("Ultra Pet Net")
             safeSet("pt", UI.PumpkinStatusText, translateSummaryBlock(Coordinator.FormatStatusSummary()))
-            safeStat("tok", UI.PTStatTokens, Net.GetPumpkinTokens())
-            safeStat("net", UI.PTStatNets, Net.GetMiscCount("Pet Net"))
-            safeStat("btn", UI.PTStatButtons, te.ButtonsBought)
+            safeStat("rebpct", UI.PTStatRebirthPct, pctRounded)
+            safeStat("rem", UI.PTStatRemaining, remaining)
+            safeStat("net", UI.PTStatNets, totalNets)
             safeSet("farm", UI.FarmStatusText, string.format("%s | Vuruş: %d", translateStatus(st.Farm), te.TurkeyHits))
             safeSet("main", UI.MainStatusText, translateStatus(st.Main))
             safeSet("egg", UI.EggStatusText, translateStatus(st.Egg))

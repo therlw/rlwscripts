@@ -11,6 +11,7 @@ local WildAndTurkey = {}
 function WildAndTurkey.Init(ctx)
     local HttpService = ctx.Roblox.HttpService
     local LocalPlayer = ctx.Roblox.LocalPlayer
+    local Lifecycle = ctx.Lifecycle
     local Net = ctx.Net
     local Utils = ctx.Utils
     local Move = ctx.Movement
@@ -23,6 +24,27 @@ function WildAndTurkey.Init(ctx)
         _lastAutoNetsAttemptAt = 0,
         _lastTurkeyJoinAt = 0,
     }
+
+    local function recordNetOutcome(tierName, caught)
+        local te = ctx.Runtime and ctx.Runtime.Telemetry
+        if not te then return end
+        te.NetsThrown = (te.NetsThrown or 0) + 1
+        if tierName == "Huge" then
+            te.HugeNetsThrown = (te.HugeNetsThrown or 0) + 1
+            if caught then
+                te.HugeCaught = (te.HugeCaught or 0) + 1
+            else
+                te.HugeEscaped = (te.HugeEscaped or 0) + 1
+            end
+        elseif tierName == "Titanic" or tierName == "Gargantuan" then
+            te.TitanicGargNetsThrown = (te.TitanicGargNetsThrown or 0) + 1
+            if caught then
+                te.TitanicGargCaught = (te.TitanicGargCaught or 0) + 1
+            else
+                te.TitanicGargEscaped = (te.TitanicGargEscaped or 0) + 1
+            end
+        end
+    end
 
     local TIER_BY_NAME = {
         Any = 0,
@@ -131,8 +153,14 @@ function WildAndTurkey.Init(ctx)
         end
 
         Cooldowns.LastThrowAt = os.clock()
-        local ok, reason = Net.PlotInvoke(M.PT_Types.NET.CatchSighting, sighting.id, bestNet)
+        local ok, reason, resTbl = Net.PlotInvoke(M.PT_Types.NET.CatchSighting, sighting.id, bestNet)
         if ok then
+            local outcome = (type(resTbl) == "table" and resTbl.outcome) or (type(reason) == "string" and reason) or ""
+            if outcome ~= "soldout" then
+                local isCaught = (type(resTbl) == "table" and (resTbl.caught == true or resTbl.outcome == "caught"))
+                    or (type(reason) == "string" and reason == "caught")
+                recordNetOutcome(sighting.tierName, isCaught)
+            end
             ctx.Runtime.Telemetry.RareAttempts = ctx.Runtime.Telemetry.RareAttempts + 1
             ctx.Runtime.Status.Event = string.format("Threw %s at %s!", bestNet, tostring(sighting.pet))
             if ctx.UI and ctx.UI.safeNotify and CONFIG.Notifications.RareSpawns then
@@ -380,13 +408,38 @@ function WildAndTurkey.Init(ctx)
         if not arrived then return false end
 
         Cooldowns.LastThrowAt = os.clock()
-        local ok, outcome = Net.PlotInvoke(M.PT_Types.NET.CatchWild, bestSlot, chosenNet)
+        local ok, outcome, resTbl = Net.PlotInvoke(M.PT_Types.NET.CatchWild, bestSlot, chosenNet)
         if ok then
+            local outStr = (type(resTbl) == "table" and resTbl.outcome) or (type(outcome) == "string" and outcome) or ""
+            if outStr ~= "soldout" then
+                local isCaught = (type(resTbl) == "table" and (resTbl.caught == true or resTbl.outcome == "caught"))
+                    or (type(outcome) == "string" and outcome == "caught")
+                local tierName = bestRareName or classifyRareTier(bestEntry and bestEntry.P)
+                recordNetOutcome(tierName, isCaught)
+            end
             ctx.Runtime.Telemetry.WildCaught = ctx.Runtime.Telemetry.WildCaught + 1
             ctx.Runtime.Status.Event = string.format("Threw %s at %s (%s)", chosenNet, tostring(bestEntry and bestEntry.P), tostring(outcome))
             return true
         end
         return false
+    end
+
+    function WildAndTurkey.Start()
+        local M = Net.Mod
+        if M.Network and M.Network.Fired and M.Hunt and M.Hunt.THROWN then
+            local sig = M.Network.Fired(M.Hunt.THROWN)
+            if sig then
+                Lifecycle.TrackConnection(sig:Connect(function(plot, _slot, res, entry)
+                    local myPlot = Net.GetPlot and Net.GetPlot()
+                    if myPlot and plot ~= myPlot then return end
+                    if type(res) ~= "table" or res.outcome == "soldout" then return end
+                    local petName = tostring(res.pet or (type(entry) == "table" and entry.P) or "")
+                    local tierName = classifyRareTier(petName, nil)
+                    local isCaught = (res.caught == true or res.outcome == "caught")
+                    recordNetOutcome(tierName, isCaught)
+                end))
+            end
+        end
     end
 
     ctx.WildAndTurkey = WT

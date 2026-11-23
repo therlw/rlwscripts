@@ -22,18 +22,19 @@ function PumpkinTycoonTab.Init(ctx)
     Tab:CreateSection({ name = "Canlı Özet & Hızlı Ayarlar" })
 
     local statsRow = Tab:CreateGroup({ direction = "row" })
-    UI.PTStatTokens = statsRow:CreateStat({
-        name = "Token",
+    UI.PTStatRebirthPct = statsRow:CreateStat({
+        name = "Rebirth İlerlemesi",
+        value = 0,
+        suffix = "%",
+        numberEasing = false,
+    })
+    UI.PTStatRemaining = statsRow:CreateStat({
+        name = "Kalan Yer",
         value = 0,
         numberEasing = false,
     })
     UI.PTStatNets = statsRow:CreateStat({
         name = "Pet Ağı",
-        value = 0,
-        numberEasing = false,
-    })
-    UI.PTStatButtons = statsRow:CreateStat({
-        name = "Buton",
         value = 0,
         numberEasing = false,
     })
