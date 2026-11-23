@@ -138,37 +138,51 @@ function WildAndTurkey.Init(ctx)
         end
 
         local throwReach = Net.GetNumberFFlag("PumpkinTycoon_ThrowReach", CONFIG.DefaultThrowReach)
-        if sighting.pos then
-            local sharedPos = Utils.getInstancePos(Net.GetTurkeyIslandFolder())
-            local onTurkey = sharedPos ~= nil and Utils.flatDist(sighting.pos, sharedPos) < 420
-            if onTurkey and not Move.IsOnTurkeyIsland() then
-                if not Move.CrossToTurkeyIsland() then
-                    return false
-                end
-            elseif not onTurkey and Move.IsOnTurkeyIsland() then
-                Move.ReturnToOwnIsland()
-            end
-            local arrived = Move.MoveTo(sighting.pos, math.max(20, throwReach - 25), 3.0)
-            if not arrived then return false end
-        end
+        local sharedPos = Utils.getInstancePos(Net.GetTurkeyIslandFolder())
+        local maxAttempts = 3
 
-        Cooldowns.LastThrowAt = os.clock()
-        local ok, reason, resTbl = Net.PlotInvoke(M.PT_Types.NET.CatchSighting, sighting.id, bestNet)
-        if ok then
-            local outcome = (type(resTbl) == "table" and resTbl.outcome) or (type(reason) == "string" and reason) or ""
-            if outcome ~= "soldout" then
-                local isCaught = (type(resTbl) == "table" and (resTbl.caught == true or resTbl.outcome == "caught"))
-                    or (type(reason) == "string" and reason == "caught")
-                recordNetOutcome(sighting.tierName, isCaught)
+        for attempt = 1, maxAttempts do
+            local current = (attempt == 1) and sighting or WT.GetActiveRareSighting()
+            if not current or not current.id then
+                return false
             end
-            ctx.Runtime.Telemetry.RareAttempts = ctx.Runtime.Telemetry.RareAttempts + 1
-            ctx.Runtime.Status.Event = string.format("Threw %s at %s!", bestNet, tostring(sighting.pet))
-            if ctx.UI and ctx.UI.safeNotify and CONFIG.Notifications.RareSpawns then
-                ctx.UI.safeNotify({ title = "Nadir Pet Görüldü!", content = string.format("%s hedefine %s atıldı", tostring(sighting.pet), bestNet) })
+
+            if current.pos then
+                local onTurkey = sharedPos ~= nil and Utils.flatDist(current.pos, sharedPos) < 420
+                if onTurkey and not Move.IsOnTurkeyIsland() then
+                    if not Move.CrossToTurkeyIsland() then
+                        task.wait(0.35)
+                        continue
+                    end
+                elseif not onTurkey and Move.IsOnTurkeyIsland() then
+                    Move.ReturnToOwnIsland()
+                end
+                local arrived = Move.MoveTo(current.pos, math.max(20, throwReach - 25), 3.0)
+                if not arrived then
+                    task.wait(0.35)
+                    continue
+                end
             end
-            return true
-        else
-            Utils.debugLog("CatchSighting", reason)
+
+            Cooldowns.LastThrowAt = os.clock()
+            local ok, reason, resTbl = Net.PlotInvoke(M.PT_Types.NET.CatchSighting, current.id, bestNet)
+            if ok then
+                local outcome = (type(resTbl) == "table" and resTbl.outcome) or (type(reason) == "string" and reason) or ""
+                if outcome ~= "soldout" then
+                    local isCaught = (type(resTbl) == "table" and (resTbl.caught == true or resTbl.outcome == "caught"))
+                        or (type(reason) == "string" and reason == "caught")
+                    recordNetOutcome(current.tierName, isCaught)
+                end
+                ctx.Runtime.Telemetry.RareAttempts = ctx.Runtime.Telemetry.RareAttempts + 1
+                ctx.Runtime.Status.Event = string.format("Threw %s at %s!", bestNet, tostring(current.pet))
+                if ctx.UI and ctx.UI.safeNotify and CONFIG.Notifications.RareSpawns then
+                    ctx.UI.safeNotify({ title = "Nadir Pet Görüldü!", content = string.format("%s hedefine %s atıldı", tostring(current.pet), bestNet) })
+                end
+                return true
+            else
+                Utils.debugLog("CatchSighting", reason)
+                task.wait(0.4)
+            end
         end
         return false
     end
