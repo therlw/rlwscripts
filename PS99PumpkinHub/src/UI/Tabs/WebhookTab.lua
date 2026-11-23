@@ -36,7 +36,17 @@ function WebhookTab.Init(ctx)
         description = "Webhook adresinin doğru çalışıp çalışmadığını test eder",
         callback = function()
             if ctx.Webhook and ctx.Webhook.SendTestWebhook then
-                ctx.Webhook.SendTestWebhook()
+                task.spawn(function()
+                    local ok, info = ctx.Webhook.SendTestWebhook()
+                    if UI.safeNotify then
+                        UI.safeNotify({
+                            title = "Webhook Testi",
+                            content = ok and "Test bildirimi Discord'a gönderildi!" or ("Gönderilemedi: " .. tostring(info)),
+                            duration = 4,
+                            force = true,
+                        })
+                    end
+                end)
             end
         end,
     })
