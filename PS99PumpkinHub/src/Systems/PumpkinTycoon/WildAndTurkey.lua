@@ -87,6 +87,8 @@ function WildAndTurkey.Init(ctx)
         return 0, nil
     end
 
+    local attemptedSightings = {}
+
     function WT.GetActiveRareSighting()
         local M = Net.Mod
         if not M.Turkey or not M.Turkey.TestState then return nil end
@@ -98,7 +100,7 @@ function WildAndTurkey.Init(ctx)
         if not okDec or type(decoded) ~= "table" then return nil end
 
         local shown = decoded.shown
-        if type(shown) ~= "table" or shown.thrown == true or shown.soldOut == true then
+        if type(shown) ~= "table" or shown.thrown == true or shown.soldOut == true or (shown.id and attemptedSightings[shown.id]) then
             return nil
         end
 
@@ -167,6 +169,7 @@ function WildAndTurkey.Init(ctx)
             Cooldowns.LastThrowAt = os.clock()
             local ok, reason, resTbl = Net.PlotInvoke(M.PT_Types.NET.CatchSighting, current.id, bestNet)
             if ok then
+                attemptedSightings[current.id] = true
                 local outcome = (type(resTbl) == "table" and resTbl.outcome) or (type(reason) == "string" and reason) or ""
                 if outcome ~= "soldout" then
                     local isCaught = (type(resTbl) == "table" and (resTbl.caught == true or resTbl.outcome == "caught"))
@@ -180,6 +183,10 @@ function WildAndTurkey.Init(ctx)
                 end
                 return true
             else
+                if tostring(reason):lower():find("already threw") then
+                    attemptedSightings[current.id] = true
+                    return false
+                end
                 Utils.debugLog("CatchSighting", reason)
                 task.wait(0.4)
             end
