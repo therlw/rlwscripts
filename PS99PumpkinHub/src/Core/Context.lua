@@ -87,6 +87,9 @@ function Context.New(opts)
         },
 
         PumpkinTycoon = {
+            -- Auto Enter Event World
+            AutoEnterEventWorld = false,
+
             -- Performance / Lag optimization
             OptimizePumpkinTycoon = false,
 
@@ -294,6 +297,7 @@ function Context.New(opts)
             LastEggHatchAt = 0,
             LastStoreBuyAt = 0,
             LastTeleportBestAt = 0,
+            LastEventEnterAt = 0,
         },
         Telemetry = {
             ButtonsBought = 0,

@@ -11,13 +11,64 @@ function EventCoordinator.Init(ctx)
 
     local Coordinator = {}
 
-    function Coordinator.StepOnce()
-        if not Net.IsInPumpkinTycoon() then
-            ctx.Runtime.Status.Event = "Waiting: Enter Pumpkin Patch Tycoon instance"
-            return
+    function Coordinator.TryEnterEventWorld()
+        local PT = States.PumpkinTycoon
+        if not PT.AutoEnterEventWorld then
+            return false
         end
+        if Net.IsInPumpkinTycoon() then
+            return false
+        end
+
+        local M = Net.Mod
+        local Instancing = M.InstancingCmds
+        if not Instancing or not Instancing.Travel then
+            ctx.Runtime.Status.Event = "InstancingCmds bekleniyor..."
+            return false
+        end
+        if Net.GetFFlag("Instance_Global", true) ~= true then
+            ctx.Runtime.Status.Event = "Etkinlik girişi sunucu FFlag ile kapalı"
+            return false
+        end
+        if Instancing.IsBusy and Instancing.IsBusy() then
+            ctx.Runtime.Status.Event = "Dünya geçişi sürüyor..."
+            return true
+        end
+
+        local instanceId = (M.PT_Types and M.PT_Types.INSTANCE_ID) or "PumpkinTycoon"
+        if Instancing.DoesMeetRequirement and not Instancing.DoesMeetRequirement(instanceId) then
+            local msg = Instancing.GetRequirementMessage and Instancing.GetRequirementMessage(instanceId)
+            ctx.Runtime.Status.Event = tostring(msg or "Etkinlik giriş gereksinimi karşılanmıyor")
+            return false
+        end
+
+        local now = os.clock()
+        if now - (ctx.Runtime.Cooldowns.LastEventEnterAt or 0) < 12 then
+            ctx.Runtime.Status.Event = "Etkinlik dünyasına geçiş bekleniyor..."
+            return true
+        end
+
+        ctx.Runtime.Cooldowns.LastEventEnterAt = now
+        ctx.Runtime.Status.Event = "Etkinlik dünyasına giriliyor..."
+        task.spawn(function()
+            local ok, err = pcall(Instancing.Travel, instanceId)
+            if not ok then
+                Utils.debugWarn("AutoEnterEventWorld", err)
+            end
+        end)
+        return true
+    end
+
+    function Coordinator.StepOnce()
         if Net.GetFFlag("PumpkinTycoon_Enabled", true) ~= true then
             ctx.Runtime.Status.Event = "Pumpkin Tycoon is currently disabled by server FFlag"
+            return
+        end
+        if not Net.IsInPumpkinTycoon() then
+            if Coordinator.TryEnterEventWorld() then
+                return
+            end
+            ctx.Runtime.Status.Event = "Waiting: Enter Pumpkin Patch Tycoon instance"
             return
         end
 

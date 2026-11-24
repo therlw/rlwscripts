@@ -44,6 +44,17 @@ function PumpkinTycoonTab.Init(ctx)
         text = tostring(ctx.Runtime.Status.Event or "Balkabağı adası bekleniyor..."),
     })
 
+    UI.AutoEnterEventWorldToggle = UI.createBoundToggle(Tab, {
+        name = "Auto Event World (Otomatik Etkinliğe Gir)",
+        flag = "PTAutoEnterEventWorld",
+        value = PT.AutoEnterEventWorld,
+        description = "Etkinlik dünyasında değilsen otomatik olarak güncel etkinlik adasına girer",
+    }, function()
+        return PT.AutoEnterEventWorld
+    end, function(v)
+        PT.AutoEnterEventWorld = (v == true)
+    end)
+
     UI.OptimizePTToggle = UI.createBoundToggle(Tab, {
         name = "Alanı Optimize Et (RAM / FPS)",
         flag = "PTOptimize",
