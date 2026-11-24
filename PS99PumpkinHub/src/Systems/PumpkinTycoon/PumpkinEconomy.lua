@@ -194,8 +194,13 @@ function PumpkinEconomy.Init(ctx)
         return ok
     end
 
+    local function isFastRebirth()
+        return ctx.TycoonProgression and ctx.TycoonProgression.IsFastRebirthActive and ctx.TycoonProgression.IsFastRebirthActive() == true
+    end
+
     function Econ.TryBuyNearestEgg()
         local PT = States.PumpkinTycoon
+        if isFastRebirth() then return false end
         if not PT.AutoBuyNearestEgg or not Net.IsInPumpkinTycoon() then return false end
         if os.clock() - Cooldowns.LastEggHatchAt < CONFIG.EggHatchCooldown then return false end
         if PT.AutoFightTurkey and Move.IsOnTurkeyIsland() then return false end
@@ -383,8 +388,15 @@ function PumpkinEconomy.Init(ctx)
         if not M.PT_Types or not M.Merchant then return false end
         local NET = M.PT_Types.NET
 
-        -- 1. Auto Buy Merchant Pumpkins (Reworked)
-        if PT.AutoBuyMerchantPumpkins and M.Merchant.Unlocked and M.Merchant.Unlocked() then
+        -- 1. Auto Buy Merchant Pumpkins (Reworked) — paused during Fast Rebirth to conserve Patch Coins
+        if isFastRebirth() then
+            if M.Merchant.AutoAllowed and M.Merchant.AutoAllowed() and M.Merchant.AutoOn and M.Merchant.AutoOn() then
+                if os.clock() - Econ._lastMerchantAutoAttemptAt >= 3.0 then
+                    Econ._lastMerchantAutoAttemptAt = os.clock()
+                    Net.PlotInvoke(NET.SetAutoMerchant, false)
+                end
+            end
+        elseif PT.AutoBuyMerchantPumpkins and M.Merchant.Unlocked and M.Merchant.Unlocked() then
             if PT.AutoBuyMerchantMode == "Game Auto Merchant" then
                 if M.Merchant.AutoAllowed and M.Merchant.AutoAllowed() and M.Merchant.AutoOn and not M.Merchant.AutoOn() then
                     if os.clock() - Econ._lastMerchantAutoAttemptAt >= 3.0 then
@@ -471,7 +483,8 @@ function PumpkinEconomy.Init(ctx)
 
     function Econ.TryBuyCocoaBoosts()
         local PT = States.PumpkinTycoon
-        if not PT.AutoBuyCocoaBoosts or not Net.IsInPumpkinTycoon() then return false end
+        local fastRebirth = isFastRebirth()
+        if not (PT.AutoBuyCocoaBoosts or fastRebirth) or not Net.IsInPumpkinTycoon() then return false end
         local now = os.clock()
         if now - Cooldowns.LastCocoaBuyAt < CONFIG.CocoaPurchaseCooldown then return false end
         if now - Econ._lastCocoaTripAt < 45 then return false end
@@ -490,10 +503,20 @@ function PumpkinEconomy.Init(ctx)
         local bundleSec = math.min(BUNDLE_THRESHOLD_SEC, math.floor(tankSec * 0.85))
         local coins = Net.GetPumpkinCoins()
 
+        -- During Fast Rebirth, always prioritize Coins (+50% Patch Coins) first and don't starve urgent buttons
+        local cocoaAxes = PT.SelectedCocoaBoosts or {}
+        if fastRebirth then
+            cocoaAxes = { "Coins", "Damage" }
+            local nextBtnPrice = ctx.TycoonProgression and ctx.TycoonProgression.GetNextPriorityButtonPrice and ctx.TycoonProgression.GetNextPriorityButtonPrice()
+            if type(nextBtnPrice) == "number" and nextBtnPrice > 0 and nextBtnPrice < 200000000 and coins < nextBtnPrice * 2 then
+                return false
+            end
+        end
+
         local lowList = {}
         local hasUrgent = false
 
-        for orderIdx, axis in ipairs(PT.SelectedCocoaBoosts or {}) do
+        for orderIdx, axis in ipairs(cocoaAxes) do
             local key = COCOA_KEY_MAP[axis]
             local offer = key and M.Util_Cocoa.Offer and M.Util_Cocoa.Offer(key)
             if key and offer then
@@ -598,7 +621,8 @@ function PumpkinEconomy.Init(ctx)
 
     function Econ.TryUsePumpkinBoosts()
         local PT = States.PumpkinTycoon
-        if not PT.AutoUsePumpkinBoosts or not Net.IsInPumpkinTycoon() then return false end
+        local fastRebirth = isFastRebirth()
+        if not (PT.AutoUsePumpkinBoosts or fastRebirth) or not Net.IsInPumpkinTycoon() then return false end
         if os.clock() - Cooldowns.LastBoostCheckAt < CONFIG.BoostCheckInterval then return false end
 
         local M = Net.Mod
@@ -608,7 +632,17 @@ function PumpkinEconomy.Init(ctx)
 
         Cooldowns.LastBoostCheckAt = os.clock()
 
-        for _, axis in ipairs(PT.SelectedPumpkinBoosts or {}) do
+        local boostAxes = PT.SelectedPumpkinBoosts or {}
+        if fastRebirth then
+            boostAxes = { "Coins" }
+            for _, a in ipairs(PT.SelectedPumpkinBoosts or {}) do
+                if a ~= "Coins" then
+                    table.insert(boostAxes, a)
+                end
+            end
+        end
+
+        for _, axis in ipairs(boostAxes) do
             local itemName = BOOST_CONSUMABLE_NAME[axis]
             if itemName then
                 -- Check highest tier available in bag first: Tier III -> Tier II -> Tier I

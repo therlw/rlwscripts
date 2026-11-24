@@ -329,7 +329,18 @@ function WildAndTurkey.Init(ctx)
 
     function WT.TryBuyPetNets()
         local PT = States.PumpkinTycoon
-        if not PT.AutoBuyPetNets or not Net.IsInPumpkinTycoon() then return false end
+        if not Net.IsInPumpkinTycoon() then return false end
+        local fastRebirth = ctx.TycoonProgression and ctx.TycoonProgression.IsFastRebirthActive and ctx.TycoonProgression.IsFastRebirthActive()
+        if fastRebirth then
+            -- Fast Rebirth: conserve all Patch Coins for buttons; pause game Auto Nets if on
+            local M = Net.Mod
+            if M.Store and M.Store.AutoOn and M.Store.AutoOn() and os.clock() - WT._lastAutoNetsAttemptAt >= 3.0 then
+                WT._lastAutoNetsAttemptAt = os.clock()
+                Net.PlotInvoke(M.PT_Types.NET.SetAutoNets, false)
+            end
+            return false
+        end
+        if not PT.AutoBuyPetNets then return false end
         if not Net.OwnPlotPart2() or Net.GetFFlag("PumpkinTycoon_NetStore", true) ~= true then return false end
 
         local M = Net.Mod

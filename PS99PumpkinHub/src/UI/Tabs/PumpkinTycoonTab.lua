@@ -135,6 +135,17 @@ function PumpkinTycoonTab.Init(ctx)
         PT.AutoRebirth = (v == true)
     end)
 
+    UI.FastRebirthToggle = UI.createBoundToggle(Tab, {
+        name = "Fast Rebirth (Hızlı Rebirth Modu)",
+        flag = "PTFastRebirth",
+        value = PT.FastRebirth,
+        description = "Son 2 opsiyonel butonu (~9.9T Cannon/Shrine) atlar, Net/Merchant/Yumurta coin harcamasını durdurur, Patch Coin Payout/Cocoa/Boost'a öncelik verir",
+    }, function()
+        return PT.FastRebirth
+    end, function(v)
+        PT.FastRebirth = (v == true)
+    end)
+
     UI.createBoundDropdown(Tab, {
         name = "Rebirth Limiti",
         flag = "PTMaxRebirths",

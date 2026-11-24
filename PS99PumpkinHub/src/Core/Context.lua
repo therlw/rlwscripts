@@ -98,6 +98,7 @@ function Context.New(opts)
             ButtonPriorityMode = "Zone/Egg First", -- "Zone/Egg First" or "Cheapest First"
             AutoClaimIslandReward = true,
             AutoRebirth = false,
+            FastRebirth = false,
             MaxRebirths = "0", -- "0" = Unlimited, or target rebirth count ("1".."20")
 
             -- Eggs & Zones (Zones 1..8 incl. Part 2 Pine Woods / Maple Creek / Golden Ridge)

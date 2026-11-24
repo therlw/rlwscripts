@@ -18,6 +18,18 @@ function TycoonProgression.Init(ctx)
 
     local Prog = {}
 
+    function Prog.IsFastRebirthActive()
+        local PT = States.PumpkinTycoon
+        if not PT.FastRebirth then
+            return false
+        end
+        local maxTarget = tonumber(PT.MaxRebirths) or 0
+        if maxTarget > 0 and Net.GetPumpkinRebirths() >= maxTarget then
+            return false
+        end
+        return true
+    end
+
     local function findButtonPosition(btnId)
         local padsFolder = workspace:FindFirstChild("PumpkinTycoonPads")
         if padsFolder then
@@ -65,20 +77,24 @@ function TycoonProgression.Init(ctx)
             return {}
         end
 
+        local fastRebirth = Prog.IsFastRebirthActive()
         local rows = {}
         for _, btn in ipairs(avail) do
-            local price = 0
-            local okP, p = pcall(M.Util_Buttons.Price, btn, priceMult)
-            if okP and type(p) == "number" then price = p end
-            table.insert(rows, {
-                def = btn,
-                id = btn.Id,
-                zone = btn.Zone or 1,
-                part = btn.Part or 1,
-                price = price,
-                isZoneOrEgg = (string.find(btn.Id, "_Zone$") ~= nil) or (string.find(btn.Id, "_Egg$") ~= nil),
-                isSpecial = btn.Id == "Zone8_Cannon" or btn.Id == "Zone8_RebirthShrine" or btn.Id == "PetNetStore" or btn.Id == "CocoaStand" or btn.Id == "UpgradeMachine" or btn.Id == "Merchant",
-            })
+            -- Fast Rebirth skips the 2 optional end buttons (Zone8_Cannon & Zone8_RebirthShrine, ~9.94T total)
+            if not (fastRebirth and btn.Optional == true) then
+                local price = 0
+                local okP, p = pcall(M.Util_Buttons.Price, btn, priceMult)
+                if okP and type(p) == "number" then price = p end
+                table.insert(rows, {
+                    def = btn,
+                    id = btn.Id,
+                    zone = btn.Zone or 1,
+                    part = btn.Part or 1,
+                    price = price,
+                    isZoneOrEgg = (string.find(btn.Id, "_Zone$") ~= nil) or (string.find(btn.Id, "_Egg$") ~= nil),
+                    isSpecial = btn.Id == "Zone8_Cannon" or btn.Id == "Zone8_RebirthShrine" or btn.Id == "PetNetStore" or btn.Id == "CocoaStand" or btn.Id == "UpgradeMachine" or btn.Id == "Merchant",
+                })
+            end
         end
 
         if States.PumpkinTycoon.ButtonPriorityMode == "Zone/Egg First" then
@@ -122,9 +138,10 @@ function TycoonProgression.Init(ctx)
         local NET = M.PT_Types.NET
         local buttonsState = Net.PlotSave(M.PT_Types.VAR.Buttons)
         if type(buttonsState) ~= "table" then buttonsState = {} end
+        local fastRebirth = Prog.IsFastRebirthActive()
 
-        -- 1. Check Auto Claim Island Reward (Plot NET.Complete)
-        if PT.AutoClaimIslandReward then
+        -- 1. Check Auto Claim Island Reward (Plot NET.Complete) — skipped during Fast Rebirth to go straight to Rebirth
+        if PT.AutoClaimIslandReward and not fastRebirth then
             local ownP2 = Net.OwnPlotPart2()
             local okComp, _, _, ratio = pcall(M.Util_Buttons.CompleteProgress, buttonsState, ownP2)
             local alreadyDone = M.Util_Buttons.Completed and M.Util_Buttons.Completed(buttonsState)
@@ -146,7 +163,7 @@ function TycoonProgression.Init(ctx)
         end
 
         -- 2. Check Auto Buy Buttons (Plot NET.Buy)
-        if not PT.AutoBuyButtons then return false end
+        if not (PT.AutoBuyButtons or fastRebirth) then return false end
         if os.clock() - Cooldowns.LastButtonAt < CONFIG.ButtonCooldown then return false end
 
         local avail = Prog.GetAvailableButtons()
@@ -162,7 +179,7 @@ function TycoonProgression.Init(ctx)
         local pos = findButtonPosition(target.id)
         if pos then
             local arrived = Move.MoveTo(pos, 4.3, 3.0, function()
-                return not States.PumpkinTycoon.AutoBuyButtons
+                return not (States.PumpkinTycoon.AutoBuyButtons or Prog.IsFastRebirthActive())
             end)
             if not arrived then return false end
         end
@@ -182,7 +199,8 @@ function TycoonProgression.Init(ctx)
 
     function Prog.TryAutoRebirth()
         local PT = States.PumpkinTycoon
-        if not PT.AutoRebirth or not Net.IsInPumpkinTycoon() then return false end
+        local fastRebirth = Prog.IsFastRebirthActive()
+        if not (PT.AutoRebirth or fastRebirth) or not Net.IsInPumpkinTycoon() then return false end
         if Net.GetFFlag("PumpkinTycoon_Rebirth", true) ~= true then return false end
         if not Net.OwnPlotPart2() then return false end
 
@@ -208,11 +226,19 @@ function TycoonProgression.Init(ctx)
         Move.ReturnToOwnIsland()
         local plotModel = Net.GetPlotModel()
         local interact = plotModel and plotModel:FindFirstChild("Interactable")
-        local rebirthPad = interact and (interact:FindFirstChild("RebirthShrineTouch") or interact:FindFirstChild("Rebirth") or interact:FindFirstChild("TycoonRebirthShrine"))
+        -- When Fast Rebirth skips Zone8_RebirthShrine, use the permanent entrance Rebirth pad directly
+        local rebirthPad = nil
+        if interact then
+            if fastRebirth then
+                rebirthPad = interact:FindFirstChild("Rebirth") or interact:FindFirstChild("RebirthShrineTouch") or interact:FindFirstChild("TycoonRebirthShrine")
+            else
+                rebirthPad = interact:FindFirstChild("RebirthShrineTouch") or interact:FindFirstChild("Rebirth") or interact:FindFirstChild("TycoonRebirthShrine")
+            end
+        end
         local padPos = Utils.getInstancePos(rebirthPad)
         if padPos then
             local okWalk = Move.MoveTo(padPos, 6, 3.5, function()
-                return not States.PumpkinTycoon.AutoRebirth
+                return not (States.PumpkinTycoon.AutoRebirth or Prog.IsFastRebirthActive())
             end)
             if not okWalk then return false end
         end
@@ -234,7 +260,8 @@ function TycoonProgression.Init(ctx)
 
     function Prog.TryBuyUpgrades()
         local PT = States.PumpkinTycoon
-        if not PT.AutoBuyUpgrades or not Net.IsInPumpkinTycoon() then return false end
+        local fastRebirth = Prog.IsFastRebirthActive()
+        if not (PT.AutoBuyUpgrades or fastRebirth) or not Net.IsInPumpkinTycoon() then return false end
         if os.clock() - Cooldowns.LastUpgradeAt < CONFIG.UpgradeCooldown then return false end
 
         local M = Net.Mod
@@ -245,18 +272,36 @@ function TycoonProgression.Init(ctx)
         local tokens = Net.GetPumpkinTokens()
         if tokens <= 0 then return false end
 
-        -- Pick cheapest affordable selected upgrade not at MaxTier
+        -- During Fast Rebirth, prioritize Patch Coin Payout (PumpkinCoins) then PumpkinDamage first
         local bestTrack = nil
         local bestCost = math.huge
-        for _, track in ipairs(M.PT_Upgrades.TRACKS or {}) do
-            if selectedSet[track] then
-                local tier = M.Upgrades.Tier(track) or 0
-                local maxTier = M.Util_Upgrades.MaxTier(track) or 0
+        if fastRebirth then
+            for _, priorityTrack in ipairs({ "PumpkinCoins", "PumpkinDamage" }) do
+                local tier = M.Upgrades.Tier(priorityTrack) or 0
+                local maxTier = M.Util_Upgrades.MaxTier(priorityTrack) or 0
                 if tier < maxTier then
-                    local cost = M.Upgrades.Cost(track, tier + 1)
-                    if type(cost) == "number" and tokens >= cost and cost < bestCost then
+                    local cost = M.Upgrades.Cost(priorityTrack, tier + 1)
+                    if type(cost) == "number" and tokens >= cost then
+                        bestTrack = priorityTrack
                         bestCost = cost
-                        bestTrack = track
+                        break
+                    end
+                end
+            end
+        end
+
+        -- Fallback to cheapest affordable selected upgrade not at MaxTier
+        if not bestTrack then
+            for _, track in ipairs(M.PT_Upgrades.TRACKS or {}) do
+                if selectedSet[track] then
+                    local tier = M.Upgrades.Tier(track) or 0
+                    local maxTier = M.Util_Upgrades.MaxTier(track) or 0
+                    if tier < maxTier then
+                        local cost = M.Upgrades.Cost(track, tier + 1)
+                        if type(cost) == "number" and tokens >= cost and cost < bestCost then
+                            bestCost = cost
+                            bestTrack = track
+                        end
                     end
                 end
             end
