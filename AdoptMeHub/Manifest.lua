@@ -3,7 +3,7 @@
 
 return {
     Name = "AdoptMeHub",
-    Version = "AdoptMe-v1.0",
+    Version = "AdoptMe-v1.1",
     DefaultBranch = "main",
 
     Modules = {

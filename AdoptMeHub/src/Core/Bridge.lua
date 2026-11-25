@@ -129,7 +129,9 @@ function Bridge.Init(ctx)
         if not M.InteriorsM then return false end
         local cur = B.GetCurrentLocation()
         if cur and cur.destination_id == destId then
-            return true
+            if destId ~= "housing" or (settings and cur.house_owner == settings.house_owner) then
+                return true
+            end
         end
         if M.InteriorsM.entering then
             return false
@@ -137,24 +139,97 @@ function Bridge.Init(ctx)
         local fn = M.InteriorsM.enter_smooth or M.InteriorsM.enter
         if type(fn) ~= "function" then return false end
         local ok = pcall(fn, destId, doorId or "MainDoor", settings)
-        task.wait(0.6)
+        task.wait(0.8)
         return ok
+    end
+
+    function B.EnterOwnHouse()
+        local cur = B.GetCurrentLocation()
+        if cur and cur.destination_id == "housing" and (cur.house_owner == nil or cur.house_owner == LocalPlayer) then
+            return true
+        end
+        return B.EnterInterior("housing", "MainDoor", { house_owner = LocalPlayer })
+    end
+
+    -- Finds matching furniture inside LocalPlayer's house_interior and resolves its exact UseBlock name
+    function B.FindOwnHouseFurniture(idPatterns)
+        local d = B.GetMyData()
+        local hi = d and d.house_interior
+        local furnTbl = hi and hi.furniture
+        if type(furnTbl) ~= "table" then return nil, nil end
+
+        local matchedUid, matchedId = nil, nil
+        for _, pat in ipairs(idPatterns) do
+            local lpat = string.lower(pat)
+            for uid, f in pairs(furnTbl) do
+                if type(f) == "table" and f.id and string.find(string.lower(tostring(f.id)), lpat, 1, true) then
+                    matchedUid = uid
+                    matchedId = f.id
+                    break
+                end
+            end
+            if matchedUid then break end
+        end
+
+        if not matchedUid then return nil, nil end
+
+        -- Inspect Workspace.HouseInteriors.furniture to resolve exact Seat1 vs UseBlock name
+        local useName = "UseBlock"
+        local hiWs = workspace:FindFirstChild("HouseInteriors")
+        local fFolder = hiWs and hiWs:FindFirstChild("furniture")
+        if fFolder then
+            local suffix = "/" .. tostring(matchedUid)
+            for _, ch in ipairs(fFolder:GetChildren()) do
+                if string.sub(ch.Name, -#suffix) == suffix then
+                    local ub = ch:FindFirstChild("UseBlocks", true)
+                    if ub then
+                        if ub:FindFirstChild("UseBlock") then
+                            useName = "UseBlock"
+                        elseif ub:FindFirstChild("Seat1") then
+                            useName = "Seat1"
+                        else
+                            local firstPart = ub:FindFirstChildWhichIsA("BasePart")
+                            if firstPart then useName = firstPart.Name end
+                        end
+                    end
+                    break
+                end
+            end
+        end
+
+        return matchedUid, useName, matchedId
     end
 
     function B.TeleportStaticLocation(locName)
         local cur = B.GetCurrentLocation()
         if not cur or cur.destination_id ~= "MainMap" then
             B.EnterInterior("MainMap", "Neighborhood!MainDoor")
-            task.wait(0.6)
+            task.wait(0.8)
         end
         local sm = workspace:FindFirstChild("StaticMap")
-        local tp = sm and sm:FindFirstChild("TeleportLocations")
+        if not sm then return false end
+
+        -- Exact 2026 RateArea target coordinates for Golden ailments
+        local directTargets = {
+            bored = sm:FindFirstChild("Park") and (sm.Park:FindFirstChild("BoredAilmentTarget") or sm.Park:FindFirstChild("AilmentTarget")),
+            camping = sm:FindFirstChild("Campsite") and sm.Campsite:FindFirstChild("CampsiteOrigin"),
+            beach_party = sm:FindFirstChild("Beach") and (sm.Beach:FindFirstChild("BeachPartyNavTarget") or sm.Beach:FindFirstChild("BeachPartyAilmentTarget")),
+        }
+        local targetInst = directTargets[locName]
+        if targetInst then
+            local pos = ctx.Utils.getPos(targetInst)
+            if pos then
+                return ctx.Utils.moveToPosition(pos, 0.3)
+            end
+        end
+
+        local tp = sm:FindFirstChild("TeleportLocations")
         if not tp then return false end
         for _, child in ipairs(tp:GetChildren()) do
             if child.Name == locName then
                 local pos = ctx.Utils.getPos(child)
                 if pos then
-                    return ctx.Utils.moveToPosition(pos, 0.25)
+                    return ctx.Utils.moveToPosition(pos, 0.3)
                 end
             end
         end

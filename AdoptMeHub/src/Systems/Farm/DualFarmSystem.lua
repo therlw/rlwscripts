@@ -1,5 +1,5 @@
 -- src/Systems/Farm/DualFarmSystem.lua
--- Handles Dual Farm (Baby + Pet), Ailment Solver, Auto-Age Queue, Auto-Hatch, Auto-Lure, Auto-Buy Eggs, Daily Claims
+-- Verified 2026 Dual Farm (Baby + Pet), Starter Egg & Beginner Friendly, Anti-Stuck Scheduler
 
 local DualFarmSystem = {}
 
@@ -12,7 +12,8 @@ function DualFarmSystem.Init(ctx)
     local CollectionService = ctx.Roblox.CollectionService
 
     local DF = {
-        _lastCompletedKeys = {},
+        _attemptCooldowns = {},
+        _busy = false,
     }
 
     local RARITY_RANK = {
@@ -25,15 +26,41 @@ function DualFarmSystem.Init(ctx)
 
     local INTERIOR_AILMENTS = {
         school = { dest = "School", door = "MainDoor" },
-        sick = { dest = "Hospital", door = "MainDoor" },
+        pizza_party = { dest = "PizzaShop", door = "MainDoor" },
         salon = { dest = "Salon", door = "MainDoor" },
         cat_cafe = { dest = "CatCafe", door = "MainDoor" },
     }
 
     local STATIC_AILMENTS = {
-        bored = "Park",
-        camping = "exterior_camping",
-        beach_party = "exterior_beach",
+        bored = "bored",
+        camping = "camping",
+        beach_party = "beach_party",
+    }
+
+    -- Instant tasks run with higher priority than 50s waiting tasks
+    local TASK_PRIORITY = {
+        mystery = 1,
+        pet_me = 2,
+        sick = 3,
+        hungry = 4,
+        thirsty = 5,
+        sleepy = 6,
+        dirty = 7,
+        toilet = 8,
+        play = 9,
+        walk = 10,
+        ride = 10,
+        swim = 10,
+        leaf_pile = 10,
+        rain_puddle = 10,
+        snowman = 10,
+        school = 15,
+        pizza_party = 15,
+        salon = 15,
+        cat_cafe = 15,
+        bored = 15,
+        camping = 15,
+        beach_party = 15,
     }
 
     local function getPetInfo(kind)
@@ -81,6 +108,22 @@ function DualFarmSystem.Init(ctx)
         return nil
     end
 
+    local function isAilmentPresent(scopeKey, kind)
+        local am = Bridge.GetAilmentsManager()
+        if scopeKey == "baby" then
+            return am.baby_ailments and am.baby_ailments[kind] ~= nil
+        end
+        return am.ailments and am.ailments[scopeKey] and am.ailments[scopeKey][kind] ~= nil
+    end
+
+    local function getAilmentEntry(scopeKey, kind)
+        local am = Bridge.GetAilmentsManager()
+        if scopeKey == "baby" then
+            return am.baby_ailments and am.baby_ailments[kind] or nil
+        end
+        return am.ailments and am.ailments[scopeKey] and am.ailments[scopeKey][kind] or nil
+    end
+
     local function ensureBabyTeam()
         local F = States.Farm
         if not (F.DualFarm and F.AutoBabyTeam) then return end
@@ -90,8 +133,8 @@ function DualFarmSystem.Init(ctx)
                 source_for_logging = "adopt_me_hub",
             })
             if ok then
-                ctx.Runtime.Status.Farm = "Rol: Baby seçildi (Dual Farm)"
-                task.wait(0.4)
+                ctx.Runtime.Status.Farm = "Rol: Bebek (Babies) seçildi"
+                task.wait(0.35)
             end
         end
     end
@@ -112,8 +155,11 @@ function DualFarmSystem.Init(ctx)
 
                 if wantEggsOnly then
                     if isEgg then
-                        bestUid = uid
-                        break
+                        -- Prefer starter_egg first for brand-new players
+                        if pet.id == "starter_egg" then
+                            return uid
+                        end
+                        bestUid = bestUid or uid
                     end
                 else
                     if not isEgg and age < 6 then
@@ -137,6 +183,7 @@ function DualFarmSystem.Init(ctx)
 
     function DF.TryRotatePetOrEgg()
         local F = States.Farm
+        if not F.DualFarm then return false end
         if not (F.AutoHatchEggs or F.AutoAgeQueue or F.DualFarm) then return false end
         if os.clock() - Cooldowns.LastEquipAt < 3.0 then return false end
 
@@ -153,7 +200,6 @@ function DualFarmSystem.Init(ctx)
         if not activePet then
             needSwap = true
         elseif preferEgg and not activeIsEgg then
-            -- Switch to egg if any egg exists in inventory
             if pickNextPetFromQueue(true) ~= nil then
                 needSwap = true
             end
@@ -171,7 +217,6 @@ function DualFarmSystem.Init(ctx)
             nextUid = pickNextPetFromQueue(false)
         end
         if not nextUid and not activePet then
-            -- Pick any first pet if nothing is equipped
             for uid in pairs(pets) do
                 nextUid = uid
                 break
@@ -184,96 +229,273 @@ function DualFarmSystem.Init(ctx)
             if ok then
                 local pName = (pets[nextUid] and pets[nextUid].id) or nextUid
                 ctx.Runtime.Status.Farm = "Kuşanıldı: " .. tostring(pName)
+                task.wait(0.4)
                 return true
             end
         end
         return false
     end
 
-    local function completeUseItemAilment(kind, targetCharWrapper)
-        local item = nil
-        if kind == "hungry" then
-            item = findInventoryItem("food", function(it)
-                local d = Bridge.Mod.InventoryDB and Bridge.Mod.InventoryDB.food and Bridge.Mod.InventoryDB.food[it.kind or it.id]
-                return d and (d.ailment_to_boost == "hungry" or string.find(tostring(it.id), "apple", 1, true) or string.find(tostring(it.id), "sandwich", 1, true))
-            end)
-            if not item then
-                -- Buy cheap apple from ShopAPI
-                Bridge.RouteInvoke("ShopAPI/BuyItem", "food", "apple", {})
-                task.wait(0.25)
-                item = findInventoryItem("food", function(it) return it.id == "apple" end)
-            end
-        elseif kind == "thirsty" then
-            item = findInventoryItem("food", function(it)
-                local d = Bridge.Mod.InventoryDB and Bridge.Mod.InventoryDB.food and Bridge.Mod.InventoryDB.food[it.kind or it.id]
-                return d and (d.ailment_to_boost == "thirsty" or string.find(tostring(it.id), "water", 1, true) or string.find(tostring(it.id), "tea", 1, true))
-            end)
-            if not item then
-                Bridge.RouteInvoke("ShopAPI/BuyItem", "food", "water", {})
-                task.wait(0.25)
-                item = findInventoryItem("food", function(it) return it.id == "water" end)
-            end
-        elseif kind == "play" then
-            item = findInventoryItem("toys", function(it)
-                local d = Bridge.Mod.InventoryDB and Bridge.Mod.InventoryDB.toys and Bridge.Mod.InventoryDB.toys[it.kind or it.id]
-                return d and (d.tool == "ThrowToyTool" or d.tool == "ChewToyTool" or d.tool == "SqueakyToyTool")
-            end)
-        end
-
-        if not item then return false end
-
-        if Bridge.Mod.UseItemHelper and Bridge.Mod.UseItemHelper.use_item and targetCharWrapper then
-            pcall(Bridge.Mod.UseItemHelper.use_item, targetCharWrapper, item)
-            return true
-        end
-        Bridge.RouteInvoke("ToolAPI/Equip", item.unique, { use_sound_delay = false })
+    local function consumePlayerItem(itemUid, scopeKey, ailmentKind)
+        if not itemUid then return false end
+        Bridge.RouteInvoke("ToolAPI/Equip", itemUid, { use_sound_delay = false })
         task.wait(0.2)
-        Bridge.RouteInvoke("ToolAPI/ServerUseTool", item.unique, "END")
-        return true
+        for _ = 1, 6 do
+            if not isAilmentPresent(scopeKey, ailmentKind) then
+                return true
+            end
+            Bridge.RouteInvoke("ToolAPI/ServerUseTool", itemUid, "START")
+            local okEnd, used = Bridge.RouteInvoke("ToolAPI/ServerUseTool", itemUid, "END")
+            task.wait(0.3)
+            if not isAilmentPresent(scopeKey, ailmentKind) then
+                return true
+            end
+            if not okEnd or used == false then
+                break
+            end
+        end
+        return not isAilmentPresent(scopeKey, ailmentKind)
     end
 
-    local function completeAilment(kind, targetKey, isPet, petUid, petCharWrapper)
-        if kind == "mystery" and States.Farm.AutoMysteryAilment and isPet and petUid then
-            Bridge.RouteFire("AilmentsAPI/ChooseMysteryAilment", petUid, kind, 1, "hungry")
-            ctx.Runtime.Status.Farm = "Mystery görev seçildi (hungry)"
-            return true
-        end
+    local function activateHouseFurnitureAndWait(idPatterns, charTarget, scopeKey, ailmentKind, maxWaitSec)
+        if not charTarget then return false end
+        if not Bridge.EnterOwnHouse() then return false end
+        task.wait(0.45)
 
-        if kind == "pet_me" and isPet and petUid then
-            local pChar = petCharWrapper and petCharWrapper.char
-            if pChar then
-                Bridge.RouteFire("AdoptAPI/FocusPet", pChar)
-                task.wait(0.15)
+        local furnUid, useBlockName = Bridge.FindOwnHouseFurniture(idPatterns)
+        if not furnUid then return false end
+
+        local _, hrp, hum = Utils.getCharacterParts()
+        local cf = (hrp and hrp.CFrame) or CFrame.new()
+
+        task.spawn(function()
+            Bridge.RouteInvoke("HousingAPI/ActivateFurniture", LocalPlayer, furnUid, useBlockName or "UseBlock", { cframe = cf }, charTarget)
+        end)
+
+        local deadline = os.clock() + (maxWaitSec or 12)
+        while os.clock() < deadline and States.Farm.DualFarm do
+            task.wait(0.5)
+            if not isAilmentPresent(scopeKey, ailmentKind) then
+                pcall(function()
+                    if hum and hum.Sit then
+                        hum.Sit = false
+                        hum.Jump = true
+                    end
+                    Bridge.RouteInvoke("PetAPI/ExitFurnitureUseStates")
+                end)
+                return true
             end
-            Bridge.RouteFire("PetAPI/PetPetted", petUid, LocalPlayer)
-            Bridge.RouteFire("AilmentsAPI/ProgressPetMeAilment", petUid)
-            if pChar then
-                Bridge.RouteFire("AdoptAPI/UnfocusPet", pChar)
+        end
+
+        pcall(function()
+            if hum and hum.Sit then
+                hum.Sit = false
+                hum.Jump = true
             end
-            ctx.Runtime.Status.Farm = "Pet okşandı (pet_me)"
-            return true
+            Bridge.RouteInvoke("PetAPI/ExitFurnitureUseStates")
+        end)
+        return not isAilmentPresent(scopeKey, ailmentKind)
+    end
+
+    local function completeAilment(kind, scopeKey, isPet, petUid, petCharWrapper)
+        local invDB = Bridge.Mod.InventoryDB
+
+        -- 1. Mystery Ailment (with real slot selection)
+        if kind == "mystery" and States.Farm.AutoMysteryAilment and isPet and petUid and petCharWrapper then
+            pcall(function()
+                local am = Bridge.Mod.AilmentsDB and Bridge.Mod.AilmentsDB.mystery
+                local act = am and am.create_action and getAilmentEntry(scopeKey, kind)
+                if act and act.components and act.components.mystery then
+                    local slots = act.components.mystery
+                    Bridge.RouteFire("AilmentsAPI/ChooseMysteryAilment", petUid, "mystery", 1, slots[1] or "hungry")
+                else
+                    Bridge.RouteFire("AilmentsAPI/ChooseMysteryAilment", petUid, "mystery", 1, "hungry")
+                end
+            end)
+            ctx.Runtime.Status.Farm = "Gizemli görev seçildi"
+            task.wait(0.4)
+            return not isAilmentPresent(scopeKey, kind)
         end
 
-        if kind == "dirty" and isPet and petUid then
-            -- Use Nursery/Salon or dirty progress / house tub
-            Bridge.RouteFire("AilmentsAPI/ProgressDirtyAilment", petUid)
-            Bridge.EnterInterior("Salon", "MainDoor")
-            ctx.Runtime.Status.Farm = "Temizleniyor (dirty)"
-            return true
-        elseif kind == "dirty" then
-            Bridge.EnterInterior("Salon", "MainDoor")
-            ctx.Runtime.Status.Farm = "Bebek temizleniyor (Salon)"
-            return true
+        -- 2. Pet Me (requires FocusPetApp:capture_focus(petCharWrapper) -> PetPetted + ProgressPetMeAilment)
+        if kind == "pet_me" and isPet and petUid and petCharWrapper then
+            ctx.Runtime.Status.Farm = "Pet okşanıyor (pet_me)..."
+            local ui = Bridge.Mod.UIManager
+            local fpa = ui and ui.apps and ui.apps.FocusPetApp
+            if fpa and fpa.capture_focus then
+                pcall(function() fpa:capture_focus(petCharWrapper) end)
+                task.wait(0.35)
+                Bridge.RouteFire("PetAPI/PetPetted", petUid, LocalPlayer)
+                Bridge.RouteFire("AilmentsAPI/ProgressPetMeAilment", petUid)
+                task.wait(0.85)
+                if fpa.release_focus then
+                    pcall(function() fpa:release_focus() end)
+                end
+            else
+                Bridge.RouteFire("AdoptAPI/FocusPet", petCharWrapper.char)
+                Bridge.RouteFire("PetAPI/PetPetted", petUid, LocalPlayer)
+                Bridge.RouteFire("AilmentsAPI/ProgressPetMeAilment", petUid)
+                task.wait(0.85)
+                Bridge.RouteFire("AdoptAPI/UnfocusPet", petCharWrapper.char)
+            end
+            return not isAilmentPresent(scopeKey, kind)
         end
 
+        -- 3. Sick -> FREE healing_apple cure (or Hospital fallback)
+        if kind == "sick" then
+            ctx.Runtime.Status.Farm = "Hastalık iyileştiriliyor (sick)..."
+            local healItem = findInventoryItem("food", function(it)
+                return (it.id or it.kind) == "healing_apple"
+            end)
+            if not healItem then
+                Bridge.RouteInvoke("ShopAPI/BuyItem", "food", "healing_apple", {})
+                task.wait(0.25)
+                healItem = findInventoryItem("food", function(it)
+                    return (it.id or it.kind) == "healing_apple"
+                end)
+            end
+            if healItem then
+                if not isPet then
+                    if consumePlayerItem(healItem.unique, scopeKey, kind) then
+                        return true
+                    end
+                elseif petCharWrapper then
+                    local ui = Bridge.Mod.UIManager
+                    local fpa = ui and ui.apps and ui.apps.FocusPetApp
+                    if fpa and fpa.capture_focus and fpa.feed_pet then
+                        pcall(function()
+                            fpa:capture_focus(petCharWrapper)
+                            task.wait(0.25)
+                            fpa:feed_pet(healItem)
+                        end)
+                        task.wait(1.5)
+                        pcall(function() fpa:release_focus() end)
+                        if not isAilmentPresent(scopeKey, kind) then
+                            return true
+                        end
+                    end
+                end
+            end
+            Bridge.EnterInterior("Hospital", "MainDoor")
+            return not isAilmentPresent(scopeKey, kind)
+        end
+
+        -- 4. Hungry
+        if kind == "hungry" then
+            ctx.Runtime.Status.Farm = isPet and "Pet besleniyor..." or "Bebek yemek yiyor..."
+            if isPet and petCharWrapper and petCharWrapper.char then
+                if activateHouseFurnitureAndWait({ "pet_food_bowl", "food_bowl", "ailments_refresh_2024_cheap_food_bowl" }, petCharWrapper.char, scopeKey, kind, 8) then
+                    return true
+                end
+            end
+
+            local foodItem = findInventoryItem("food", function(it)
+                local d = invDB and invDB.food and invDB.food[it.kind or it.id]
+                return d and (d.ailment_to_boost == "hungry" or string.find(tostring(it.id), "sandwich", 1, true) or string.find(tostring(it.id), "apple", 1, true))
+            end)
+            if not foodItem and Bridge.GetMoney() >= 1 then
+                Bridge.RouteInvoke("ShopAPI/BuyItem", "food", "apple", {})
+                task.wait(0.25)
+                foodItem = findInventoryItem("food", function(it) return (it.id or it.kind) == "apple" end)
+            end
+            if foodItem then
+                if not isPet then
+                    return consumePlayerItem(foodItem.unique, scopeKey, kind)
+                elseif petCharWrapper then
+                    local ui = Bridge.Mod.UIManager
+                    local fpa = ui and ui.apps and ui.apps.FocusPetApp
+                    if fpa and fpa.capture_focus and fpa.feed_pet then
+                        pcall(function()
+                            fpa:capture_focus(petCharWrapper)
+                            task.wait(0.25)
+                            fpa:feed_pet(foodItem)
+                        end)
+                        task.wait(1.5)
+                        pcall(function() fpa:release_focus() end)
+                    elseif Bridge.Mod.UseItemHelper and Bridge.Mod.UseItemHelper.use_item then
+                        pcall(Bridge.Mod.UseItemHelper.use_item, petCharWrapper, foodItem)
+                        task.wait(1.5)
+                    end
+                    return not isAilmentPresent(scopeKey, kind)
+                end
+            end
+            return false
+        end
+
+        -- 5. Thirsty
+        if kind == "thirsty" then
+            ctx.Runtime.Status.Farm = isPet and "Pet su içiyor..." or "Bebek su içiyor..."
+            if isPet and petCharWrapper and petCharWrapper.char then
+                if activateHouseFurnitureAndWait({ "pet_water_bowl", "water_bowl", "ailments_refresh_2024_cheap_water_bowl" }, petCharWrapper.char, scopeKey, kind, 8) then
+                    return true
+                end
+            end
+
+            local drinkItem = findInventoryItem("food", function(it)
+                local d = invDB and invDB.food and invDB.food[it.kind or it.id]
+                return d and d.ailment_to_boost == "thirsty"
+            end)
+            if not drinkItem and Bridge.GetMoney() >= 1 then
+                Bridge.RouteInvoke("ShopAPI/BuyItem", "food", "water", {})
+                task.wait(0.25)
+                drinkItem = findInventoryItem("food", function(it) return (it.id or it.kind) == "water" end)
+            end
+            if drinkItem then
+                if not isPet then
+                    return consumePlayerItem(drinkItem.unique, scopeKey, kind)
+                elseif petCharWrapper then
+                    local ui = Bridge.Mod.UIManager
+                    local fpa = ui and ui.apps and ui.apps.FocusPetApp
+                    if fpa and fpa.capture_focus and fpa.feed_pet then
+                        pcall(function()
+                            fpa:capture_focus(petCharWrapper)
+                            task.wait(0.25)
+                            fpa:feed_pet(drinkItem)
+                        end)
+                        task.wait(1.5)
+                        pcall(function() fpa:release_focus() end)
+                    end
+                    return not isAilmentPresent(scopeKey, kind)
+                end
+            end
+            return false
+        end
+
+        -- 6. Sleepy (House bed/crib -> wait until cleared!)
         if kind == "sleepy" then
-            -- Nursery & Hospital & School have free beds; enter Nursery for fast recovery
+            local targetChar = isPet and (petCharWrapper and petCharWrapper.char) or LocalPlayer.Character
+            ctx.Runtime.Status.Farm = isPet and "Pet uyutuluyor (Ev Yatağı)..." or "Bebek uyutuluyor (Ev Yatağı)..."
+            if activateHouseFurnitureAndWait({ "basicbed", "basiccrib", "crib", "bed" }, targetChar, scopeKey, kind, 14) then
+                return true
+            end
             Bridge.EnterInterior("Nursery", "MainDoor")
-            ctx.Runtime.Status.Farm = "Uyku görevi (Nursery)"
-            return true
+            return false
         end
 
-        if kind == "toilet" then
+        -- 7. Dirty (House shower/bathtub -> wait until cleared!)
+        if kind == "dirty" then
+            local targetChar = isPet and (petCharWrapper and petCharWrapper.char) or LocalPlayer.Character
+            local patterns = isPet
+                and { "cheap_pet_bathtub", "cheapbathtub", "pet_bathtub", "bathtub", "modernshower", "shower" }
+                or { "modernshower", "shower", "bathtub", "cheapbathtub" }
+            ctx.Runtime.Status.Farm = isPet and "Pet yıkanıyor (Küvet)..." or "Bebek duş alıyor..."
+            if activateHouseFurnitureAndWait(patterns, targetChar, scopeKey, kind, 14) then
+                return true
+            end
+            if isPet and petUid then
+                Bridge.RouteFire("AilmentsAPI/ProgressDirtyAilment", petUid)
+            end
+            Bridge.EnterInterior("Salon", "MainDoor")
+            return not isAilmentPresent(scopeKey, kind)
+        end
+
+        -- 8. Toilet (House toilet / litter box OR FireHydrantServer)
+        if kind == "toilet" and isPet then
+            if petCharWrapper and petCharWrapper.char then
+                if activateHouseFurnitureAndWait({ "litter_box", "toilet" }, petCharWrapper.char, scopeKey, kind, 10) then
+                    return true
+                end
+            end
             local hydrants = CollectionService:GetTagged("FireHydrantServer")
             if #hydrants > 0 then
                 local pos = Utils.getPos(hydrants[1])
@@ -281,44 +503,66 @@ function DualFarmSystem.Init(ctx)
                     local cur = Bridge.GetCurrentLocation()
                     if not cur or cur.destination_id ~= "MainMap" then
                         Bridge.EnterInterior("MainMap", "Neighborhood!MainDoor")
-                        task.wait(0.4)
+                        task.wait(0.6)
                     end
-                    Utils.moveToPosition(pos, 0.25)
+                    Utils.moveToPosition(pos, 0.3)
                     ctx.Runtime.Status.Farm = "Tuvalet görevi (Yangın Musluğu)"
-                    return true
+                    task.wait(2.5)
+                    return not isAilmentPresent(scopeKey, kind)
                 end
             end
+            return false
         end
 
+        -- 9. Play
+        if kind == "play" and isPet and petCharWrapper then
+            local toy = findInventoryItem("toys", function(it)
+                local d = invDB and invDB.toys and invDB.toys[it.kind or it.id]
+                return d and (d.tool == "ThrowToyTool" or d.tool == "ChewToyTool" or d.tool == "SqueakyToyTool")
+            end)
+            if toy then
+                ctx.Runtime.Status.Farm = "Oyun görevi (" .. tostring(toy.id or toy.kind) .. ")"
+                Bridge.RouteInvoke("ToolAPI/Equip", toy.unique, { use_sound_delay = false })
+                task.wait(0.25)
+                Bridge.RouteInvoke("PetObjectAPI/CreatePetObject", "__Enum_PetObjectCreatorType_1", {
+                    reaction_name = "ThrowToyReaction",
+                    unique_id = toy.unique,
+                })
+                task.wait(2.0)
+                return not isAilmentPresent(scopeKey, kind)
+            end
+            return false
+        end
+
+        -- 10. Golden Interior RateArea (school, pizza_party, salon, cat_cafe)
         if INTERIOR_AILMENTS[kind] then
             local target = INTERIOR_AILMENTS[kind]
-            Bridge.EnterInterior(target.dest, target.door)
-            ctx.Runtime.Status.Farm = string.format("Konum görevi: %s (%s)", kind, target.dest)
-            return true
+            local cur = Bridge.GetCurrentLocation()
+            if not cur or cur.destination_id ~= target.dest then
+                Bridge.EnterInterior(target.dest, target.door)
+                task.wait(0.8)
+            end
+            ctx.Runtime.Status.Farm = string.format("Konumda bekleniyor: %s (%s)", kind, target.dest)
+            return false -- RateArea stays open smoothly without spamming completion count
         end
 
+        -- 11. Golden StaticMap RateArea (bored, camping, beach_party)
         if STATIC_AILMENTS[kind] then
             Bridge.TeleportStaticLocation(STATIC_AILMENTS[kind])
-            ctx.Runtime.Status.Farm = "Harita görevi: " .. kind
-            return true
+            ctx.Runtime.Status.Farm = "Harita alanında bekleniyor: " .. kind
+            return false
         end
 
-        if kind == "hungry" or kind == "thirsty" or kind == "play" then
-            if completeUseItemAilment(kind, petCharWrapper) then
-                ctx.Runtime.Status.Farm = "Eşya ile tamamlanıyor: " .. kind
-                return true
-            end
-        end
-
+        -- 12. Movement / Weather
         if kind == "walk" or kind == "ride" or kind == "swim" or kind == "leaf_pile" or kind == "rain_puddle" or kind == "snowman" then
             local _, hrp, hum = Utils.getCharacterParts()
             if hrp and hum then
                 hum:Move(Vector3.new(0, 0, -1), true)
-                task.wait(0.25)
+                task.wait(0.35)
                 hum:Move(Vector3.zero, true)
                 ctx.Runtime.Status.Farm = "Hareket görevi: " .. kind
-                return true
             end
+            return not isAilmentPresent(scopeKey, kind)
         end
 
         return false
@@ -327,75 +571,125 @@ function DualFarmSystem.Init(ctx)
     function DF.TryStepAilments()
         local F = States.Farm
         if not (F.DualFarm and F.AutoAilments) then return false end
-        if os.clock() - Cooldowns.LastAilmentStepAt < 3.5 then return false end
+        if DF._busy then return false end
+        if os.clock() - Cooldowns.LastAilmentStepAt < 1.5 then return false end
 
-        ensureBabyTeam()
+        DF._busy = true
+        local okStep, didRun = pcall(function()
+            ensureBabyTeam()
 
-        local am = Bridge.GetAilmentsManager()
-        local petUid, petCharWrapper = getActivePetUniqueAndWrapper()
+            local am = Bridge.GetAilmentsManager()
+            local petUid, petCharWrapper = getActivePetUniqueAndWrapper()
+            local now = os.clock()
 
-        -- Prefer Pet ailments first, then Baby ailments (Dual Farm completes both!)
-        local chosenKind, chosenIsPet = nil, false
-        local petAilments = petUid and am.ailments and am.ailments[petUid] or nil
-        if type(petAilments) == "table" then
-            for kind, a in pairs(petAilments) do
-                if type(a) == "table" then
-                    chosenKind = a.kind or kind
-                    chosenIsPet = true
-                    break
+            -- Build candidate task list across BOTH Baby and Active Pet, sorted by priority & cooldown
+            local candidates = {}
+            local activeRateName = nil
+
+            if petUid and am.ailments and type(am.ailments[petUid]) == "table" then
+                for k, a in pairs(am.ailments[petUid]) do
+                    if type(a) == "table" then
+                        local ak = a.kind or k
+                        local cdKey = tostring(petUid) .. ":" .. tostring(ak)
+                        local rate = tonumber(a.rate) or 0
+                        if rate > 0 then
+                            activeRateName = activeRateName or (tostring(ak) .. " (%" .. tostring(math.floor((tonumber(a.progress) or 0) * 100)) .. ")")
+                        elseif (DF._attemptCooldowns[cdKey] or 0) <= now then
+                            table.insert(candidates, {
+                                kind = ak,
+                                scopeKey = petUid,
+                                isPet = true,
+                                prio = TASK_PRIORITY[ak] or 12,
+                                cdKey = cdKey,
+                            })
+                        end
+                    end
                 end
             end
-        end
 
-        if not chosenKind and F.DualFarm and type(am.baby_ailments) == "table" then
-            for kind, a in pairs(am.baby_ailments) do
-                if type(a) == "table" then
-                    chosenKind = a.kind or kind
-                    chosenIsPet = false
-                    break
+            if type(am.baby_ailments) == "table" then
+                for k, a in pairs(am.baby_ailments) do
+                    if type(a) == "table" then
+                        local ak = a.kind or k
+                        local cdKey = "baby:" .. tostring(ak)
+                        local rate = tonumber(a.rate) or 0
+                        if rate > 0 then
+                            activeRateName = activeRateName or (tostring(ak) .. " (%" .. tostring(math.floor((tonumber(a.progress) or 0) * 100)) .. ")")
+                        elseif (DF._attemptCooldowns[cdKey] or 0) <= now then
+                            table.insert(candidates, {
+                                kind = ak,
+                                scopeKey = "baby",
+                                isPet = false,
+                                prio = (TASK_PRIORITY[ak] or 12) + 0.1,
+                                cdKey = cdKey,
+                            })
+                        end
+                    end
                 end
             end
-        end
 
-        if not chosenKind then
-            ctx.Runtime.Status.Farm = "Aktif görev bekleniyor..."
+            -- If a task is actively filling via RateArea/Furniture, only run instant in-place tasks (prio <= 5) so we don't teleport away mid-bar
+            if activeRateName then
+                local inPlaceOnly = {}
+                for _, c in ipairs(candidates) do
+                    if c.prio <= 5.2 and (c.isPet or c.kind == "sick" or c.kind == "hungry" or c.kind == "thirsty") then
+                        if c.kind == "pet_me" or c.kind == "mystery" or not c.isPet then
+                            table.insert(inPlaceOnly, c)
+                        end
+                    end
+                end
+                candidates = inPlaceOnly
+            end
+
+            if #candidates == 0 then
+                ctx.Runtime.Status.Farm = activeRateName and ("Doluyor: " .. activeRateName) or "Yeni görev bekleniyor..."
+                return false
+            end
+
+            table.sort(candidates, function(a, b)
+                return a.prio < b.prio
+            end)
+
+            -- Never jump away from an active RateArea location for another long RateArea; allow quick local tasks only
+            local cand = candidates[1]
+            Cooldowns.LastAilmentStepAt = os.clock()
+            -- Anti-stuck cooldown: if a task doesn't complete immediately, wait 12s (or 20s for RateArea) before retrying it
+            DF._attemptCooldowns[cand.cdKey] = os.clock() + (cand.prio >= 15 and 18 or 8)
+
+            local completed = completeAilment(cand.kind, cand.scopeKey, cand.isPet, petUid, petCharWrapper)
+            if completed then
+                ctx.Runtime.Telemetry.TasksCompleted = ctx.Runtime.Telemetry.TasksCompleted + 1
+                DF._attemptCooldowns[cand.cdKey] = nil
+                ctx.Runtime.Status.Farm = "Tamamlandı: " .. tostring(cand.kind)
+                return true
+            end
             return false
-        end
+        end)
 
-        Cooldowns.LastAilmentStepAt = os.clock()
-        if completeAilment(chosenKind, chosenIsPet and petUid or tostring(LocalPlayer.UserId), chosenIsPet, petUid, petCharWrapper) then
-            ctx.Runtime.Telemetry.TasksCompleted = ctx.Runtime.Telemetry.TasksCompleted + 1
-            return true
-        end
-        return false
+        DF._busy = false
+        return okStep and didRun == true
     end
 
     function DF.TryAutoLure()
         local F = States.Farm
-        if not F.AutoLure or os.clock() - Cooldowns.LastLureAt < 10 then return false end
+        if not F.AutoLure or os.clock() - Cooldowns.LastLureAt < 8 then return false end
         local LuresNet = Bridge.Mod.LuresNet
+        local invDB = Bridge.Mod.InventoryDB
         if not LuresNet then return false end
 
-        local d = Bridge.GetMyData()
-        local lm = d and d.lures_2023_lure_manager
-        if not lm then return false end
+        local data = Bridge.GetMyData()
+        local lureMgr = data and data.lures_2023_lure_manager
+        if not lureMgr then return false end
+
         Cooldowns.LastLureAt = os.clock()
 
-        local luresMap = lm.lures_map or {}
-        local lureSlots = { "BasicLure" }
-        if lm.owns_premium_lure then
-            table.insert(lureSlots, "PremiumLure")
-        end
-
-        local invDB = Bridge.Mod.InventoryDB
-        for _, slot in ipairs(lureSlots) do
-            local state = luresMap[slot]
-            if state and state.finished then
+        for slot, state in pairs(lureMgr.lures_by_type or {}) do
+            if type(state) == "table" and state.reward_ready then
                 pcall(function()
                     LuresNet.ClaimLure:invoke_server_async(slot)
                 end)
                 ctx.Runtime.Telemetry.LuresClaimed = ctx.Runtime.Telemetry.LuresClaimed + 1
-                ctx.Runtime.Status.Farm = "Lure ödülü toplandı: " .. slot
+                ctx.Runtime.Status.Farm = "Lure ödülü toplandı"
                 return true
             elseif not state then
                 local bait = findInventoryItem("food", function(it)

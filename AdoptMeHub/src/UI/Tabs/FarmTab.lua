@@ -28,14 +28,27 @@ function FarmTab.Init(ctx)
         if statusText and statusText.Set then
             local bucks = Bridge.GetMoney()
             local eq = Bridge.GetEquippedPets()
-            local pName = (eq[1] and (eq[1].kind or eq[1].id)) or "Yok"
+            local rawId = eq[1] and (eq[1].pet_id or eq[1].kind or eq[1].id)
+            local invPets = Bridge.Mod.InventoryDB and Bridge.Mod.InventoryDB.pets
+            local pName = (rawId and invPets and invPets[rawId] and invPets[rawId].name) or rawId or "Yok"
+
+            local am = Bridge.GetAilmentsManager()
+            local petUid = eq[1] and (eq[1].pet_unique or eq[1].unique)
+            local bCount, pCount = 0, 0
+            for _ in pairs(am.baby_ailments or {}) do bCount = bCount + 1 end
+            if petUid and am.ailments and type(am.ailments[petUid]) == "table" then
+                for _ in pairs(am.ailments[petUid]) do pCount = pCount + 1 end
+            end
+
             pcall(function()
                 statusText:Set(string.format(
-                    "%s | Bucks: %s (+%s) | Görev: %d | Pet: %s",
+                    "%s | Bucks: %s (+%s) | Biten: %d | Aktif: Bebek %d / Pet %d | Pet: %s",
                     tostring(ctx.Runtime.Status.Farm),
                     Utils.formatNumber(bucks),
                     Utils.formatNumber(ctx.Runtime.Telemetry.BucksEarned),
                     ctx.Runtime.Telemetry.TasksCompleted,
+                    bCount,
+                    pCount,
                     tostring(pName)
                 ))
             end)
