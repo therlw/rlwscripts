@@ -22,7 +22,21 @@ end
 if subPath ~= "" and string.sub(subPath, -1) ~= "/" then
     subPath = subPath .. "/"
 end
-local baseUrl = userCfg.BaseUrl or string.format("https://raw.githubusercontent.com/%s/%s/%s/%s", owner, repo, branch, subPath)
+
+-- Resolve exact commit SHA on branch so raw.githubusercontent.com Fastly CDN never serves stale cached modules
+local resolvedRef = branch
+if not userCfg.BaseUrl and userCfg.CacheBust ~= false then
+    pcall(function()
+        local apiUrl = string.format("https://api.github.com/repos/%s/%s/commits/%s?_cb=%d", owner, repo, branch, math.floor(os.clock() * 1000))
+        local raw = game:HttpGet(apiUrl, true)
+        local sha = type(raw) == "string" and string.match(raw, '"sha"%s*:%s*"([0-9a-fA-F]+)"')
+        if sha and #sha >= 7 then
+            resolvedRef = sha
+        end
+    end)
+end
+
+local baseUrl = userCfg.BaseUrl or string.format("https://raw.githubusercontent.com/%s/%s/%s/%s", owner, repo, resolvedRef, subPath)
 if string.sub(baseUrl, -1) ~= "/" then
     baseUrl = baseUrl .. "/"
 end
