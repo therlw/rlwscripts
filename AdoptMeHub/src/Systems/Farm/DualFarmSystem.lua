@@ -27,7 +27,6 @@ function DualFarmSystem.Init(ctx)
         school = { dest = "School", door = "MainDoor" },
         sick = { dest = "Hospital", door = "MainDoor" },
         salon = { dest = "Salon", door = "MainDoor" },
-        pizza_party = { dest = "PizzaShop", door = "MainDoor" },
         cat_cafe = { dest = "CatCafe", door = "MainDoor" },
     }
 
@@ -327,7 +326,7 @@ function DualFarmSystem.Init(ctx)
 
     function DF.TryStepAilments()
         local F = States.Farm
-        if not (F.DualFarm or F.AutoAilments) then return false end
+        if not (F.DualFarm and F.AutoAilments) then return false end
         if os.clock() - Cooldowns.LastAilmentStepAt < 3.5 then return false end
 
         ensureBabyTeam()

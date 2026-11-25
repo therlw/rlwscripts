@@ -29,7 +29,7 @@ function EventsAndWorldSystem.Init(ctx)
         { id = "PetShop", label = "Pet Shop", type = "interior", dest = "PetShop", door = "MainDoor" },
         { id = "Supermarket", label = "Süpermarket", type = "interior", dest = "Supermarket", door = "MainDoor" },
         { id = "CoffeeShop", label = "Kahve Dükkanı", type = "interior", dest = "CoffeeShop", door = "MainDoor" },
-        { id = "PizzaShop", label = "Pizza Dükkanı", type = "interior", dest = "IceCream", door = "MainDoor" },
+        { id = "PizzaShop", label = "Dondurma Dükkanı (Ice Cream)", type = "interior", dest = "IceCream", door = "MainDoor" },
         { id = "ToyShop", label = "Oyuncakçı (Toy Shop)", type = "interior", dest = "ToyShop", door = "MainDoor" },
         { id = "SkyCastle", label = "Gökyüzü Kalesi (Sky Castle)", type = "interior", dest = "SkyCastle", door = "MainDoor" },
         { id = "Playground", label = "Oyun Parkı (Playground)", type = "static", loc = "exterior_park" },
