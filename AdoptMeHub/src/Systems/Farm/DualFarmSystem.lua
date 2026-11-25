@@ -238,6 +238,8 @@ function DualFarmSystem.Init(ctx)
 
     local function consumePlayerItem(itemUid, scopeKey, ailmentKind)
         if not itemUid then return false end
+        Bridge.RouteFire("ToolAPI/UnequipAll")
+        task.wait(0.15)
         Bridge.RouteInvoke("ToolAPI/Equip", itemUid, { use_sound_delay = false })
         task.wait(0.2)
         for _ = 1, 6 do
@@ -252,6 +254,59 @@ function DualFarmSystem.Init(ctx)
             end
             if not okEnd or used == false then
                 break
+            end
+        end
+        Bridge.RouteFire("ToolAPI/UnequipAll")
+        return not isAilmentPresent(scopeKey, ailmentKind)
+    end
+
+    -- Feeds ANY pet OR unhatched Egg (like Starter Egg) directly via PetActions.feed_pet without FocusPetApp lockouts
+    local function feedPetDirect(petCharWrapper, item, scopeKey, ailmentKind)
+        if not petCharWrapper or not petCharWrapper.char or not item then
+            return false
+        end
+        local ui = Bridge.Mod.UIManager
+        local fpa = ui and ui.apps and ui.apps.FocusPetApp
+        if fpa and fpa.release_focus and fpa.visible then
+            pcall(function() fpa:release_focus() end)
+            task.wait(0.2)
+        end
+        pcall(Bridge.RouteInvoke, "PetAPI/ExitFurnitureUseStates")
+        Bridge.RouteFire("ToolAPI/UnequipAll")
+        task.wait(0.15)
+
+        local PA = Bridge.Mod.Fsys and pcall(Bridge.Mod.Fsys.load, "PetActions") and Bridge.Mod.Fsys.load("PetActions")
+        local pChar = petCharWrapper.char
+        local pRoot = pChar:FindFirstChild("HumanoidRootPart") or select(2, Utils.getCharacterParts())
+        local spawnCF = pRoot and (pRoot.CFrame * CFrame.new(0, 1, -2)) or CFrame.new()
+
+        local fedObj = nil
+        local okFeed = false
+        if PA and PA.feed_pet then
+            local okCall, r1, r2 = pcall(function()
+                return PA.feed_pet(petCharWrapper, {
+                    item = item,
+                    spawn_cframe = spawnCF,
+                })
+            end)
+            okFeed = okCall and r1 == true
+            fedObj = r2
+        elseif Bridge.Mod.UseItemHelper and Bridge.Mod.UseItemHelper.use_item then
+            okFeed = pcall(Bridge.Mod.UseItemHelper.use_item, petCharWrapper, item)
+        end
+
+        if not okFeed then
+            return false
+        end
+
+        local deadline = os.clock() + 6.5
+        while os.clock() < deadline and States.Farm.DualFarm do
+            task.wait(0.45)
+            if not isAilmentPresent(scopeKey, ailmentKind) then
+                return true
+            end
+            if fedObj and typeof(fedObj) == "Instance" and fedObj.Parent and (os.clock() > deadline - 3.0) then
+                Bridge.RouteFire("PetAPI/ConsumeFoodObject", fedObj, petCharWrapper.pet_unique)
             end
         end
         return not isAilmentPresent(scopeKey, ailmentKind)
@@ -360,19 +415,8 @@ function DualFarmSystem.Init(ctx)
                         return true
                     end
                 elseif petCharWrapper then
-                    local ui = Bridge.Mod.UIManager
-                    local fpa = ui and ui.apps and ui.apps.FocusPetApp
-                    if fpa and fpa.capture_focus and fpa.feed_pet then
-                        pcall(function()
-                            fpa:capture_focus(petCharWrapper)
-                            task.wait(0.25)
-                            fpa:feed_pet(healItem)
-                        end)
-                        task.wait(1.5)
-                        pcall(function() fpa:release_focus() end)
-                        if not isAilmentPresent(scopeKey, kind) then
-                            return true
-                        end
+                    if feedPetDirect(petCharWrapper, healItem, scopeKey, kind) then
+                        return true
                     end
                 end
             end
@@ -383,11 +427,6 @@ function DualFarmSystem.Init(ctx)
         -- 4. Hungry
         if kind == "hungry" then
             ctx.Runtime.Status.Farm = isPet and "Pet besleniyor..." or "Bebek yemek yiyor..."
-            if isPet and petCharWrapper and petCharWrapper.char then
-                if activateHouseFurnitureAndWait({ "pet_food_bowl", "food_bowl", "ailments_refresh_2024_cheap_food_bowl" }, petCharWrapper.char, scopeKey, kind, 8) then
-                    return true
-                end
-            end
 
             local foodItem = findInventoryItem("food", function(it)
                 local d = invDB and invDB.food and invDB.food[it.kind or it.id]
@@ -400,23 +439,18 @@ function DualFarmSystem.Init(ctx)
             end
             if foodItem then
                 if not isPet then
-                    return consumePlayerItem(foodItem.unique, scopeKey, kind)
-                elseif petCharWrapper then
-                    local ui = Bridge.Mod.UIManager
-                    local fpa = ui and ui.apps and ui.apps.FocusPetApp
-                    if fpa and fpa.capture_focus and fpa.feed_pet then
-                        pcall(function()
-                            fpa:capture_focus(petCharWrapper)
-                            task.wait(0.25)
-                            fpa:feed_pet(foodItem)
-                        end)
-                        task.wait(1.5)
-                        pcall(function() fpa:release_focus() end)
-                    elseif Bridge.Mod.UseItemHelper and Bridge.Mod.UseItemHelper.use_item then
-                        pcall(Bridge.Mod.UseItemHelper.use_item, petCharWrapper, foodItem)
-                        task.wait(1.5)
+                    if consumePlayerItem(foodItem.unique, scopeKey, kind) then
+                        return true
                     end
-                    return not isAilmentPresent(scopeKey, kind)
+                elseif petCharWrapper then
+                    if feedPetDirect(petCharWrapper, foodItem, scopeKey, kind) then
+                        return true
+                    end
+                end
+            end
+            if isPet and petCharWrapper and petCharWrapper.char then
+                if activateHouseFurnitureAndWait({ "pet_food_bowl", "food_bowl", "ailments_refresh_2024_cheap_food_bowl" }, petCharWrapper.char, scopeKey, kind, 8) then
+                    return true
                 end
             end
             return false
@@ -425,11 +459,6 @@ function DualFarmSystem.Init(ctx)
         -- 5. Thirsty
         if kind == "thirsty" then
             ctx.Runtime.Status.Farm = isPet and "Pet su içiyor..." or "Bebek su içiyor..."
-            if isPet and petCharWrapper and petCharWrapper.char then
-                if activateHouseFurnitureAndWait({ "pet_water_bowl", "water_bowl", "ailments_refresh_2024_cheap_water_bowl" }, petCharWrapper.char, scopeKey, kind, 8) then
-                    return true
-                end
-            end
 
             local drinkItem = findInventoryItem("food", function(it)
                 local d = invDB and invDB.food and invDB.food[it.kind or it.id]
@@ -442,20 +471,18 @@ function DualFarmSystem.Init(ctx)
             end
             if drinkItem then
                 if not isPet then
-                    return consumePlayerItem(drinkItem.unique, scopeKey, kind)
-                elseif petCharWrapper then
-                    local ui = Bridge.Mod.UIManager
-                    local fpa = ui and ui.apps and ui.apps.FocusPetApp
-                    if fpa and fpa.capture_focus and fpa.feed_pet then
-                        pcall(function()
-                            fpa:capture_focus(petCharWrapper)
-                            task.wait(0.25)
-                            fpa:feed_pet(drinkItem)
-                        end)
-                        task.wait(1.5)
-                        pcall(function() fpa:release_focus() end)
+                    if consumePlayerItem(drinkItem.unique, scopeKey, kind) then
+                        return true
                     end
-                    return not isAilmentPresent(scopeKey, kind)
+                elseif petCharWrapper then
+                    if feedPetDirect(petCharWrapper, drinkItem, scopeKey, kind) then
+                        return true
+                    end
+                end
+            end
+            if isPet and petCharWrapper and petCharWrapper.char then
+                if activateHouseFurnitureAndWait({ "pet_water_bowl", "water_bowl", "ailments_refresh_2024_cheap_water_bowl" }, petCharWrapper.char, scopeKey, kind, 8) then
+                    return true
                 end
             end
             return false

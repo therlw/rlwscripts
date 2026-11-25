@@ -49,10 +49,10 @@ function Context.Create(opts)
             DualFarm = false,         -- Baby + Pet simultaneous farm
             AutoBabyTeam = true,      -- Automatically choose Babies team
             AutoAilments = true,      -- Complete Baby & Pet tasks
-            AutoAgeQueue = false,     -- Rotate to next pet once Full Grown
+            AutoAgeQueue = true,      -- Rotate to next pet once Full Grown
             AgeQueueRarity = "All",   -- "All", "legendary", "ultra_rare", "rare", "uncommon", "common"
             AgeQueuePetKind = "",     -- Optional specific pet kind filter
-            AutoHatchEggs = false,    -- Equip & hatch eggs sequentially
+            AutoHatchEggs = true,     -- Equip & hatch eggs sequentially (great for Starter Egg!)
             AutoLure = false,         -- Claim & re-bait home Lure Box
             LureBaitMode = "Free / Any Bait",
             AutoBuyEggs = false,      -- Buy eggs when Bucks > reserve
