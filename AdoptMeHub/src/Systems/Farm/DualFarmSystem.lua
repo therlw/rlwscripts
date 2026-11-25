@@ -592,13 +592,26 @@ function DualFarmSystem.Init(ctx)
             return false
         end
 
-        -- 12. Movement / Weather (RateMovement requires continuous movement ~30s on open ground)
+        -- 12. Movement / Ride / Weather (ride requires Stroller/Vehicle state; walk allows free movement)
         if kind == "walk" or kind == "ride" or kind == "swim" or kind == "leaf_pile" or kind == "rain_puddle" or kind == "snowman" then
             local curLoc = Bridge.GetCurrentLocation()
             if not curLoc or curLoc.destination_id ~= "MainMap" then
                 Bridge.EnterInterior("MainMap", "Neighborhood!MainDoor")
                 task.wait(0.8)
             end
+
+            local usingStroller = false
+            if kind == "ride" and isPet and petCharWrapper then
+                local stItem = findInventoryItem("strollers", function() return true end)
+                if stItem and Bridge.Mod.UseItemHelper and Bridge.Mod.UseItemHelper.use_item then
+                    stItem.category = stItem.category or "strollers"
+                    stItem.kind = stItem.kind or stItem.id
+                    pcall(Bridge.Mod.UseItemHelper.use_item, petCharWrapper, stItem)
+                    usingStroller = true
+                    task.wait(1.0)
+                end
+            end
+
             local _, hrp, hum = Utils.getCharacterParts()
             if hrp and hum then
                 if hum.Sit then hum.Sit = false; hum.Jump = true; task.wait(0.15) end
@@ -618,11 +631,15 @@ function DualFarmSystem.Init(ctx)
                     while os.clock() < subEnd and States.Farm.DualFarm and isAilmentPresent(scopeKey, kind) do
                         local ent = getAilmentEntry(scopeKey, kind)
                         local pct = ent and math.floor((tonumber(ent.progress) or 0) * 100) or 0
-                        ctx.Runtime.Status.Farm = string.format("Yürüyüş / Hareket (%s): %%%d", kind, pct)
+                        ctx.Runtime.Status.Farm = string.format("%s (%s): %%%d", usingStroller and "Bebek Arabası Turu" or "Yürüyüş / Hareket", kind, pct)
                         task.wait(0.5)
                     end
                 end
                 pcall(function() hum:MoveTo(hrp.Position) end)
+            end
+
+            if usingStroller then
+                Bridge.RouteFire("ToolAPI/UnequipAll")
             end
             return not isAilmentPresent(scopeKey, kind)
         end
