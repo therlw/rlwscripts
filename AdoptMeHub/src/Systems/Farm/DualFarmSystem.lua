@@ -355,20 +355,32 @@ function DualFarmSystem.Init(ctx)
     local function completeAilment(kind, scopeKey, isPet, petUid, petCharWrapper)
         local invDB = Bridge.Mod.InventoryDB
 
-        -- 1. Mystery Ailment (with real slot selection)
+        -- 1. Mystery Ailment (resolves real seeded slots via MysteryHelper/MysteryAilmentClient & picks fastest task)
         if kind == "mystery" and States.Farm.AutoMysteryAilment and isPet and petUid and petCharWrapper then
             pcall(function()
-                local am = Bridge.Mod.AilmentsDB and Bridge.Mod.AilmentsDB.mystery
-                local act = am and am.create_action and getAilmentEntry(scopeKey, kind)
-                if act and act.components and act.components.mystery then
-                    local slots = act.components.mystery
-                    Bridge.RouteFire("AilmentsAPI/ChooseMysteryAilment", petUid, "mystery", 1, slots[1] or "hungry")
-                else
-                    Bridge.RouteFire("AilmentsAPI/ChooseMysteryAilment", petUid, "mystery", 1, "hungry")
+                local entry = getAilmentEntry(scopeKey, kind)
+                local mysteryMod = Bridge.Mod.AilmentsDB and Bridge.Mod.AilmentsDB.mystery
+                local act = mysteryMod and mysteryMod.create_action and entry and mysteryMod.create_action(entry)
+                local slots = act and act._get_ailment_slots and act:_get_ailment_slots(petCharWrapper) or nil
+                local key = (entry and entry.components and entry.components.mystery and entry.components.mystery.ailment_key) or "mystery"
+
+                if type(slots) == "table" then
+                    local bestIdx, bestKind, bestPrio = nil, nil, math.huge
+                    for idx, sKind in pairs(slots) do
+                        local p = TASK_PRIORITY[sKind] or 12
+                        if p < bestPrio then
+                            bestPrio = p
+                            bestIdx = idx
+                            bestKind = sKind
+                        end
+                    end
+                    if bestIdx and bestKind then
+                        Bridge.RouteFire("AilmentsAPI/ChooseMysteryAilment", petUid, key, bestIdx, bestKind)
+                        ctx.Runtime.Status.Farm = "Gizemli görev seçildi: " .. tostring(bestKind)
+                    end
                 end
             end)
-            ctx.Runtime.Status.Farm = "Gizemli görev seçildi"
-            task.wait(0.4)
+            task.wait(0.5)
             return not isAilmentPresent(scopeKey, kind)
         end
 
