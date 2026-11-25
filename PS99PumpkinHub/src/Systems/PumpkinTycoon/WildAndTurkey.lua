@@ -368,10 +368,9 @@ function WildAndTurkey.Init(ctx)
             local coins = Net.GetPumpkinCoins()
             for _, offer in ipairs(shelf.offers) do
                 if (offer.left or 0) > 0 and wantedSet[offer.item] and coins >= (offer.price or math.huge) then
-                    local padPos = Move.FindMachinePad("PetNetStore")
-                    if padPos then
+                    -- Patch update allows buying Pet Nets from anywhere on your island (just leave Turkey island if there)
+                    if Move.IsOnTurkeyIsland() then
                         Move.ReturnToOwnIsland()
-                        Move.MoveTo(padPos, 17, 3.0)
                     end
                     Cooldowns.LastStoreBuyAt = os.clock()
                     local ok = Net.NetworkInvoke("Merchant_RequestPurchase", "PetNetStore", offer.slot, false, shelf.seed)
