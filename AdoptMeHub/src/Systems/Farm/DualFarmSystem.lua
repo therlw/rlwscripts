@@ -792,6 +792,25 @@ function DualFarmSystem.Init(ctx)
         return false
     end
 
+    function DF.DismissPopupAnimations()
+        if not States.Farm.DualFarm then return end
+        local ui = Bridge.Mod.UIManager
+        if not ui then return end
+        for _, appName in ipairs({ "JackboxRewardApp", "NewSpotlightApp", "PetDiscoveryApp" }) do
+            pcall(function()
+                local app = ui.apps and ui.apps[appName]
+                if app and (app.visible or (app.instance and app.instance.Enabled)) then
+                    if ui.set_app_visibility then
+                        ui.set_app_visibility(appName, false)
+                    end
+                    if app.instance and app.instance:IsA("ScreenGui") then
+                        app.instance.Enabled = false
+                    end
+                end
+            end)
+        end
+    end
+
     function DF.TryAutoBuyEggs()
         local F = States.Farm
         if not F.AutoBuyEggs or os.clock() - Cooldowns.LastEggBuyAt < 6 then return false end
@@ -806,6 +825,7 @@ function DualFarmSystem.Init(ctx)
         local ok = Bridge.RouteInvoke("ShopAPI/BuyItem", "pets", eggId, {})
         if ok then
             ctx.Runtime.Status.Farm = "Yumurta satın alındı: " .. eggId
+            task.delay(0.25, DF.DismissPopupAnimations)
             return true
         end
         return false
@@ -829,6 +849,7 @@ function DualFarmSystem.Init(ctx)
             ctx.Runtime.Telemetry.BucksEarned = money - ctx.Runtime.StartMoney
         end
 
+        DF.DismissPopupAnimations()
         DF.TryClaimDailies()
         if DF.TryRotatePetOrEgg() then return end
         if DF.TryStepAilments() then return end
