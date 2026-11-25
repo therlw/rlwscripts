@@ -80,6 +80,7 @@ function Lifecycle.Init(ctx)
     end
 
     ctx.Lifecycle = L
+    L.BeginGeneration()
     return L
 end
 

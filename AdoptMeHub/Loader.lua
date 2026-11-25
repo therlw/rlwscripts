@@ -229,12 +229,6 @@ function Loader.Boot()
     ctx.Loader = Loader
     Loader.Context = ctx
 
-    if ctx.Lifecycle and ctx.Lifecycle.BeginGeneration then
-        ctx.Generation = ctx.Lifecycle.BeginGeneration()
-    else
-        ctx.Generation = 1
-    end
-
     for _, entry in ipairs(remaining) do
         local ok, modOrErr = loadEntry(entry)
         if not ok then
