@@ -35,6 +35,7 @@ function DualFarmSystem.Init(ctx)
         bored = "bored",
         camping = "camping",
         beach_party = "beach_party",
+        swim = "swim",
     }
 
     -- Instant tasks run with higher priority than 50s waiting tasks
@@ -593,7 +594,7 @@ function DualFarmSystem.Init(ctx)
         end
 
         -- 12. Movement / Ride / Weather (ride requires Stroller/Vehicle state; walk allows free movement)
-        if kind == "walk" or kind == "ride" or kind == "swim" or kind == "leaf_pile" or kind == "rain_puddle" or kind == "snowman" then
+        if kind == "walk" or kind == "ride" or kind == "leaf_pile" or kind == "rain_puddle" or kind == "snowman" then
             local curLoc = Bridge.GetCurrentLocation()
             if not curLoc or curLoc.destination_id ~= "MainMap" then
                 Bridge.EnterInterior("MainMap", "Neighborhood!MainDoor")

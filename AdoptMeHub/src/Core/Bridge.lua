@@ -209,11 +209,12 @@ function Bridge.Init(ctx)
         local sm = workspace:FindFirstChild("StaticMap")
         if not sm then return false end
 
-        -- Exact 2026 RateArea target coordinates for Golden ailments
+        -- Exact 2026 RateArea target coordinates for Golden & Swim ailments
         local directTargets = {
             bored = sm:FindFirstChild("Park") and (sm.Park:FindFirstChild("BoredAilmentTarget") or sm.Park:FindFirstChild("AilmentTarget")),
             camping = sm:FindFirstChild("Campsite") and sm.Campsite:FindFirstChild("CampsiteOrigin"),
             beach_party = sm:FindFirstChild("Beach") and (sm.Beach:FindFirstChild("BeachPartyNavTarget") or sm.Beach:FindFirstChild("BeachPartyAilmentTarget")),
+            swim = sm:FindFirstChild("Beach") and sm.Beach:FindFirstChild("SwimNavTarget"),
         }
         local targetInst = directTargets[locName]
         if targetInst then
