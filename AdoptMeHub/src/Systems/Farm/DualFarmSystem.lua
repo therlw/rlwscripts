@@ -592,14 +592,22 @@ function DualFarmSystem.Init(ctx)
             return false
         end
 
-        -- 12. Movement / Weather
+        -- 12. Movement / Weather (RateMovement requires continuous movement ~30s total)
         if kind == "walk" or kind == "ride" or kind == "swim" or kind == "leaf_pile" or kind == "rain_puddle" or kind == "snowman" then
             local _, hrp, hum = Utils.getCharacterParts()
             if hrp and hum then
-                hum:Move(Vector3.new(0, 0, -1), true)
-                task.wait(0.35)
-                hum:Move(Vector3.zero, true)
-                ctx.Runtime.Status.Farm = "Hareket görevi: " .. kind
+                local dirs = { Vector3.new(1, 0, 0), Vector3.new(0, 0, 1), Vector3.new(-1, 0, 0), Vector3.new(0, 0, -1) }
+                local step = 0
+                local deadline = os.clock() + 34
+                while os.clock() < deadline and States.Farm.DualFarm and isAilmentPresent(scopeKey, kind) do
+                    step = (step % #dirs) + 1
+                    hum:Move(dirs[step], true)
+                    local ent = getAilmentEntry(scopeKey, kind)
+                    local pct = ent and math.floor((tonumber(ent.progress) or 0) * 100) or 0
+                    ctx.Runtime.Status.Farm = string.format("Yürüyüş / Hareket (%s): %%%d", kind, pct)
+                    task.wait(0.85)
+                end
+                pcall(function() hum:Move(Vector3.zero, true) end)
             end
             return not isAilmentPresent(scopeKey, kind)
         end
